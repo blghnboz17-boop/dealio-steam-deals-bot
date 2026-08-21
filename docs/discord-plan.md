@@ -1,4 +1,6 @@
-# Discord Botu İlk Sürüm Planı
+# Historical Discord Botu İlk Sürüm Planı
+
+Bu belge erken tasarım kararlarını kaydeder ve güncel uygulama sözleşmesi değildir. Güncel davranış için `README.md` ve `docs/architecture.md` dosyalarına bakın.
 
 ## 1. Kapsam ve Kararlar
 

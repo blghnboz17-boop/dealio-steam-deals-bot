@@ -7,14 +7,22 @@ import { deleteDataCommand } from './commands/delete-data.js';
 
 export const commands = [setupCommand, statusCommand, checkCommand, deleteDataCommand];
 
-export async function registerCommands(environment: EnvironmentConfig): Promise<void> {
+export async function registerCommands(
+  environment: EnvironmentConfig,
+  signal?: AbortSignal,
+): Promise<void> {
   const body: RESTPostAPIChatInputApplicationCommandsJSONBody[] = commands.map((command) =>
     command.toJSON(),
   );
-  const rest = new REST({ version: '10' }).setToken(environment.discordToken);
+  const rest = new REST({
+    version: '10',
+    timeout: 10_000,
+    retries: 0,
+    rejectOnRateLimit: () => true,
+  }).setToken(environment.discordToken);
 
   await rest.put(
     Routes.applicationGuildCommands(environment.discordClientId, environment.discordGuildId),
-    { body },
+    { body, signal },
   );
 }

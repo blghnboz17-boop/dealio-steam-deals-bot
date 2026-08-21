@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NotificationService, type NotificationSender } from '../src/application/notification-service.js';
+import {
+  NotificationDeliveryCancelledError,
+  NotificationService,
+  type NotificationSender,
+} from '../src/application/notification-service.js';
 import { createDatabase } from '../src/persistence/database.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
@@ -183,6 +187,53 @@ describe('NotificationService', () => {
     expect(secondResult).toEqual({ candidateCount: 0, sentCount: 0, failedCount: 0 });
     expect(firstResult).toEqual({ candidateCount: 1, sentCount: 1, failedCount: 0 });
     expect(sender.send).toHaveBeenCalledTimes(1);
+    services.database.close();
+  });
+
+  it('does not claim candidates after application shutdown starts', async () => {
+    const lifecycle = new AbortController();
+    const sender = { send: vi.fn().mockResolvedValue(undefined) };
+    const services = createService('en', sender);
+    const service = new NotificationService(
+      services.userConfigRepository,
+      services.repository,
+      sender,
+      { lifecycleSignal: lifecycle.signal },
+    );
+    lifecycle.abort();
+
+    await expect(service.deliverPending('discord-user')).resolves.toEqual({
+      candidateCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+    });
+    expect(sender.send).not.toHaveBeenCalled();
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('candidate');
+    services.database.close();
+  });
+
+  it('leaves an uncertain in-flight delivery sending when shutdown cancels it', async () => {
+    const lifecycle = new AbortController();
+    let rejectSend: ((error: Error) => void) | undefined;
+    const sender = {
+      send: vi.fn(() => new Promise<void>((_resolve, reject) => {
+        rejectSend = reject;
+      })),
+    };
+    const services = createService('en', sender);
+    const service = new NotificationService(
+      services.userConfigRepository,
+      services.repository,
+      sender,
+      { lifecycleSignal: lifecycle.signal },
+    );
+    const delivery = service.deliverPending('discord-user');
+    await vi.waitFor(() => expect(sender.send).toHaveBeenCalledOnce());
+    lifecycle.abort();
+    rejectSend?.(new NotificationDeliveryCancelledError('shutdown'));
+
+    await expect(delivery).resolves.toMatchObject({ sentCount: 0, failedCount: 0 });
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('sending');
     services.database.close();
   });
 

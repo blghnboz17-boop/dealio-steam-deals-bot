@@ -12,6 +12,8 @@ dist/
 *.db-shm
 *.db-wal
 *.db.lock
+*.lock.reclaim-*
+*.lock.stale-*
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

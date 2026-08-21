@@ -4,10 +4,12 @@ export interface EnvironmentConfig {
   readonly discordGuildId: string;
   readonly databasePath: string;
   readonly pollIntervalHours: number;
+  readonly notificationRetryIntervalSeconds: number;
 }
 
 const defaultDatabasePath = './data/wishlist.db';
 const defaultPollIntervalHours = 6;
+const defaultNotificationRetryIntervalSeconds = 60;
 export const minPollIntervalHours = 0.25;
 export const maxPollIntervalHours = 24 * 7;
 
@@ -38,6 +40,19 @@ function boundedNumber(
   return parsed;
 }
 
+function boundedInteger(
+  value: string,
+  key: string,
+  minimum: number,
+  maximum: number,
+): number {
+  const parsed = boundedNumber(value, key, minimum, maximum);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`Environment variable ${key} must be a whole number`);
+  }
+  return parsed;
+}
+
 export function loadEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
 ): EnvironmentConfig {
@@ -61,6 +76,14 @@ export function loadEnvironment(
         maxPollIntervalHours,
       )
     : defaultPollIntervalHours;
+  const notificationRetryIntervalSeconds = environment.NOTIFICATION_RETRY_INTERVAL_SECONDS
+    ? boundedInteger(
+        environment.NOTIFICATION_RETRY_INTERVAL_SECONDS,
+        'NOTIFICATION_RETRY_INTERVAL_SECONDS',
+        1,
+        3_600,
+      )
+    : defaultNotificationRetryIntervalSeconds;
 
   return {
     discordToken: requiredValue(environment, 'DISCORD_TOKEN'),
@@ -68,5 +91,6 @@ export function loadEnvironment(
     discordGuildId,
     databasePath,
     pollIntervalHours,
+    notificationRetryIntervalSeconds,
   };
 }

@@ -1,7 +1,8 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ProcessLock, ProcessLockError } from '../src/application/process-lock.js';
 import { startBot } from '../src/index.js';
 
@@ -19,17 +20,50 @@ describe('process lifecycle', () => {
     }
   });
 
-  it('refuses to remove a stale lock automatically', () => {
+  it('reclaims a valid lock only when its owner PID is definitely dead', () => {
     const directory = mkdtempSync(join(tmpdir(), 'wishlist-stale-lock-'));
     const databasePath = join(directory, 'wishlist.db');
+    const stalePid = 1_234_567;
     writeFileSync(`${resolve(databasePath)}.lock`, JSON.stringify({
-      pid: 2_147_483_647,
-      token: 'stale-token',
+      pid: stalePid,
+      token: randomUUID(),
       startedAt: '2026-08-21T00:00:00.000Z',
     }));
+    const kill = vi.spyOn(process, 'kill').mockImplementation((pid) => {
+      if (pid === stalePid) {
+        throw Object.assign(new Error('missing process'), { code: 'ESRCH' });
+      }
+      return true;
+    });
 
-    expect(() => ProcessLock.acquire(databasePath)).toThrow(ProcessLockError);
-    rmSync(directory, { recursive: true, force: true });
+    try {
+      const lock = ProcessLock.acquire(databasePath);
+      expect(() => ProcessLock.acquire(databasePath)).toThrow(ProcessLockError);
+      lock.release();
+    } finally {
+      kill.mockRestore();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a valid lock when process state is uncertain', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'wishlist-uncertain-lock-'));
+    const databasePath = join(directory, 'wishlist.db');
+    writeFileSync(`${resolve(databasePath)}.lock`, JSON.stringify({
+      pid: 1_234_568,
+      token: randomUUID(),
+      startedAt: '2026-08-21T00:00:00.000Z',
+    }));
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('permission denied'), { code: 'EPERM' });
+    });
+
+    try {
+      expect(() => ProcessLock.acquire(databasePath)).toThrow(ProcessLockError);
+    } finally {
+      kill.mockRestore();
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('does not delete an incomplete lock that may still be owned by a starting process', () => {
@@ -51,6 +85,7 @@ describe('process lifecycle', () => {
       discordGuildId: '987654321098765432',
       databasePath: ':memory:',
       pollIntervalHours: 6,
+      notificationRetryIntervalSeconds: 60,
     }, { signal: controller.signal })).rejects.toThrow('Bot startup was cancelled');
   });
 
@@ -61,6 +96,7 @@ describe('process lifecycle', () => {
       discordGuildId: '987654321098765432',
       databasePath: ':memory:',
       pollIntervalHours: 0,
+      notificationRetryIntervalSeconds: 60,
     };
 
     await expect(startBot(environment)).rejects.toThrow(
@@ -79,6 +115,7 @@ describe('process lifecycle', () => {
       discordGuildId: '987654321098765432',
       databasePath,
       pollIntervalHours: 6,
+      notificationRetryIntervalSeconds: 60,
     };
 
     try {
@@ -97,5 +134,9 @@ describe('process lifecycle', () => {
     expect(script.indexOf('Set-Content -LiteralPath $shutdownRequestPath'))
       .toBeLessThan(script.indexOf('taskkill.exe /PID'));
     expect(script).toContain('Graceful shutdown timed out');
+    expect(script).toContain('bot.health.json');
+    expect(script).toContain('System.Threading.Mutex');
+    expect(script.indexOf("$health.phase -eq 'ready'"))
+      .toBeLessThan(script.indexOf('Bot started'));
   });
 });

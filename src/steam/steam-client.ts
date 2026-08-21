@@ -25,6 +25,7 @@ export interface SteamClientOptions {
   readonly maxRetries?: number;
   readonly retryBaseDelayMs?: number;
   readonly maxRetryDelayMs?: number;
+  readonly lifecycleSignal?: AbortSignal;
 }
 
 const wishlistEndpoint = 'https://api.steampowered.com/IWishlistService/GetWishlist/v1/';
@@ -124,6 +125,7 @@ export class SteamClient {
   private readonly maxRetries: number;
   private readonly retryBaseDelayMs: number;
   private readonly maxRetryDelayMs: number;
+  private readonly lifecycleSignal?: AbortSignal;
 
   public constructor(options: SteamClientOptions = {}) {
     this.fetchImpl = options.fetchImpl ?? defaultFetch;
@@ -133,6 +135,7 @@ export class SteamClient {
     this.maxRetries = options.maxRetries ?? defaultMaxRetries;
     this.retryBaseDelayMs = options.retryBaseDelayMs ?? defaultRetryBaseDelayMs;
     this.maxRetryDelayMs = options.maxRetryDelayMs ?? defaultMaxRetryDelayMs;
+    this.lifecycleSignal = options.lifecycleSignal;
 
     if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs <= 0) {
       throw new Error('Steam timeout must be a positive safe integer');
@@ -195,6 +198,9 @@ export class SteamClient {
           };
         } catch (error: unknown) {
           if (error instanceof SteamWishlistError) {
+            if (error.code === 'STEAM_CANCELLED') {
+              throw error;
+            }
             errors.push({ appId: entry.appId, code: error.code });
             return null;
           }
@@ -236,22 +242,34 @@ export class SteamClient {
 
   private async requestJson(url: string, requireWishlistAccess = false): Promise<unknown> {
     for (let attempt = 0; ; attempt += 1) {
+      if (this.lifecycleSignal?.aborted) {
+        throw cancelledError();
+      }
+
       try {
         return await this.requestLimiter.run(async () => {
           try {
-            return await this.requestJsonAttempt(url, requireWishlistAccess);
+            return await this.requestJsonAttempt(
+              url,
+              requireWishlistAccess,
+              this.lifecycleSignal,
+            );
           } catch (error: unknown) {
             if (error instanceof SteamWishlistError && error.code === 'STEAM_RATE_LIMITED') {
               const retryDelayMs = error.retryAfterSeconds === undefined
                 ? Math.min(this.retryBaseDelayMs * (2 ** attempt), this.maxRetryDelayMs)
-                : error.retryAfterSeconds * 1000;
-              this.requestLimiter.deferFor(retryDelayMs);
+                : Math.min(error.retryAfterSeconds * 1000, this.maxRetryDelayMs);
+              this.requestLimiter.deferFor(retryDelayMs, this.lifecycleSignal);
             }
 
             throw error;
           }
-        });
+        }, this.lifecycleSignal);
       } catch (error: unknown) {
+        if (this.lifecycleSignal?.aborted) {
+          throw cancelledError();
+        }
+
         if (
           !(error instanceof SteamWishlistError) ||
           error.code !== 'STEAM_RATE_LIMITED' ||
@@ -264,8 +282,25 @@ export class SteamClient {
     }
   }
 
-  private async requestJsonAttempt(url: string, requireWishlistAccess: boolean): Promise<unknown> {
+  private async requestJsonAttempt(
+    url: string,
+    requireWishlistAccess: boolean,
+    lifecycleSignal?: AbortSignal,
+  ): Promise<unknown> {
+    if (lifecycleSignal?.aborted) {
+      throw cancelledError();
+    }
+
     const controller = new AbortController();
+    let rejectCancellation: ((error: SteamWishlistError) => void) | undefined;
+    const cancellationPromise = new Promise<never>((_resolve, reject) => {
+      rejectCancellation = reject;
+    });
+    const cancel = (): void => {
+      controller.abort();
+      rejectCancellation?.(cancelledError());
+    };
+    lifecycleSignal?.addEventListener('abort', cancel, { once: true });
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
       timeout = setTimeout(() => {
@@ -279,14 +314,20 @@ export class SteamClient {
       response = await Promise.race([
         this.fetchImpl(url, { signal: controller.signal }),
         timeoutPromise,
+        cancellationPromise,
       ]);
     } catch (error: unknown) {
+      lifecycleSignal?.removeEventListener('abort', cancel);
       if (timeout !== undefined) {
         clearTimeout(timeout);
       }
 
       if (error instanceof SteamWishlistError) {
         throw error;
+      }
+
+      if (lifecycleSignal?.aborted) {
+        throw cancelledError();
       }
 
       if (controller.signal.aborted) {
@@ -329,6 +370,10 @@ export class SteamClient {
         throw error;
       }
 
+      if (lifecycleSignal?.aborted) {
+        throw cancelledError();
+      }
+
       if (controller.signal.aborted) {
         throw new SteamWishlistError('STEAM_TIMEOUT', 'Steam response timed out');
       }
@@ -338,9 +383,14 @@ export class SteamClient {
         `Steam returned invalid JSON: ${error instanceof Error ? error.message : 'unknown response error'}`,
       );
     } finally {
+      lifecycleSignal?.removeEventListener('abort', cancel);
       if (timeout !== undefined) {
         clearTimeout(timeout);
       }
     }
   }
+}
+
+function cancelledError(): SteamWishlistError {
+  return new SteamWishlistError('STEAM_CANCELLED', 'Steam request cancelled');
 }

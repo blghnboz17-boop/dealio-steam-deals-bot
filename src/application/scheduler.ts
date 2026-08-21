@@ -31,8 +31,8 @@ const systemClock: SchedulerClock = {
 };
 
 const consoleLogger: SchedulerLogger = {
-  info: (message) => console.log(`[scheduler] ${message}`),
-  error: (message) => console.error(`[scheduler] ${message}`),
+  info: (message) => console.log(`${new Date().toISOString()} [scheduler] ${message}`),
+  error: (message) => console.error(`${new Date().toISOString()} [scheduler] ${message}`),
 };
 
 export interface SchedulerOptions {

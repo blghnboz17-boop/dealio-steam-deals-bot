@@ -15,6 +15,7 @@ describe('loadEnvironment', () => {
       discordGuildId: '987654321098765432',
       databasePath: './data/wishlist.db',
       pollIntervalHours: 6,
+      notificationRetryIntervalSeconds: 60,
     });
   });
 
@@ -37,5 +38,15 @@ describe('loadEnvironment', () => {
     expect(() =>
       loadEnvironment({ ...validEnvironment, POLL_INTERVAL_HOURS: '1000' }),
     ).toThrow('Environment variable POLL_INTERVAL_HOURS must be between 0.25 and 168');
+    expect(() => loadEnvironment({
+      ...validEnvironment,
+      NOTIFICATION_RETRY_INTERVAL_SECONDS: '0',
+    })).toThrow(
+      'Environment variable NOTIFICATION_RETRY_INTERVAL_SECONDS must be between 1 and 3600',
+    );
+    expect(() => loadEnvironment({
+      ...validEnvironment,
+      NOTIFICATION_RETRY_INTERVAL_SECONDS: '1.5',
+    })).toThrow('Environment variable NOTIFICATION_RETRY_INTERVAL_SECONDS must be a whole number');
   });
 });

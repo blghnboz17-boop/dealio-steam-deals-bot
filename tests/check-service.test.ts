@@ -212,6 +212,31 @@ describe('CheckService sale state', () => {
     services.database.close();
   });
 
+  it('does not change check or wishlist state when shutdown cancels Steam work', async () => {
+    const steamClient = {
+      getWishlistWithErrors: vi
+        .fn()
+        .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] })
+        .mockRejectedValueOnce(new SteamWishlistError('STEAM_CANCELLED', 'shutdown')),
+    };
+    const services = createServices(steamClient);
+    await services.checkService.check('discord-user');
+    const stateBefore = services.wishlistStateRepository.findByDiscordUserAndAppId(
+      'discord-user',
+      10,
+    );
+    const checkBefore = services.checkStateRepository.findByDiscordUserId('discord-user');
+
+    await expect(services.checkService.check('discord-user')).resolves.toEqual({
+      status: 'unavailable',
+      errorCode: 'STEAM_CANCELLED',
+    });
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toEqual(stateBefore);
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')).toEqual(checkBefore);
+    services.database.close();
+  });
+
   it('preserves an active sale episode while the wishlist is inaccessible', async () => {
     const steamClient = {
       getWishlistWithErrors: vi

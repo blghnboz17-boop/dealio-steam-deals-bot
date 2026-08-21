@@ -3,12 +3,20 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { WishlistScheduler } from './scheduler.js';
 import type { ApplicationTaskTracker } from './application-task-tracker.js';
 import type { ProcessLock } from './process-lock.js';
+import type { RuntimeHealth } from './runtime-health.js';
+
+interface Stoppable {
+  stop(): Promise<void>;
+}
 
 export class BotRuntime {
   private readonly shutdownTimeoutMs: number;
   private readonly logger: Pick<Console, 'error'>;
   private readonly taskTracker: Pick<ApplicationTaskTracker, 'stop'>;
   private readonly processLock: Pick<ProcessLock, 'release'>;
+  private readonly additionalSchedulers: readonly Stoppable[];
+  private readonly cancelActiveWork: () => void;
+  private readonly health?: Pick<RuntimeHealth, 'markStopping' | 'markStopped' | 'markFailed'>;
   private stopPromise: Promise<void> | null = null;
 
   public constructor(
@@ -20,12 +28,18 @@ export class BotRuntime {
       readonly logger?: Pick<Console, 'error'>;
       readonly taskTracker?: Pick<ApplicationTaskTracker, 'stop'>;
       readonly processLock?: Pick<ProcessLock, 'release'>;
+      readonly additionalSchedulers?: readonly Stoppable[];
+      readonly cancelActiveWork?: () => void;
+      readonly health?: Pick<RuntimeHealth, 'markStopping' | 'markStopped' | 'markFailed'>;
     } = {},
   ) {
     this.shutdownTimeoutMs = options.shutdownTimeoutMs ?? 30_000;
     this.logger = options.logger ?? console;
     this.taskTracker = options.taskTracker ?? { stop: async () => undefined };
     this.processLock = options.processLock ?? { release: () => undefined };
+    this.additionalSchedulers = options.additionalSchedulers ?? [];
+    this.cancelActiveWork = options.cancelActiveWork ?? (() => undefined);
+    this.health = options.health;
 
     if (!Number.isSafeInteger(this.shutdownTimeoutMs) || this.shutdownTimeoutMs <= 0) {
       throw new Error('Shutdown timeout must be a positive safe integer');
@@ -41,8 +55,13 @@ export class BotRuntime {
   }
 
   private async stopResources(): Promise<void> {
+    this.health?.markStopping();
+    this.cancelActiveWork();
     const activeWorkStop = Promise.allSettled([
       callSafely(() => this.scheduler.stop()),
+      ...this.additionalSchedulers.map((scheduler) =>
+        callSafely(() => scheduler.stop()),
+      ),
       callSafely(() => this.taskTracker.stop()),
     ]);
     let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -101,8 +120,11 @@ export class BotRuntime {
     }
 
     if (errors.length > 0) {
+      this.health?.markFailed();
       throw new AggregateError(errors, 'Bot shutdown completed with errors');
     }
+
+    this.health?.markStopped();
   }
 }
 

@@ -8,6 +8,10 @@ export interface NotificationSender {
   send(candidate: NotificationCandidate, language: Language): Promise<void>;
 }
 
+export class NotificationDeliveryCancelledError extends Error {
+  public readonly name = 'NotificationDeliveryCancelledError';
+}
+
 export interface NotificationDeliveryResult {
   readonly candidateCount: number;
   readonly sentCount: number;
@@ -21,6 +25,7 @@ export interface NotificationServiceOptions {
   readonly maxAttempts?: number;
   readonly retryBaseDelayMs?: number;
   readonly maxRetryDelayMs?: number;
+  readonly lifecycleSignal?: AbortSignal;
 }
 
 const defaultSendingTimeoutMs = 15 * 60 * 1000;
@@ -35,6 +40,7 @@ export class NotificationService {
   private readonly maxAttempts: number;
   private readonly retryBaseDelayMs: number;
   private readonly maxRetryDelayMs: number;
+  private readonly lifecycleSignal?: AbortSignal;
 
   public constructor(
     private readonly userConfigRepository: UserConfigRepository,
@@ -48,6 +54,7 @@ export class NotificationService {
     this.maxAttempts = options.maxAttempts ?? defaultMaxAttempts;
     this.retryBaseDelayMs = options.retryBaseDelayMs ?? defaultRetryBaseDelayMs;
     this.maxRetryDelayMs = options.maxRetryDelayMs ?? defaultMaxRetryDelayMs;
+    this.lifecycleSignal = options.lifecycleSignal;
 
     if (!Number.isSafeInteger(this.sendingTimeoutMs) || this.sendingTimeoutMs <= 0) {
       throw new Error('Notification sending timeout must be a positive safe integer');
@@ -76,6 +83,10 @@ export class NotificationService {
   private async deliverPendingExclusive(
     discordUserId: string,
   ): Promise<NotificationDeliveryResult> {
+    if (this.lifecycleSignal?.aborted) {
+      return { candidateCount: 0, sentCount: 0, failedCount: 0 };
+    }
+
     const config = this.userConfigRepository.findByDiscordUserId(discordUserId);
 
     if (!config) {
@@ -93,6 +104,10 @@ export class NotificationService {
     let failedCount = 0;
 
     for (const candidate of candidates) {
+      if (this.lifecycleSignal?.aborted) {
+        break;
+      }
+
       if (candidate.attemptCount >= this.maxAttempts) {
         this.wishlistStateRepository.markNotificationTerminal(
           candidate,
@@ -114,6 +129,10 @@ export class NotificationService {
       try {
         await this.sender.send(candidate, config.language);
       } catch (error: unknown) {
+        if (error instanceof NotificationDeliveryCancelledError) {
+          break;
+        }
+
         const message = error instanceof Error ? error.message : 'Unknown Discord error';
         const attemptCount = candidate.attemptCount + 1;
         const terminal = isPermanentDiscordError(error) || attemptCount >= this.maxAttempts;

@@ -123,6 +123,10 @@ export class CheckService {
       }
 
       const errorCode = error.code;
+      if (errorCode === 'STEAM_CANCELLED') {
+        return { status: 'unavailable', errorCode };
+      }
+
       try {
         this.checkStateRepository.markUnavailable(
           discordUserId,

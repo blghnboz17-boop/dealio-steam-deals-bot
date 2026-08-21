@@ -261,6 +261,37 @@ describe('BotRuntime', () => {
     expect(database.close).toHaveBeenCalledTimes(1);
   });
 
+  it('cancels active delivery and stops additional schedulers before closing resources', async () => {
+    const calls: string[] = [];
+    const scheduler = { stop: vi.fn(async () => { calls.push('scheduler'); }) };
+    const retryScheduler = { stop: vi.fn(async () => { calls.push('retry'); }) };
+    const client = { destroy: vi.fn(async () => { calls.push('client'); }) };
+    const database = { close: vi.fn(() => calls.push('database')) };
+    const health = {
+      markStopping: vi.fn(() => calls.push('stopping')),
+      markStopped: vi.fn(() => calls.push('stopped')),
+      markFailed: vi.fn(),
+    };
+    const runtime = new BotRuntime(scheduler, client, database, {
+      additionalSchedulers: [retryScheduler],
+      cancelActiveWork: () => calls.push('cancel'),
+      health,
+    });
+
+    await runtime.stop();
+
+    expect(calls).toEqual([
+      'stopping',
+      'cancel',
+      'scheduler',
+      'retry',
+      'client',
+      'database',
+      'stopped',
+    ]);
+    expect(retryScheduler.stop).toHaveBeenCalledOnce();
+  });
+
   it('keeps resources open after the timeout until scheduler work finishes', async () => {
     let resolveStop: (() => void) | undefined;
     const scheduler = {

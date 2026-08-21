@@ -16,12 +16,26 @@ $nodePidPath = Join-Path $runtimeDirectory 'bot.node.pid'
 $stdoutPath = Join-Path $runtimeDirectory 'bot.stdout.log'
 $stderrPath = Join-Path $runtimeDirectory 'bot.stderr.log'
 $shutdownRequestPath = Join-Path $runtimeDirectory 'shutdown.request'
+$healthPath = Join-Path $runtimeDirectory 'bot.health.json'
 $runnerPath = Join-Path $resolvedProjectRoot 'scripts\run-bot.ps1'
+$hashProvider = [System.Security.Cryptography.SHA256]::Create()
+try {
+    $rootHashBytes = $hashProvider.ComputeHash(
+        [System.Text.Encoding]::UTF8.GetBytes($resolvedProjectRoot.ToLowerInvariant())
+    )
+} finally {
+    $hashProvider.Dispose()
+}
+$rootHash = [System.BitConverter]::ToString($rootHashBytes).Replace('-', '')
+$operationMutex = [System.Threading.Mutex]::new(
+    $false,
+    "Local\SteamWishlistDiscordBot-$rootHash"
+)
 
 function Write-Status {
     param([string]$Message)
 
-    Write-Host "[bot] $Message"
+    Write-Host "$([DateTime]::UtcNow.ToString('o')) [bot] $Message"
 }
 
 function Get-ProcessCommandLine {
@@ -224,6 +238,9 @@ function Start-Bot {
         Remove-Item -LiteralPath $shutdownRequestPath -Force
     }
     New-Item -ItemType Directory -Path $runtimeDirectory -Force | Out-Null
+    Remove-Item -LiteralPath $healthPath -Force -ErrorAction SilentlyContinue
+    Get-ChildItem -LiteralPath $runtimeDirectory -Filter 'bot.health.json.*.tmp' `
+        -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
     $shellPath = (Get-Process -Id $PID).Path
     if ([string]::IsNullOrWhiteSpace($shellPath)) {
         $shellPath = 'powershell.exe'
@@ -240,22 +257,89 @@ function Start-Bot {
         -PassThru
 
     Set-Content -LiteralPath $pidPath -Value $process.Id -NoNewline
-    Start-Sleep -Seconds 1
-    if (-not (Test-IsBotRunner -ProcessId $process.Id)) {
+    $ready = $false
+    $startupFailure = $null
+    $deadline = [DateTime]::UtcNow.AddSeconds(60)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        if (-not (Test-IsBotRunner -ProcessId $process.Id)) {
+            $startupFailure = "Bot runner exited during startup. See $stderrPath."
+            break
+        }
+
+        if (Test-Path -LiteralPath $healthPath) {
+            try {
+                $health = Get-Content -LiteralPath $healthPath -Raw | ConvertFrom-Json
+                if ($health.schemaVersion -eq 1 -and $health.phase -eq 'ready' -and `
+                    $health.discordReady -eq $true) {
+                    $healthProcessId = 0
+                    $heartbeat = [DateTime]::MinValue
+                    $validPid = [int]::TryParse([string]$health.pid, [ref]$healthProcessId)
+                    $validHeartbeat = [DateTime]::TryParse(
+                        [string]$health.heartbeatAt,
+                        [ref]$heartbeat
+                    )
+                    $heartbeatAge = [DateTime]::UtcNow - $heartbeat.ToUniversalTime()
+                    if ($validPid -and $validHeartbeat -and `
+                        $heartbeatAge.TotalSeconds -ge -5 -and `
+                        $heartbeatAge.TotalSeconds -le 30 -and `
+                        (Test-IsBotNode -ProcessId $healthProcessId)) {
+                        Set-Content -LiteralPath $nodePidPath -Value $healthProcessId -NoNewline
+                        $ready = $true
+                        break
+                    }
+                } elseif ($health.phase -eq 'failed' -or $health.phase -eq 'stopped') {
+                    $startupFailure = "Bot reported startup phase '$($health.phase)'. See $stderrPath."
+                    break
+                }
+            } catch {
+                # Atomic health replacement can briefly race this read; retry until the deadline.
+            }
+        }
+
+        Start-Sleep -Milliseconds 500
+    }
+
+    if (-not $ready) {
+        if ([string]::IsNullOrWhiteSpace($startupFailure)) {
+            $startupFailure = "Bot readiness timed out. See $stderrPath."
+        }
+        Write-Status $startupFailure
+        if (Test-IsBotRunner -ProcessId $process.Id) {
+            & taskkill.exe /PID $process.Id /T /F *> $null
+            Start-Sleep -Milliseconds 500
+        }
         Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
-        Write-Status "Bot runner exited during startup. See $stderrPath."
+        Remove-Item -LiteralPath $nodePidPath -Force -ErrorAction SilentlyContinue
         exit 1
     }
     Write-Status "Bot started (PID $($process.Id))."
     Write-Status "Output: $stdoutPath"
 }
 
-switch ($Action) {
-    'Start' { Start-Bot }
-    'Stop' { Stop-Bot }
-    'Restart' {
-        Stop-Bot
-        Start-Sleep -Milliseconds 500
-        Start-Bot
+$mutexAcquired = $false
+try {
+    try {
+        $mutexAcquired = $operationMutex.WaitOne(70000)
+    } catch [System.Threading.AbandonedMutexException] {
+        $mutexAcquired = $true
     }
+    if (-not $mutexAcquired) {
+        Write-Status 'Another bot control operation is already in progress.'
+        exit 1
+    }
+
+    switch ($Action) {
+        'Start' { Start-Bot }
+        'Stop' { Stop-Bot }
+        'Restart' {
+            Stop-Bot
+            Start-Sleep -Milliseconds 500
+            Start-Bot
+        }
+    }
+} finally {
+    if ($mutexAcquired) {
+        $operationMutex.ReleaseMutex()
+    }
+    $operationMutex.Dispose()
 }

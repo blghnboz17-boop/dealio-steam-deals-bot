@@ -280,7 +280,7 @@ describe('SteamClient', () => {
     }
   });
 
-  it('honors Retry-After before retrying a rate-limited request', async () => {
+  it('caps Retry-After before retrying a rate-limited request', async () => {
     const sleep = vi.fn().mockResolvedValue(undefined);
     const limiter = new SteamRequestLimiter(1, sleep);
     const fetchMock = createFetchMock()
@@ -295,7 +295,7 @@ describe('SteamClient', () => {
         '76561198000000000',
       ),
     ).resolves.toEqual([]);
-    expect(sleep).toHaveBeenCalledWith(300_000);
+    expect(sleep).toHaveBeenCalledWith(60_000, undefined);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -315,7 +315,7 @@ describe('SteamClient', () => {
       .mockImplementation(() => Promise.resolve(jsonResponse({ response: {} })));
     const first = new SteamClient({ fetchImpl: fetchMock, maxRetries: 1, requestLimiter: limiter })
       .getWishlist('76561198000000000');
-    await vi.waitFor(() => expect(sleep).toHaveBeenCalledWith(10_000));
+    await vi.waitFor(() => expect(sleep).toHaveBeenCalledWith(10_000, undefined));
     const second = new SteamClient({ fetchImpl: fetchMock, requestLimiter: limiter })
       .getWishlist('76561198000000001');
     await Promise.resolve();
@@ -451,6 +451,77 @@ describe('SteamClient', () => {
         '76561198000000000',
       ),
     ).rejects.toMatchObject({ code: 'STEAM_TIMEOUT' });
+  });
+
+  it('cancels active Steam work during application shutdown', async () => {
+    const lifecycle = new AbortController();
+    const fetchMock = createFetchMock().mockImplementation(
+      () => new Promise<Response>(() => undefined),
+    );
+    const request = new SteamClient({
+      fetchImpl: fetchMock,
+      lifecycleSignal: lifecycle.signal,
+    }).getWishlist('76561198000000000');
+    const rejection = expect(request).rejects.toMatchObject({ code: 'STEAM_CANCELLED' });
+    lifecycle.abort();
+
+    await rejection;
+  });
+
+  it('rejects a partially loaded wishlist when app-detail work is cancelled', async () => {
+    const lifecycle = new AbortController();
+    const fetchMock = createFetchMock()
+      .mockResolvedValueOnce(jsonResponse({
+        response: { items: [{ appid: 10 }, { appid: 20 }] },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        '10': {
+          success: true,
+          data: {
+            steam_appid: 10,
+            name: 'Completed Game',
+            is_free: false,
+            price_overview: {
+              currency: 'TRY',
+              initial: 1_000,
+              final: 500,
+              discount_percent: 50,
+            },
+          },
+        },
+      }))
+      .mockImplementationOnce(() => new Promise<Response>(() => undefined));
+    const request = new SteamClient({
+      fetchImpl: fetchMock,
+      maxConcurrency: 1,
+      lifecycleSignal: lifecycle.signal,
+    }).getWishlistWithErrors('76561198000000000');
+    const rejection = expect(request).rejects.toMatchObject({ code: 'STEAM_CANCELLED' });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    lifecycle.abort();
+
+    await rejection;
+  });
+
+  it('removes cancelled limiter waiters without losing capacity', async () => {
+    const limiter = new SteamRequestLimiter(1);
+    let releaseFirst: (() => void) | undefined;
+    const first = limiter.run(() => new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    }));
+    const lifecycle = new AbortController();
+    const secondOperation = vi.fn().mockResolvedValue(undefined);
+    const second = limiter.run(secondOperation, lifecycle.signal);
+    const rejection = expect(second).rejects.toMatchObject({ name: 'AbortError' });
+    lifecycle.abort();
+    await rejection;
+    releaseFirst?.();
+    await first;
+
+    const thirdOperation = vi.fn().mockResolvedValue(undefined);
+    await limiter.run(thirdOperation);
+    expect(secondOperation).not.toHaveBeenCalled();
+    expect(thirdOperation).toHaveBeenCalledOnce();
   });
 
   it('rejects HTML or malformed JSON responses', async () => {

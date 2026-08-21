@@ -13,11 +13,13 @@ import { BotRuntime } from './application/bot-runtime.js';
 import { ApplicationTaskTracker } from './application/application-task-tracker.js';
 import { CheckService } from './application/check-service.js';
 import { NotificationService } from './application/notification-service.js';
+import { NotificationRetryScheduler } from './application/notification-retry-scheduler.js';
 import { WishlistScheduler } from './application/scheduler.js';
 import { StatusService } from './application/status-service.js';
 import { UserConfigurationService } from './application/user-configuration-service.js';
 import { UserOperationCoordinator } from './application/user-operation-coordinator.js';
 import { ProcessLock } from './application/process-lock.js';
+import { RuntimeHealth } from './application/runtime-health.js';
 import { loadEnvironment, type EnvironmentConfig } from './config/environment.js';
 import {
   createDatabase,
@@ -35,15 +37,29 @@ import { handleDeleteData } from './discord/commands/delete-data.js';
 import { DiscordNotificationSender } from './discord/notification-sender.js';
 import { registerCommands } from './discord/register-commands.js';
 
+interface StartBotOptions {
+  readonly signal?: AbortSignal;
+  readonly nodePidPath?: string;
+  readonly healthPath?: string;
+  readonly health?: RuntimeHealth;
+}
+
 export async function startBot(
   environment: EnvironmentConfig = loadEnvironment(),
-  options: { readonly signal?: AbortSignal; readonly nodePidPath?: string } = {},
+  options: StartBotOptions = {},
 ): Promise<BotRuntime> {
   if (options.signal?.aborted) {
     throw new Error('Bot startup was cancelled');
   }
 
   const processLock = ProcessLock.acquire(environment.databasePath);
+  let health: RuntimeHealth | undefined;
+  try {
+    health = options.health ?? (options.healthPath ? new RuntimeHealth(options.healthPath) : undefined);
+  } catch (error: unknown) {
+    processLock.release();
+    throw error;
+  }
   let database;
   try {
     database = createDatabase(environment.databasePath);
@@ -51,6 +67,7 @@ export async function startBot(
     if (!(error instanceof DatabaseInitializationError) || error.databaseClosed) {
       processLock.release();
     }
+    health?.markFailed();
     throw error;
   }
 
@@ -62,7 +79,10 @@ export async function startBot(
     const wishlistStateRepository = new WishlistStateRepository(database);
     const taskTracker = new ApplicationTaskTracker();
     const userOperationCoordinator = new UserOperationCoordinator();
-    const steamClient = new SteamClient();
+    const applicationAbortController = new AbortController();
+    const steamClient = new SteamClient({
+      lifecycleSignal: applicationAbortController.signal,
+    });
     const userConfigurationService = new UserConfigurationService(
       userConfigRepository,
       steamClient,
@@ -77,11 +97,17 @@ export async function startBot(
       userOperationCoordinator,
     );
     const client = createDiscordClient();
+    health?.setDiscordReadyProbe(() => client.isReady());
     const notificationService = new NotificationService(
       userConfigRepository,
       wishlistStateRepository,
-      new DiscordNotificationSender(client),
-      { coordinator: userOperationCoordinator },
+      new DiscordNotificationSender(client, {
+        lifecycleSignal: applicationAbortController.signal,
+      }),
+      {
+        coordinator: userOperationCoordinator,
+        lifecycleSignal: applicationAbortController.signal,
+      },
     );
     const scheduler = new WishlistScheduler({
       intervalHours: environment.pollIntervalHours,
@@ -89,9 +115,17 @@ export async function startBot(
       checkService,
       notificationService,
     });
+    const notificationRetryScheduler = new NotificationRetryScheduler({
+      intervalSeconds: environment.notificationRetryIntervalSeconds,
+      userConfigRepository,
+      notificationService,
+    });
     runtime = new BotRuntime(scheduler, client, database, {
       taskTracker,
       processLock,
+      additionalSchedulers: [notificationRetryScheduler],
+      cancelActiveWork: () => applicationAbortController.abort(),
+      health,
     });
     const startedRuntime = runtime;
     if (options.nodePidPath) {
@@ -104,10 +138,15 @@ export async function startBot(
     };
     options.signal?.addEventListener('abort', handleStartupAbort, { once: true });
 
-    client.once(Events.ClientReady, (readyClient) => {
-      console.log(`Discord bot is ready as ${readyClient.user.tag}`);
+    client.once(Events.ClientReady, () => {
+      console.log(`${new Date().toISOString()} Discord client is ready; schedulers started.`);
       scheduler.start();
+      notificationRetryScheduler.start();
+      health?.markReady();
     });
+    client.on(Events.ShardReady, () => health?.refreshDiscordReady());
+    client.on(Events.ShardDisconnect, () => health?.refreshDiscordReady());
+    client.on(Events.Invalidated, () => health?.refreshDiscordReady());
 
     client.on(Events.InteractionCreate, (interaction) => {
       if (!interaction.isChatInputCommand()) {
@@ -142,7 +181,7 @@ export async function startBot(
       });
     });
 
-    await registerCommands(environment);
+    await registerCommands(environment, options.signal);
     if (options.signal?.aborted) {
       throw new Error('Bot startup was cancelled');
     }
@@ -164,6 +203,11 @@ export async function startBot(
       } catch (releaseError: unknown) {
         console.error('Could not release process lock after startup failure', releaseError);
       }
+    }
+    if (options.signal?.aborted) {
+      health?.markStopped();
+    } else {
+      health?.markFailed();
     }
     throw error;
   }
@@ -205,6 +249,7 @@ if (isMainModule) {
   const runtimeDirectory = resolve('.runtime');
   const shutdownRequestPath = resolve(runtimeDirectory, 'shutdown.request');
   const nodePidPath = resolve(runtimeDirectory, 'bot.node.pid');
+  const healthPath = resolve(runtimeDirectory, 'bot.health.json');
   mkdirSync(runtimeDirectory, { recursive: true });
   const shutdownRequestTimer = setInterval(() => {
     try {
@@ -220,7 +265,10 @@ if (isMainModule) {
       rmSync(shutdownRequestPath, { force: true });
       requestShutdown('control request');
     } catch (error: unknown) {
-      console.error('Could not process cooperative shutdown request', error);
+      console.error(
+        `${new Date().toISOString()} Could not process cooperative shutdown request`,
+        error,
+      );
     }
   }, 500);
   shutdownRequestTimer.unref();
@@ -232,12 +280,12 @@ if (isMainModule) {
 
     shutdownRequested = true;
     clearInterval(shutdownRequestTimer);
-    console.log(`Received ${signal}; shutting down.`);
+    console.log(`${new Date().toISOString()} Received ${signal}; shutting down.`);
     startupAbortController.abort();
     if (runtime) {
       void runtime.stop()
         .catch((error: unknown) => {
-          console.error('Bot shutdown failed', error);
+          console.error(`${new Date().toISOString()} Bot shutdown failed`, error);
         })
         .finally(removeNodePid);
     }
@@ -256,10 +304,12 @@ if (isMainModule) {
   process.on('SIGINT', () => requestShutdown('SIGINT'));
   process.on('SIGTERM', () => requestShutdown('SIGTERM'));
 
-  startBot(loadEnvironment(), {
-    signal: startupAbortController.signal,
-    nodePidPath,
-  })
+  Promise.resolve()
+    .then(() => startBot(loadEnvironment(), {
+      signal: startupAbortController.signal,
+      nodePidPath,
+      healthPath,
+    }))
     .then(async (startedRuntime) => {
       runtime = startedRuntime;
       if (shutdownRequested) {
@@ -270,7 +320,7 @@ if (isMainModule) {
     .catch((error: unknown) => {
       clearInterval(shutdownRequestTimer);
       if (!shutdownRequested) {
-        console.error('Bot failed to start', error);
+        console.error(`${new Date().toISOString()} Bot failed to start`, error);
         process.exitCode = 1;
       }
       removeNodePid();

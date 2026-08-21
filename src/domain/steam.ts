@@ -8,7 +8,8 @@ export type SteamWishlistErrorCode =
   | 'STEAM_INVALID_RESPONSE'
   | 'STEAM_SCHEMA_INVALID'
   | 'STEAM_APP_NOT_FOUND'
-  | 'STEAM_WISHLIST_INACCESSIBLE';
+  | 'STEAM_WISHLIST_INACCESSIBLE'
+  | 'STEAM_CANCELLED';
 
 export class SteamWishlistError extends Error {
   public readonly name = 'SteamWishlistError';
