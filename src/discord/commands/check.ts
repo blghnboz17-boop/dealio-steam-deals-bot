@@ -1,4 +1,8 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
+import {
+  ChatInputCommandInteraction,
+  MessageFlags,
+  SlashCommandBuilder,
+} from 'discord.js';
 import { CheckService } from '../../application/check-service.js';
 import { NotificationService } from '../../application/notification-service.js';
 import { StatusService } from '../../application/status-service.js';
@@ -20,12 +24,12 @@ export async function handleCheck(
   if (!config) {
     await interaction.reply({
       content: messagesFor(language).notConfigured,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await checkService.check(interaction.user.id);
   const delivery = result.status === 'success'
     ? await notificationService.deliverPending(interaction.user.id)

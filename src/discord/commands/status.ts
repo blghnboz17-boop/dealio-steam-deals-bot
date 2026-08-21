@@ -1,4 +1,8 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
+import {
+  ChatInputCommandInteraction,
+  MessageFlags,
+  SlashCommandBuilder,
+} from 'discord.js';
 import { StatusService } from '../../application/status-service.js';
 import type { Language } from '../../domain/user-config.js';
 import { messagesFor } from '../messages.js';
@@ -25,7 +29,7 @@ export async function handleStatus(
   if (!status.config) {
     await interaction.reply({
       content: messagesFor('tr').statusNotConfigured,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -57,5 +61,5 @@ export async function handleStatus(
         `Next check: ${displayTime(checkState?.nextScheduledAt ?? null)}`,
       ].join('\n');
 
-  await interaction.reply({ content, ephemeral: true });
+  await interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }

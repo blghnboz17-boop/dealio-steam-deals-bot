@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { MessageFlags } from 'discord.js';
 import { commands } from '../src/discord/register-commands.js';
 import { handleCheck } from '../src/discord/commands/check.js';
 import { handleSetup } from '../src/discord/commands/setup.js';
@@ -88,7 +89,7 @@ describe('Discord slash commands', () => {
 
     expect(interaction.reply).toHaveBeenCalledWith({
       content: expect.stringContaining('Game details public'),
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   });
 
@@ -117,7 +118,7 @@ describe('Discord slash commands', () => {
 
     expect(interaction.reply).toHaveBeenCalledWith({
       content: expect.stringContaining('Access error:'),
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   });
 });

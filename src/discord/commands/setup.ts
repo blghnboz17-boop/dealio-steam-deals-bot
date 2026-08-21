@@ -1,5 +1,6 @@
 import {
   ChatInputCommandInteraction,
+  MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js';
 import {
@@ -44,13 +45,13 @@ export async function handleSetup(
     );
     await interaction.reply({
       content: messagesFor(config.language).setupSuccess,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } catch (error) {
     if (error instanceof InvalidUserConfigurationError) {
       await interaction.reply({
         content: messagesFor('tr').invalidSetup,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -59,7 +60,7 @@ export async function handleSetup(
       const content = error.code === 'STEAM_WISHLIST_INACCESSIBLE'
         ? messagesFor(language as 'tr' | 'en').wishlistInaccessible
         : messagesFor(language as 'tr' | 'en').setupValidationUnavailable;
-      await interaction.reply({ content, ephemeral: true });
+      await interaction.reply({ content, flags: MessageFlags.Ephemeral });
       return;
     }
 

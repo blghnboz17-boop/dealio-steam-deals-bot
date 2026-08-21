@@ -1,4 +1,8 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
+import {
+  ChatInputCommandInteraction,
+  MessageFlags,
+  SlashCommandBuilder,
+} from 'discord.js';
 import { UserConfigurationService } from '../../application/user-configuration-service.js';
 import { messagesFor } from '../messages.js';
 
@@ -23,7 +27,7 @@ export async function handleDeleteData(
   if (!confirmed) {
     await interaction.reply({
       content: messagesFor(language).deleteNotConfirmed,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -33,6 +37,6 @@ export async function handleDeleteData(
     content: deleted
       ? messagesFor(language).deleteSuccess
       : messagesFor(language).deleteNoData,
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }

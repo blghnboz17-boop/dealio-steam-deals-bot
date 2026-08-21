@@ -8,7 +8,7 @@ import {
 } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Events } from 'discord.js';
+import { Events, MessageFlags } from 'discord.js';
 import { BotRuntime } from './application/bot-runtime.js';
 import { ApplicationTaskTracker } from './application/application-task-tracker.js';
 import { CheckService } from './application/check-service.js';
@@ -171,7 +171,7 @@ export async function startBot(
             } else {
               await interaction.reply({
                 content: 'The command could not be completed.',
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
               });
             }
           } catch (replyError: unknown) {
@@ -234,7 +234,10 @@ async function handleInteraction(
       await handleDeleteData(interaction, userConfigurationService);
       return;
     default:
-      await interaction.reply({ content: 'Unknown command.', ephemeral: true });
+      await interaction.reply({
+        content: 'Unknown command.',
+        flags: MessageFlags.Ephemeral,
+      });
   }
 }
 

@@ -44,6 +44,31 @@ function Get-ProcessCommandLine {
     return Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction SilentlyContinue
 }
 
+function Test-ProcessInfoIsBotRunner {
+    param([object]$ProcessInfo)
+
+    if ($null -eq $ProcessInfo -or [string]::IsNullOrWhiteSpace($ProcessInfo.CommandLine)) {
+        return $false
+    }
+
+    $commandLine = $ProcessInfo.CommandLine.Replace('/', '\').ToLowerInvariant()
+    return $commandLine.Contains('run-bot.ps1') -and `
+        (Test-ReferencesProject -CommandLine $ProcessInfo.CommandLine)
+}
+
+function Test-ProcessInfoIsBotNode {
+    param([object]$ProcessInfo)
+
+    if ($null -eq $ProcessInfo -or [string]::IsNullOrWhiteSpace($ProcessInfo.CommandLine)) {
+        return $false
+    }
+
+    $commandLine = $ProcessInfo.CommandLine.Replace('/', '\').ToLowerInvariant()
+    return $ProcessInfo.Name.ToLowerInvariant().StartsWith('node') -and `
+        (Test-ReferencesProject -CommandLine $ProcessInfo.CommandLine) -and `
+        ($commandLine.Contains('src\index.ts') -or $commandLine.Contains('dist\index.js'))
+}
+
 function Test-ReferencesProject {
     param([string]$CommandLine)
 
@@ -57,27 +82,14 @@ function Test-IsBotRunner {
     param([int]$ProcessId)
 
     $processInfo = Get-ProcessCommandLine -ProcessId $ProcessId
-    if ($null -eq $processInfo -or [string]::IsNullOrWhiteSpace($processInfo.CommandLine)) {
-        return $false
-    }
-
-    $commandLine = $processInfo.CommandLine.Replace('/', '\').ToLowerInvariant()
-    return $commandLine.Contains('run-bot.ps1') -and `
-        (Test-ReferencesProject -CommandLine $processInfo.CommandLine)
+    return Test-ProcessInfoIsBotRunner -ProcessInfo $processInfo
 }
 
 function Test-IsBotNode {
     param([int]$ProcessId)
 
     $processInfo = Get-ProcessCommandLine -ProcessId $ProcessId
-    if ($null -eq $processInfo -or [string]::IsNullOrWhiteSpace($processInfo.CommandLine)) {
-        return $false
-    }
-
-    $commandLine = $processInfo.CommandLine.Replace('/', '\').ToLowerInvariant()
-    return $processInfo.Name.ToLowerInvariant().StartsWith('node') -and `
-        (Test-ReferencesProject -CommandLine $processInfo.CommandLine) -and `
-        ($commandLine.Contains('src\index.ts') -or $commandLine.Contains('dist\index.js'))
+    return Test-ProcessInfoIsBotNode -ProcessInfo $processInfo
 }
 
 function Get-TrackedProcessId {
@@ -102,15 +114,13 @@ function Get-TrackedProcessId {
 
 function Find-BotRunners {
     return Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        $commandLine = ([string]$_.CommandLine).Replace('/', '\').ToLowerInvariant()
-        $commandLine.Contains('run-bot.ps1') -and `
-            (Test-ReferencesProject -CommandLine ([string]$_.CommandLine))
+        Test-ProcessInfoIsBotRunner -ProcessInfo $_
     }
 }
 
 function Find-BotNodes {
     return Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-        Test-IsBotNode -ProcessId ([int]$_.ProcessId)
+        Test-ProcessInfoIsBotNode -ProcessInfo $_
     }
 }
 
@@ -135,6 +145,7 @@ function Get-TrackedNodeProcessId {
 }
 
 function Stop-Bot {
+    Write-Status 'Checking for a running bot...'
     $processId = Get-TrackedProcessId
     $nodeProcessId = Get-TrackedNodeProcessId
     if ($null -eq $nodeProcessId) {
@@ -167,11 +178,19 @@ function Stop-Bot {
 
     if ($requestWritten) {
         $deadline = [DateTime]::UtcNow.AddSeconds(40)
+        $nextProgressAt = [DateTime]::UtcNow.AddSeconds(5)
         while ([DateTime]::UtcNow -lt $deadline) {
             $runnerRunning = $null -ne $processId -and (Test-IsBotRunner -ProcessId $processId)
             $nodeRunning = $null -ne $nodeProcessId -and (Test-IsBotNode -ProcessId $nodeProcessId)
             if (-not $runnerRunning -and -not $nodeRunning) {
                 break
+            }
+            if ([DateTime]::UtcNow -ge $nextProgressAt) {
+                $remainingSeconds = [Math]::Max(0, [Math]::Ceiling(
+                    ($deadline - [DateTime]::UtcNow).TotalSeconds
+                ))
+                Write-Status "Waiting for graceful shutdown ($remainingSeconds seconds remaining)..."
+                $nextProgressAt = [DateTime]::UtcNow.AddSeconds(5)
             }
             Start-Sleep -Milliseconds 500
         }
@@ -204,6 +223,7 @@ function Stop-Bot {
 }
 
 function Start-Bot {
+    Write-Status 'Checking for an existing bot process...'
     $processId = Get-TrackedProcessId
     if ($null -ne $processId) {
         Write-Status "Bot is already running (PID $processId)."
@@ -247,6 +267,7 @@ function Start-Bot {
     }
 
     $argumentList = '-NoProfile -ExecutionPolicy Bypass -File "' + $runnerPath + '" -ProjectRoot "' + $resolvedProjectRoot + '"'
+    Write-Status 'Launching the bot and waiting up to 60 seconds for Discord readiness...'
     $process = Start-Process `
         -FilePath $shellPath `
         -ArgumentList $argumentList `
@@ -260,6 +281,7 @@ function Start-Bot {
     $ready = $false
     $startupFailure = $null
     $deadline = [DateTime]::UtcNow.AddSeconds(60)
+    $nextProgressAt = [DateTime]::UtcNow.AddSeconds(5)
     while ([DateTime]::UtcNow -lt $deadline) {
         if (-not (Test-IsBotRunner -ProcessId $process.Id)) {
             $startupFailure = "Bot runner exited during startup. See $stderrPath."
@@ -296,6 +318,14 @@ function Start-Bot {
             }
         }
 
+        if ([DateTime]::UtcNow -ge $nextProgressAt) {
+            $remainingSeconds = [Math]::Max(0, [Math]::Ceiling(
+                ($deadline - [DateTime]::UtcNow).TotalSeconds
+            ))
+            Write-Status "Still waiting for Discord readiness ($remainingSeconds seconds remaining)..."
+            $nextProgressAt = [DateTime]::UtcNow.AddSeconds(5)
+        }
+
         Start-Sleep -Milliseconds 500
     }
 
@@ -318,13 +348,14 @@ function Start-Bot {
 
 $mutexAcquired = $false
 try {
+    Write-Status "$Action requested. Acquiring the bot control lock..."
     try {
-        $mutexAcquired = $operationMutex.WaitOne(70000)
+        $mutexAcquired = $operationMutex.WaitOne(3000)
     } catch [System.Threading.AbandonedMutexException] {
         $mutexAcquired = $true
     }
     if (-not $mutexAcquired) {
-        Write-Status 'Another bot control operation is already in progress.'
+        Write-Status 'Another bot control operation is already in progress. Try again after it finishes.'
         exit 1
     }
 
