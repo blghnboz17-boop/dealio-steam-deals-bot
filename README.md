@@ -1,6 +1,6 @@
-# Steam Wishlist Discord Bot
+# Dealio
 
-A small Discord bot that checks Steam wishlist prices and sends a direct message when a game goes on sale.
+Dealio is a Discord bot that checks Steam wishlist prices and sends a direct message when a game goes on sale.
 
 ## Status
 

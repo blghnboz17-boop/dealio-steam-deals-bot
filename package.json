@@ -1,8 +1,8 @@
 {
-  "name": "steam-wishlist-discord-bot",
+  "name": "dealio",
   "version": "0.1.0",
   "private": true,
-  "description": "Notify Discord users when Steam wishlist games go on sale.",
+  "description": "Dealio notifies Discord users when Steam wishlist games go on sale.",
   "license": "MIT",
   "type": "module",
   "engines": {
