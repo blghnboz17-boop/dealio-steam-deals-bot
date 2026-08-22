@@ -6,11 +6,16 @@ import {
 } from '../src/discord/notification-sender.js';
 import type { NotificationCandidate } from '../src/domain/wishlist-state.js';
 import { NotificationDeliveryCancelledError } from '../src/application/notification-service.js';
+import {
+  initialWishlistNoSaleMessage,
+  initialWishlistSaleMessage,
+} from '../src/discord/initial-wishlist-summary-messages.js';
 
 const candidate: NotificationCandidate = {
   discordUserId: 'discord-user',
   steamId64: '76561198000000000',
   configVersion: 1,
+  storeCountryCode: 'TR',
   appId: 10,
   gameName: 'Test Game',
   saleEpisodeId: 'episode-1',
@@ -195,5 +200,63 @@ describe('DiscordNotificationSender', () => {
       [1],
       () => ({ description: 'x'.repeat(6_001) }),
     )).toThrow('exceeds Discord limits');
+  });
+
+  it('sends the initial setup summary in limit-safe batches with regional prices', async () => {
+    const post = vi.fn()
+      .mockResolvedValueOnce({ id: '123456789012345678' })
+      .mockResolvedValue({ id: 'message' });
+    const sender = new DiscordNotificationSender({ rest: { post } } as never);
+    const sales = Array.from({ length: 11 }, (_, index) => ({
+      appId: 10 + index,
+      gameName: `Setup Game ${index + 1}`,
+      currency: 'USD',
+      normalPriceMinor: 2_000,
+      finalPriceMinor: 1_000,
+      discountPercent: 50,
+    }));
+
+    await sender.sendInitialSummary({
+      discordUserId: 'discord-user',
+      storeCountryCode: 'US',
+      capturedAt: '2026-08-23T00:00:00.000Z',
+      sales,
+    });
+
+    expect(post).toHaveBeenCalledTimes(3);
+    expect(post.mock.calls[1]?.[1]?.body).toMatchObject({
+      content: initialWishlistSaleMessage,
+      embeds: expect.any(Array),
+      allowed_mentions: { parse: [] },
+    });
+    expect(post.mock.calls[1]?.[1]?.body.embeds).toHaveLength(10);
+    expect(post.mock.calls[2]?.[1]?.body.embeds).toHaveLength(1);
+    expect(post.mock.calls[1]?.[1]?.body.embeds[0]).toMatchObject({
+      title: 'Setup Game 1',
+      url: 'https://store.steampowered.com/app/10/',
+      fields: expect.arrayContaining([
+        { name: 'Currency', value: 'USD', inline: true },
+        { name: 'Steam Store country', value: 'United States (US)', inline: true },
+      ]),
+    });
+  });
+
+  it('sends the setup-complete no-sale message without embeds', async () => {
+    const post = vi.fn()
+      .mockResolvedValueOnce({ id: '123456789012345678' })
+      .mockResolvedValueOnce({ id: 'message' });
+    const sender = new DiscordNotificationSender({ rest: { post } } as never);
+
+    await sender.sendInitialSummary({
+      discordUserId: 'discord-user',
+      storeCountryCode: 'TR',
+      capturedAt: '2026-08-23T00:00:00.000Z',
+      sales: [],
+    });
+
+    expect(post.mock.calls[1]?.[1]?.body).toEqual({
+      content: initialWishlistNoSaleMessage,
+      allowed_mentions: { parse: [] },
+    });
   });
 });

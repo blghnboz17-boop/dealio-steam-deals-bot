@@ -60,6 +60,7 @@ export async function handleWishlist(
     items: result.items,
     failedItemCount: result.errors.length,
     capturedAt: result.capturedAt,
+    storeCountryCode: result.storeCountryCode,
     globalMinimumDiscountPercent: result.globalMinimumDiscountPercent ?? 0,
     gameMinimumDiscountOverrides: new Map(result.gameMinimumDiscountOverrides ?? []),
   };

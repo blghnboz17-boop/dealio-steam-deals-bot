@@ -23,6 +23,8 @@ import { RuntimeHealth } from './application/runtime-health.js';
 import { TestNotificationService } from './application/test-notification-service.js';
 import { WishlistViewService } from './application/wishlist-view-service.js';
 import { DiscountThresholdService } from './application/discount-threshold-service.js';
+import { InitialWishlistSummaryService } from './application/initial-wishlist-summary-service.js';
+import { SetupService } from './application/setup-service.js';
 import { loadEnvironment, type EnvironmentConfig } from './config/environment.js';
 import {
   createDatabase,
@@ -43,6 +45,8 @@ import { handleStatus } from './discord/commands/status.js';
 import { handleDeleteData } from './discord/commands/delete-data.js';
 import { handleTestNotification } from './discord/commands/test-notification.js';
 import { handleWishlist } from './discord/commands/wishlist.js';
+import { handleRegion } from './discord/commands/region.js';
+import { handleStoreCountryAutocomplete } from './discord/store-country-options.js';
 import { DiscordNotificationSender } from './discord/notification-sender.js';
 import { registerCommands } from './discord/register-commands.js';
 
@@ -128,6 +132,15 @@ export async function startBot(
     const notificationSender = new DiscordNotificationSender(client, {
       lifecycleSignal: applicationAbortController.signal,
     });
+    const initialWishlistSummaryService = new InitialWishlistSummaryService(
+      checkService,
+      notificationSender,
+    );
+    const setupService = new SetupService(
+      userConfigurationService,
+      initialWishlistSummaryService,
+      userOperationCoordinator,
+    );
     const notificationService = new NotificationService(
       userConfigRepository,
       wishlistStateRepository,
@@ -143,6 +156,7 @@ export async function startBot(
       steamClient,
       undefined,
       discountThresholdRepository,
+      userOperationCoordinator,
     );
     const scheduler = new WishlistScheduler({
       intervalHours: environment.pollIntervalHours,
@@ -185,6 +199,19 @@ export async function startBot(
     client.on(Events.Invalidated, () => health?.refreshDiscordReady());
 
     client.on(Events.InteractionCreate, (interaction) => {
+      if (interaction.isAutocomplete()) {
+        taskTracker.run(async () => {
+          try {
+            await handleStoreCountryAutocomplete(interaction);
+          } catch (error: unknown) {
+            console.error('Discord store-country autocomplete failed', error);
+            if (!interaction.responded) {
+              await interaction.respond([]).catch(() => undefined);
+            }
+          }
+        });
+        return;
+      }
       if (!interaction.isChatInputCommand()) {
         return;
       }
@@ -194,6 +221,7 @@ export async function startBot(
           await handleInteraction(
             interaction,
             userConfigurationService,
+            setupService,
             statusService,
             checkService,
             notificationService,
@@ -256,6 +284,7 @@ export async function startBot(
 async function handleInteraction(
   interaction: Parameters<typeof handleSetup>[0],
   userConfigurationService: UserConfigurationService,
+  setupService: SetupService,
   statusService: StatusService,
   checkService: CheckService,
   notificationService: NotificationService,
@@ -266,7 +295,10 @@ async function handleInteraction(
 ): Promise<void> {
   switch (interaction.commandName) {
     case 'setup':
-      await handleSetup(interaction, userConfigurationService);
+      await handleSetup(interaction, setupService);
+      return;
+    case 'region':
+      await handleRegion(interaction, userConfigurationService);
       return;
     case 'status':
       await handleStatus(

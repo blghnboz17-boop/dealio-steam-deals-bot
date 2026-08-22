@@ -79,6 +79,7 @@ describe('user configuration', () => {
       'discord-user',
       '76561198000000000',
       'tr',
+      'TR',
     );
     expect(created.steamId64).toBe('76561198000000000');
     expect(created.language).toBe('tr');
@@ -101,8 +102,34 @@ describe('user configuration', () => {
   it('rejects an invalid resolved SteamID64', async () => {
     const services = createServices();
 
-    await expect(services.userConfigurationService.configure('discord-user', '123', 'tr'))
+    await expect(services.userConfigurationService.configure('discord-user', '123', 'tr', 'TR'))
       .rejects.toBeInstanceOf(InvalidUserConfigurationError);
+    services.database.close();
+  });
+
+  it('rejects an unsupported store country before resolving the Steam profile', async () => {
+    const services = createServices();
+
+    expect(() => services.userConfigurationService.configure(
+      'discord-user',
+      '76561198000000000',
+      'en',
+      'XX',
+    )).toThrow(expect.objectContaining({ code: 'INVALID_STORE_COUNTRY' }));
+    expect(services.identityResolver.resolve).not.toHaveBeenCalled();
+    services.database.close();
+  });
+
+  it('requires an explicit store country for a new configuration', async () => {
+    const services = createServices();
+
+    await expect(services.userConfigurationService.configure(
+      'discord-user',
+      '76561198000000000',
+      'en',
+    )).rejects.toMatchObject({ code: 'INVALID_STORE_COUNTRY' });
+    expect(services.identityResolver.resolve).not.toHaveBeenCalled();
+    expect(services.userConfigRepository.findByDiscordUserId('discord-user')).toBeNull();
     services.database.close();
   });
 
@@ -119,6 +146,7 @@ describe('user configuration', () => {
       'discord-user',
       'https://steamcommunity.com/id/RawVanity?tracking=1',
       'en',
+      'US',
     );
 
     expect(identityResolver.resolve).toHaveBeenCalledWith(
@@ -129,6 +157,27 @@ describe('user configuration', () => {
     expect(config.steamId64).toBe('76561198000000000');
     expect(JSON.stringify(services.database.prepare('SELECT * FROM user_config').all()))
       .not.toContain('RawVanity');
+    services.database.close();
+  });
+
+  it('keeps setup successful when wishlist validation is temporarily unavailable', async () => {
+    const wishlistAccessValidator = {
+      validateWishlistAccess: vi.fn().mockRejectedValue(
+        new SteamWishlistError('STEAM_TIMEOUT', 'temporary timeout'),
+      ),
+    };
+    const services = createServices(undefined, wishlistAccessValidator);
+
+    await expect(services.userConfigurationService.configure(
+      'discord-user',
+      '76561198000000000',
+      'en',
+      'US',
+    )).resolves.toMatchObject({
+      steamId64: '76561198000000000',
+      storeCountryCode: 'US',
+    });
+    expect(services.userConfigRepository.findByDiscordUserId('discord-user')).not.toBeNull();
     services.database.close();
   });
 
@@ -146,6 +195,7 @@ describe('user configuration', () => {
       'discord-user',
       'first-name',
       'tr',
+      'TR',
     );
 
     await expect(services.userConfigurationService.configure(
@@ -163,6 +213,7 @@ describe('user configuration', () => {
       'discord-user',
       '76561198000000000',
       'tr',
+      'TR',
     );
     await services.checkService.check('discord-user');
     expect(services.statusService.get('discord-user').checkState?.lastStatus).toBe('success');
@@ -194,6 +245,7 @@ describe('user configuration', () => {
       'discord-user',
       '76561198000000000',
       'tr',
+      'TR',
     );
     await services.checkService.check('discord-user');
 
@@ -215,6 +267,86 @@ describe('user configuration', () => {
     services.database.close();
   });
 
+  it('isolates regional prices, expires old alerts, and baselines the new country', async () => {
+    const regionalSale = {
+      appId: 10,
+      name: 'Regional Game',
+      priority: null,
+      dateAdded: null,
+      price: {
+        currency: 'EUR',
+        initialMinor: 2_000,
+        finalMinor: 1_000,
+        discountPercent: 50,
+        isFree: false,
+      },
+      onSale: true,
+    } as const;
+    const steamClient = {
+      getWishlistWithErrors: vi.fn().mockResolvedValue({ items: [regionalSale], errors: [] }),
+    };
+    const services = createServices(steamClient);
+    const original = await services.userConfigurationService.configure(
+      'discord-user',
+      '76561198000000000',
+      'en',
+      'US',
+    );
+    services.discountThresholdRepository.setGameOverride(
+      original,
+      10,
+      40,
+      '2026-08-21T00:01:00.000Z',
+    );
+    const regular = { ...regionalSale, onSale: false, price: {
+      ...regionalSale.price,
+      currency: 'USD',
+      finalMinor: 2_000,
+      discountPercent: 0,
+    } } as const;
+    services.wishlistStateRepository.recordObservation(original, {
+      item: regular,
+      saleKey: null,
+      observedAt: '2026-08-21T00:02:00.000Z',
+    });
+    const oldSale = services.wishlistStateRepository.recordObservation(original, {
+      item: { ...regionalSale, price: { ...regionalSale.price, currency: 'USD' } },
+      saleKey: 'USD:2000:1000:50',
+      observedAt: '2026-08-21T00:03:00.000Z',
+    }).notificationCandidate;
+    if (!oldSale) {
+      throw new Error('Expected old-region notification candidate');
+    }
+
+    const updated = await services.userConfigurationService.setStoreCountry('discord-user', 'DE');
+    expect(updated).toMatchObject({
+      storeCountryCode: 'DE',
+      configVersion: 2,
+      language: 'en',
+      minimumDiscountPercent: 0,
+    });
+    if (!updated) {
+      throw new Error('Expected updated regional configuration');
+    }
+    expect(services.discountThresholdRepository.findGameOverride(updated, 10)).toBe(40);
+    expect(services.wishlistStateRepository.findNotificationStatus(oldSale)).toBe('expired');
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')?.lastStatus).toBeNull();
+
+    const firstRegionalCheck = await services.checkService.check('discord-user');
+    expect(firstRegionalCheck).toMatchObject({ status: 'success', notificationCandidates: [] });
+    expect(steamClient.getWishlistWithErrors)
+      .toHaveBeenCalledWith('76561198000000000', 'DE', 'en');
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10, 2))
+      .toMatchObject({
+        storeCountryCode: 'DE',
+        currency: 'EUR',
+        onSale: true,
+        observationStatus: 'known',
+      });
+    expect(services.wishlistStateRepository.countNotificationCandidates('discord-user', 2)).toBe(0);
+    services.database.close();
+  });
+
   it('atomically toggles enabled state without changing account generation or history', async () => {
     const services = createServices();
     let now = new Date('2026-08-21T00:00:00.000Z');
@@ -229,6 +361,7 @@ describe('user configuration', () => {
       'discord-user',
       '76561198000000000',
       'en',
+      'US',
     );
     await services.checkService.check('discord-user');
     new PollScheduleRepository(services.database)
@@ -267,6 +400,7 @@ describe('user configuration', () => {
       'discord-user',
       '76561198000000000',
       'en',
+      'US',
     );
 
     await expect(services.discountThresholdService.setGlobal('discord-user', 35))
@@ -312,6 +446,7 @@ describe('user configuration', () => {
       'discord-user',
       '76561198000000001',
       'en',
+      'US',
     );
     expect(recreated.configurationId).not.toBe(previousConfigurationId);
     await expect(services.discountThresholdService.setGlobal(
@@ -338,6 +473,7 @@ describe('user configuration', () => {
       'discord-user',
       '76561198000000000',
       'tr',
+      'TR',
     );
 
     await expect(
@@ -361,6 +497,7 @@ describe('user configuration', () => {
       'discord-user',
       '76561198000000000',
       'tr',
+      'TR',
     );
     const baseItem = {
       appId: 10,
@@ -438,6 +575,7 @@ describe('check service', () => {
       'discord-user',
       '76561198000000000',
       'en',
+      'US',
     );
 
     const result = await services.checkService.check('discord-user');
@@ -460,6 +598,7 @@ describe('check service', () => {
       'discord-user',
       '76561198000000000',
       'tr',
+      'TR',
     );
 
     const firstCheck = services.checkService.check('discord-user');

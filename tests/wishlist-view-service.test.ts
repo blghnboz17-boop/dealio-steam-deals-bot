@@ -5,6 +5,7 @@ import { createDatabase } from '../src/persistence/database.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
 import { DiscountThresholdRepository } from '../src/persistence/discount-threshold-repository.js';
+import { UserOperationCoordinator } from '../src/application/user-operation-coordinator.js';
 
 const item: WishlistItem = {
   appId: 10,
@@ -44,6 +45,7 @@ describe('WishlistViewService', () => {
         configVersion: 1,
         configurationId: 'configuration-id',
         language: 'en',
+        storeCountryCode: 'US',
         minimumDiscountPercent: 0,
       }),
     };
@@ -67,17 +69,19 @@ describe('WishlistViewService', () => {
       capturedAt: '2026-08-22T12:00:00.000Z',
       configVersion: 1,
       configurationId: 'configuration-id',
+      storeCountryCode: 'US',
       globalMinimumDiscountPercent: 0,
       gameMinimumDiscountOverrides: new Map(),
     });
     expect(configReader.findByDiscordUserId).toHaveBeenCalledWith('invoking-user');
-    expect(wishlistReader.getWishlistWithErrors).toHaveBeenCalledWith('76561198000000000');
+    expect(wishlistReader.getWishlistWithErrors)
+      .toHaveBeenCalledWith('76561198000000000', 'US', 'en');
   });
 
   it('does not turn a complete Steam failure into an empty successful wishlist', async () => {
     const service = new WishlistViewService(
       { findByDiscordUserId: vi.fn().mockReturnValue({
-        steamId64: '76561198000000000', language: 'tr',
+        steamId64: '76561198000000000', language: 'tr', storeCountryCode: 'TR',
       }) } as never,
       {
         getWishlistWithErrors: vi.fn().mockRejectedValue(
@@ -99,7 +103,7 @@ describe('WishlistViewService', () => {
   it('treats a reader result containing only app errors as unavailable', async () => {
     const service = new WishlistViewService(
       { findByDiscordUserId: vi.fn().mockReturnValue({
-        steamId64: '76561198000000000', language: 'en',
+        steamId64: '76561198000000000', language: 'en', storeCountryCode: 'US',
       }) } as never,
       {
         getWishlistWithErrors: vi.fn().mockResolvedValue({
@@ -116,6 +120,52 @@ describe('WishlistViewService', () => {
     });
   });
 
+  it('waits for a concurrent region change before requesting live prices', async () => {
+    const coordinator = new UserOperationCoordinator();
+    let storeCountryCode: 'US' | 'DE' = 'US';
+    let releaseRegion: (() => void) | undefined;
+    const regionChange = coordinator.runExclusive('invoking-user', async () => {
+      storeCountryCode = 'DE';
+      await new Promise<void>((resolve) => {
+        releaseRegion = resolve;
+      });
+    });
+    const wishlistReader = {
+      getWishlistWithErrors: vi.fn().mockResolvedValue({ items: [item], errors: [] }),
+    };
+    const service = new WishlistViewService(
+      {
+        findByDiscordUserId: vi.fn(() => ({
+          discordUserId: 'invoking-user',
+          steamId64: '76561198000000000',
+          configVersion: 2,
+          configurationId: 'configuration-id',
+          language: 'en',
+          storeCountryCode,
+          minimumDiscountPercent: 0,
+        })),
+      } as never,
+      wishlistReader,
+      undefined,
+      undefined,
+      coordinator,
+    );
+
+    const loading = service.load('invoking-user', 'tr');
+    await Promise.resolve();
+    expect(wishlistReader.getWishlistWithErrors).not.toHaveBeenCalled();
+
+    releaseRegion?.();
+    await regionChange;
+    await expect(loading).resolves.toMatchObject({
+      status: 'success',
+      storeCountryCode: 'DE',
+      configVersion: 2,
+    });
+    expect(wishlistReader.getWishlistWithErrors)
+      .toHaveBeenCalledWith('76561198000000000', 'DE', 'en');
+  });
+
   it('reads live data without changing check, sale, or notification persistence', async () => {
     const database = createDatabase(':memory:');
     const configRepository = new UserConfigRepository(database);
@@ -125,6 +175,7 @@ describe('WishlistViewService', () => {
       'invoking-user',
       '76561198000000000',
       'en',
+      'US',
       '2026-08-22T00:00:00.000Z',
     );
     stateRepository.recordObservation(config, {

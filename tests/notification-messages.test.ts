@@ -10,6 +10,7 @@ const candidate: NotificationCandidate = {
   discordUserId: 'discord-user',
   steamId64: '76561198000000000',
   configVersion: 1,
+  storeCountryCode: 'TR',
   appId: 10,
   gameName: 'Test Game',
   saleEpisodeId: 'episode-1',

@@ -82,6 +82,7 @@ export function createDatabase(databasePath: string): DatabaseSync {
     migrateStatusDashboard(database);
     migrateDiscountThresholds(database);
     migrateConfigurationIdentity(database);
+    migratePricingContext(database);
     return database;
   } catch (error: unknown) {
     try {
@@ -93,6 +94,34 @@ export function createDatabase(databasePath: string): DatabaseSync {
       );
     }
     throw new DatabaseInitializationError(error, true);
+  }
+}
+
+function migratePricingContext(database: DatabaseSync): void {
+  const versionRow = database.prepare('PRAGMA user_version').get() as {
+    user_version: number;
+  };
+  if (versionRow.user_version >= 8) {
+    return;
+  }
+
+  database.exec('BEGIN');
+  try {
+    database.exec(`
+      ALTER TABLE user_config ADD COLUMN store_country_code TEXT NOT NULL DEFAULT 'TR'
+        CHECK (length(store_country_code) = 2 AND store_country_code = upper(store_country_code));
+      ALTER TABLE wishlist_item_state ADD COLUMN store_country_code TEXT NOT NULL DEFAULT 'TR'
+        CHECK (length(store_country_code) = 2 AND store_country_code = upper(store_country_code));
+      ALTER TABLE wishlist_item_state ADD COLUMN observation_status TEXT NOT NULL DEFAULT 'known'
+        CHECK (observation_status IN ('known', 'unknown', 'error', 'missing'));
+      ALTER TABLE notification_log ADD COLUMN store_country_code TEXT NOT NULL DEFAULT 'TR'
+        CHECK (length(store_country_code) = 2 AND store_country_code = upper(store_country_code));
+      PRAGMA user_version = 8;
+    `);
+    database.exec('COMMIT');
+  } catch (error: unknown) {
+    database.exec('ROLLBACK');
+    throw error;
   }
 }
 

@@ -1,10 +1,14 @@
 import type { WishlistItem } from './steam.js';
 import type { Language } from './user-config.js';
+import type { StoreCountryCode } from './store-country.js';
+
+export type WishlistObservationStatus = 'known' | 'unknown' | 'error' | 'missing';
 
 export interface WishlistItemState {
   readonly discordUserId: string;
   readonly steamId64: string;
   readonly configVersion: number;
+  readonly storeCountryCode: StoreCountryCode;
   readonly appId: number;
   readonly onSale: boolean;
   readonly saleEpisodeId: string | null;
@@ -15,12 +19,14 @@ export interface WishlistItemState {
   readonly finalPriceMinor: number | null;
   readonly discountPercent: number | null;
   readonly lastSeenAt: string;
+  readonly observationStatus: WishlistObservationStatus;
 }
 
 export interface NotificationCandidate {
   readonly discordUserId: string;
   readonly steamId64: string;
   readonly configVersion: number;
+  readonly storeCountryCode: StoreCountryCode;
   readonly appId: number;
   readonly gameName: string;
   readonly saleEpisodeId: string;

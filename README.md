@@ -49,8 +49,9 @@ Notification delivery is at-least-once. A dedicated scheduler checks the durable
 
 ## Commands
 
-- `/setup` configure a Steam wishlist from a SteamID64, profile link, or vanity name
-- `/status` show a localized dashboard, toggle notifications, and set the global minimum discount
+- `/setup` configure a Steam wishlist, notification language, and Steam Store country
+- `/region` change the country configured on the caller's Steam Store account
+- `/status` show a localized dashboard, Store region, latest currency, notification state, and global minimum discount
 - `/check` trigger a manual check
 - `/wishlist` show a paginated live wishlist and set game-specific minimum discounts
 - `/test-notification` send an example sale embed by DM
@@ -60,17 +61,27 @@ Manual checks have a per-user cooldown. Scheduled users and Steam requests are p
 
 `/setup steam-profile:` accepts a 17-digit SteamID64, a `steamcommunity.com/profiles/{SteamID64}` link, a `steamcommunity.com/id/{vanity}` link, or a bare vanity name containing 2-32 letters, digits, underscores, or hyphens. Both HTTP and HTTPS Steam links are parsed, but user-provided URLs are never fetched; HTTP input is treated as a Steam identifier and all outbound requests use fixed HTTPS Steam endpoints. Credentials, custom ports, non-Steam hosts, traversal paths, malformed profile paths, and unsafe vanity characters are rejected. Query strings and fragments on otherwise valid Steam profile links are discarded.
 
+`/setup store-country:` is a required autocomplete selection for new setups. Select the country currently configured for the Steam Store account, not the user's physical or Discord location. Dealio does not infer this value because Discord does not expose an authoritative Steam Store country and public Steam profile locations may be unrelated. Existing configurations created before this option are migrated to `TR`, preserving their previous behavior. `/region country:` changes the saved Store country later.
+
+After `/setup`, Dealio immediately saves a notification-free baseline and sends an English DM summary of every game Steam currently confirms as discounted in the selected Store country. This one-time summary ignores global and game-specific thresholds and never enters the durable notification queue. Repeating setup creates a fresh pricing generation, retires old retryable alerts, and preserves game thresholds for the same Steam account. Large summaries are split into Discord-safe batches. If Steam prices or Discord DMs are temporarily unavailable, setup remains saved and the ephemeral response explains why no summary was delivered.
+
+Steam app-detail requests use the saved country as `cc` and the notification language as Steam's response-text language. The currency and prices come directly from Steam's regional `price_overview`; Dealio does not ask users to choose a currency and does not convert currencies. `/status` shows the selected Store region and currencies from the latest known current-region prices. Sale and test-notification footers also identify the Store region.
+
 The `/status` dashboard includes a notification toggle. Disabling notifications pauses automatic Steam checks and notification retries without deleting wishlist state, pending notifications, batches, or delivery history. Manual `/check` remains available while disabled and can update the persisted wishlist/check state, but it never sends sale DMs. Re-enabling resumes automatic checks and allows still-active queued notifications to be delivered by a later retry cycle. A Discord delivery already in progress may finish before the coordinated disable operation completes.
 
 The global minimum discount defaults to `0`, which accepts any real discount. Use the `/status` button to set a whole percentage from `0` to `100`. Each game shown by `/wishlist` has its own threshold button; a game-specific value overrides the global value, and submitting that modal empty removes the override. A known not-on-sale game starts an eligible sale episode when it goes on sale. If that episode starts below its effective threshold, it can create one notification candidate later when the discount reaches the threshold. The initial wishlist observation remains a notification-free baseline.
 
+Changing the Store country creates a new pricing generation. Pending notifications from the previous region are expired, old regional prices are never compared with new ones, and the first successful check in the new region establishes a notification-free baseline. Global and game-specific minimum-discount settings are preserved when only the Store country changes.
+
 `POLL_INTERVAL_HOURS` configures Steam polling. `NOTIFICATION_RETRY_INTERVAL_SECONDS` configures the independent notification queue scan from 1 to 3600 seconds.
 
-Steam reports wishlist access separately from the JSON body. The bot accepts an empty wishlist only when Steam explicitly marks the request successful. A private or otherwise inaccessible wishlist is reported to the user and does not clear existing sale state. `/setup` first resolves the input to a canonical SteamID64, then verifies wishlist access before replacing an existing configuration. A failed vanity lookup, unavailable Steam API, missing optional key, or failed wishlist validation leaves the existing configuration unchanged.
+Steam reports wishlist access separately from the JSON body. The bot accepts an empty wishlist only when Steam explicitly marks the request successful. A private or otherwise inaccessible wishlist is reported to the user and does not clear existing sale state. `/setup` first resolves the input to a canonical SteamID64, then verifies wishlist access before replacing an existing configuration. A failed vanity lookup, missing optional key, invalid input, or confirmed inaccessible wishlist leaves the existing configuration unchanged. A transient Steam validation failure may still save the configuration, but it never produces a sale summary from unavailable price data.
+
+A successful Steam snapshot is persisted atomically with its check summary. An item whose latest app-detail observation has an unknown price or an item-level Steam error keeps its previous sale episode but cannot be delivered until a later known observation confirms the same episode. Candidate and failed retries resume with the latest confirmed price snapshot; an already-sending batch keeps the documented at-least-once behavior. A confirmed not-on-sale observation or wishlist removal ends the episode and expires its pending alert. This prevents partial database writes and stale prices from becoming sale messages.
 
 ## Stored Data And Deletion
 
-The bot stores the Discord user ID, canonical public SteamID64, historical Steam IDs associated with earlier account generations, language, enabled state, global and game-specific minimum discount settings, and configuration timestamps. It does not store the submitted vanity name, raw profile link, URL query/fragment, or Steam Web API key. It also stores check timestamps/status, observed wishlist app IDs, game names, price/sale episode state, plus notification delivery status, attempt timestamps/counts, retry time, and the last delivery error.
+The bot stores the Discord user ID, canonical public SteamID64, historical Steam IDs associated with earlier account generations, selected Steam Store country code, language, enabled state, global and game-specific minimum discount settings, and configuration timestamps. It does not store the submitted vanity name, raw profile link, URL query/fragment, or Steam Web API key. It also stores check timestamps/status, observed wishlist app IDs, game names, regional price/currency and sale-episode state, latest observation reliability, plus notification delivery status, attempt timestamps/counts, retry time, and the last delivery error.
 
 The bot does not request or store Steam passwords, cookies, login information, private-profile credentials, Discord messages, or Discord tokens in SQLite. Discord and Steam API credentials remain in `.env`.
 

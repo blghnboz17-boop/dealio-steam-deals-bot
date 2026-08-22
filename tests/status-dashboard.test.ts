@@ -33,6 +33,7 @@ function readyResult(
       steamId64: '76561198000000000',
       configVersion: 1,
       language,
+      storeCountryCode: 'US',
       enabled: true,
       minimumDiscountPercent: 30,
       createdAt: '2026-08-21T00:00:00.000Z',
@@ -53,6 +54,7 @@ function readyResult(
       lastSuccessFailedItemCount: 1,
     },
     notificationQueue: queue,
+    latestPriceCurrencies: ['USD'],
     gameDiscountOverrideCount: 2,
   };
 }
@@ -75,6 +77,8 @@ describe('status dashboard presentation', () => {
     expect(text).toContain('Scheduled for retry: **2**');
     expect(text).toContain('Global minimum discount: **30%**');
     expect(text).toContain('Game-specific rules: **2**');
+    expect(text).toContain('Steam Store region: **United States (US)**');
+    expect(text).toContain('Latest price currency: **USD**');
     expect(text).toContain('<t:');
     expect(text).toContain(':f> (<t:');
     expect(text).toContain(':R>)');
@@ -218,6 +222,7 @@ describe('status notification queue query', () => {
       'discord-user',
       '76561198000000000',
       'en',
+      'US',
       '2026-08-21T00:00:00.000Z',
     );
     const insertState = database.prepare(
@@ -329,6 +334,8 @@ describe('status notification queue query', () => {
         terminalFailed: 1,
         expired: 1,
       });
+      expect(new StatusDashboardRepository(database).findLatestPriceCurrencies(config))
+        .toEqual(['USD']);
     } finally {
       database.close();
     }

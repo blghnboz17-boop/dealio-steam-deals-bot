@@ -2,6 +2,8 @@
 
 Bu belge erken tasarım kararlarını kaydeder ve güncel uygulama sözleşmesi değildir. Güncel davranış için `README.md` ve `docs/architecture.md` dosyalarına bakın.
 
+Mağaza bölgesiyle ilgili aşağıdaki tarihsel açık karar artık çözülmüştür: güncel uygulama kurulumda autocomplete ile Steam Store ülkesini ister, para birimini Steam'in bölgesel yanıtından alır ve bölge değişimini yeni bir fiyat nesli olarak işler.
+
 ## 1. Kapsam ve Kararlar
 
 İlk sürümün amacı, bir Discord kullanıcısının public Steam profilindeki wishlist'i

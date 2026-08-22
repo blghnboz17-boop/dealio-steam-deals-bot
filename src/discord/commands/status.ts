@@ -20,6 +20,7 @@ import { UserConfigurationService } from '../../application/user-configuration-s
 import { DiscountThresholdService } from '../../application/discount-threshold-service.js';
 import type { CheckStatus } from '../../domain/check-state.js';
 import type { Language, UserConfig } from '../../domain/user-config.js';
+import { storeCountryLabel } from '../../domain/store-country.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
 
@@ -110,6 +111,10 @@ export function buildStatusDashboardEmbed(
           `${messages.statusSteamIdLabel}: \`${maskSteamId(config.steamId64)}\``,
           `[${messages.statusOpenProfile}](${profileUrl})`,
           `${messages.statusLanguageLabel}: **${language === 'tr' ? 'Türkçe' : 'English'}**`,
+          `${messages.statusStoreRegionLabel}: **${storeCountryLabel(config.storeCountryCode, language)}**`,
+          `${messages.statusLatestCurrencyLabel}: **${result.latestPriceCurrencies.length > 0
+            ? result.latestPriceCurrencies.join(' / ')
+            : messages.statusNever}**`,
           `${messages.statusEnabledLabel}: **${config.enabled ? messages.statusEnabled : messages.statusDisabled}**`,
           `${messages.statusMinimumDiscountLabel}: **${config.minimumDiscountPercent}%**`,
           `${messages.statusGameOverridesLabel}: **${result.gameDiscountOverrideCount ?? 0}**`,

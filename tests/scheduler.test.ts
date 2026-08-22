@@ -127,8 +127,8 @@ describe('WishlistScheduler', () => {
   it('does not select disabled users for automatic wishlist checks', async () => {
     const database = createDatabase(':memory:');
     const userRepository = new UserConfigRepository(database);
-    userRepository.upsert('enabled-user', '76561198000000000', 'en', '2026-08-21T00:00:00Z');
-    userRepository.upsert('disabled-user', '76561198000000001', 'en', '2026-08-21T00:00:00Z');
+    userRepository.upsert('enabled-user', '76561198000000000', 'en', 'TR', '2026-08-21T00:00:00Z');
+    userRepository.upsert('disabled-user', '76561198000000001', 'en', 'TR', '2026-08-21T00:00:00Z');
     userRepository.setEnabled('disabled-user', false, '2026-08-21T01:00:00Z');
     const checkService = { check: vi.fn().mockResolvedValue(successResult()) };
     const scheduler = new WishlistScheduler({
@@ -360,6 +360,7 @@ describe('WishlistScheduler', () => {
       'user-a',
       '76561198000000000',
       'en',
+      'TR',
       '2026-08-22T00:00:00.000Z',
     );
     const firstCheck = { check: vi.fn().mockResolvedValue(successResult()) };
@@ -386,6 +387,7 @@ describe('WishlistScheduler', () => {
       'user-b',
       '76561198000000001',
       'tr',
+      'TR',
       '2026-08-22T00:30:00.000Z',
     );
     expect(checkStateRepository.findByDiscordUserId('user-b')?.nextScheduledAt)

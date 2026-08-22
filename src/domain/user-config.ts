@@ -1,3 +1,5 @@
+import type { StoreCountryCode } from './store-country.js';
+
 export type Language = 'tr' | 'en';
 
 export interface UserConfig {
@@ -6,6 +8,7 @@ export interface UserConfig {
   readonly steamId64: string;
   readonly configVersion: number;
   readonly language: Language;
+  readonly storeCountryCode: StoreCountryCode;
   readonly enabled: boolean;
   readonly minimumDiscountPercent: number;
   readonly createdAt: string;

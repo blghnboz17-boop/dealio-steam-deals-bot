@@ -23,6 +23,7 @@ export type StatusDashboardResult =
       readonly config: UserConfig;
       readonly checkState: CheckState | null;
       readonly notificationQueue: NotificationQueueCounts;
+      readonly latestPriceCurrencies: readonly string[];
       readonly gameDiscountOverrideCount: number;
     };
 
@@ -62,6 +63,7 @@ export class StatusService {
         config,
         checkState: this.checkStateRepository.findByDiscordUserId(discordUserId),
         notificationQueue: this.dashboardRepository.findNotificationQueueCounts(config),
+        latestPriceCurrencies: this.dashboardRepository.findLatestPriceCurrencies(config),
         gameDiscountOverrideCount: this.thresholdRepository?.countGameOverrides(config) ?? 0,
       };
     } catch (_error: unknown) {

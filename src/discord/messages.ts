@@ -2,8 +2,12 @@ import type { Language } from '../domain/user-config.js';
 
 interface MessageCatalog {
   readonly setupSuccess: string;
+  readonly setupSummarySent: string;
+  readonly setupSummaryUnavailable: string;
+  readonly setupSummaryDmFailed: string;
   readonly invalidSetup: string;
   readonly invalidSteamProfile: string;
+  readonly invalidStoreCountry: string;
   readonly vanityProfileNotFound: string;
   readonly vanityResolutionUnavailable: string;
   readonly steamWebApiKeyMissing: string;
@@ -38,6 +42,8 @@ interface MessageCatalog {
   readonly statusSteamIdLabel: string;
   readonly statusOpenProfile: string;
   readonly statusLanguageLabel: string;
+  readonly statusStoreRegionLabel: string;
+  readonly statusLatestCurrencyLabel: string;
   readonly statusEnabledLabel: string;
   readonly statusUpdatedAtLabel: string;
   readonly statusEnabled: string;
@@ -92,6 +98,8 @@ interface MessageCatalog {
   readonly salePriceLabel: string;
   readonly openSteamStore: string;
   readonly notificationFooter: string;
+  readonly regionSaved: (country: string) => string;
+  readonly regionUnchanged: (country: string) => string;
   readonly wishlistTitle: string;
   readonly wishlistEmpty: string;
   readonly wishlistUnavailable: string;
@@ -129,8 +137,12 @@ interface MessageCatalog {
 const catalog: Record<Language, MessageCatalog> = {
   tr: {
     setupSuccess: 'Steam profilin doğrulandı ve wishlist ayarın kaydedildi. Bildirimler aktif.',
+    setupSummarySent: 'Başlangıç wishlist özetin DM olarak gönderildi.',
+    setupSummaryUnavailable: 'Kurulum tamamlandı ancak Steam fiyatları şu anda alınamadığı için başlangıç özeti gönderilemedi. Dealio daha sonra normal kontrollerine devam edecek.',
+    setupSummaryDmFailed: 'Kurulum tamamlandı ancak başlangıç özeti DM olarak gönderilemedi. Discord DM gizlilik ayarlarını kontrol edebilirsin.',
     invalidSetup: 'Dil Türkçe veya English olmalı.',
     invalidSteamProfile: 'Geçerli bir SteamID64, Steam profil bağlantısı veya vanity adı girmelisin.',
+    invalidStoreCountry: 'Geçerli bir Steam mağaza ülkesi seçmelisin.',
     vanityProfileNotFound: 'Bu Steam vanity profili bulunamadı. Profil bağlantısını veya adını kontrol et.',
     vanityResolutionUnavailable: 'Steam profil adı şu anda çözümlenemiyor. Mevcut ayarın değiştirilmedi; daha sonra tekrar dene.',
     steamWebApiKeyMissing: 'Steam profil adlarını çözümleme özelliği şu anda yapılandırılmamış. SteamID64 veya /profiles/ bağlantısı kullanabilirsin.',
@@ -167,6 +179,8 @@ const catalog: Record<Language, MessageCatalog> = {
     statusSteamIdLabel: 'SteamID64',
     statusOpenProfile: 'Steam profilini aç',
     statusLanguageLabel: 'Bildirim dili',
+    statusStoreRegionLabel: 'Steam mağaza bölgesi',
+    statusLatestCurrencyLabel: 'Son fiyat para birimi',
     statusEnabledLabel: 'Yapılandırma',
     statusUpdatedAtLabel: 'Güncellendi',
     statusEnabled: 'Aktif',
@@ -222,6 +236,8 @@ const catalog: Record<Language, MessageCatalog> = {
     salePriceLabel: 'İndirimli fiyat',
     openSteamStore: 'Steam mağazasında aç',
     notificationFooter: 'Dealio · Steam wishlist bildirimi',
+    regionSaved: (country) => `Steam mağaza bölgen ${country} olarak kaydedildi. Yeni bölgedeki ilk kontrol bildirim üretmeyen bir başlangıç verisi oluşturacak.`,
+    regionUnchanged: (country) => `Steam mağaza bölgen zaten ${country}.`,
     wishlistTitle: 'Steam wishlistin',
     wishlistEmpty: 'Wishlistinde henüz oyun bulunmuyor.',
     wishlistUnavailable: 'Steam wishlist veya oyun ayrıntıları şu anda yüklenemedi. Daha sonra tekrar dene.',
@@ -257,8 +273,12 @@ const catalog: Record<Language, MessageCatalog> = {
   },
   en: {
     setupSuccess: 'Your Steam profile was verified and wishlist notifications are configured.',
+    setupSummarySent: 'Your initial wishlist summary was sent by DM.',
+    setupSummaryUnavailable: 'Setup is complete, but Steam prices are currently unavailable, so the initial summary could not be sent. Dealio will continue with its normal checks.',
+    setupSummaryDmFailed: 'Setup is complete, but the initial summary DM could not be sent. Check your Discord DM privacy settings.',
     invalidSetup: 'Language must be Turkish or English.',
     invalidSteamProfile: 'Enter a valid SteamID64, Steam profile link, or vanity name.',
+    invalidStoreCountry: 'Select a valid Steam Store country.',
     vanityProfileNotFound: 'That Steam vanity profile was not found. Check the profile link or name.',
     vanityResolutionUnavailable: 'The Steam profile name cannot be resolved right now. Your existing configuration was not changed; try again later.',
     steamWebApiKeyMissing: 'Steam profile-name resolution is not configured right now. You can use a SteamID64 or /profiles/ link instead.',
@@ -295,6 +315,8 @@ const catalog: Record<Language, MessageCatalog> = {
     statusSteamIdLabel: 'SteamID64',
     statusOpenProfile: 'Open Steam profile',
     statusLanguageLabel: 'Notification language',
+    statusStoreRegionLabel: 'Steam Store region',
+    statusLatestCurrencyLabel: 'Latest price currency',
     statusEnabledLabel: 'Configuration',
     statusUpdatedAtLabel: 'Updated',
     statusEnabled: 'Active',
@@ -350,6 +372,8 @@ const catalog: Record<Language, MessageCatalog> = {
     salePriceLabel: 'Sale price',
     openSteamStore: 'Open in Steam Store',
     notificationFooter: 'Dealio · Steam wishlist notification',
+    regionSaved: (country) => `Your Steam Store region is now ${country}. The first check in the new region will establish a notification-free baseline.`,
+    regionUnchanged: (country) => `Your Steam Store region is already ${country}.`,
     wishlistTitle: 'Your Steam wishlist',
     wishlistEmpty: 'Your wishlist does not contain any games yet.',
     wishlistUnavailable: 'The Steam wishlist or game details could not be loaded right now. Try again later.',

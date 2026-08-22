@@ -51,6 +51,7 @@ function createService(
     'discord-user',
     '76561198000000000',
     language,
+    'TR',
     '2026-08-21T00:00:00.000Z',
   );
   wishlistStateRepository.recordObservation(config, {
@@ -133,6 +134,192 @@ describe('NotificationService', () => {
 
     expect(secondResult).toEqual({ candidateCount: 0, sentCount: 0, failedCount: 0 });
     expect(sender.send).toHaveBeenCalledTimes(1);
+    services.database.close();
+  });
+
+  it.each(['unknown', 'error'] as const)(
+    'suspends a pending sale while its latest observation is %s and resumes when known',
+    async (observationStatus) => {
+      const sender = createSender();
+      const services = createService('en', sender);
+      services.database.prepare(
+        'UPDATE user_config SET minimum_discount_percent = 70 WHERE discord_user_id = ?',
+      ).run('discord-user');
+      services.repository.markObservationStatus(
+        services.config,
+        [services.candidate.appId],
+        observationStatus,
+        '2026-08-21T00:06:00.000Z',
+      );
+
+      await expect(services.service.deliverPending('discord-user')).resolves.toEqual({
+        candidateCount: 0,
+        sentCount: 0,
+        failedCount: 0,
+      });
+      expect(sender.send).not.toHaveBeenCalled();
+      expect(services.repository.findNotificationStatus(services.candidate)).toBe('candidate');
+
+      const repeated = services.repository.recordObservation(services.config, {
+        item: {
+          ...saleItem,
+          price: {
+            ...saleItem.price!,
+            currency: 'EUR',
+            initialMinor: 2_000,
+            finalMinor: 800,
+            discountPercent: 60,
+          },
+        },
+        saleKey: 'EUR:2000:800:60',
+        observedAt: '2026-08-21T00:07:00.000Z',
+      });
+      expect(repeated.notificationCandidate).toBeNull();
+      await expect(services.service.deliverPending('discord-user')).resolves.toMatchObject({
+        candidateCount: 1,
+        sentCount: 1,
+      });
+      expect(sender.send).toHaveBeenCalledOnce();
+      expect(sender.send).toHaveBeenCalledWith(expect.objectContaining({
+        notifications: [expect.objectContaining({
+          currency: 'EUR',
+          normalPriceMinor: 2_000,
+          finalPriceMinor: 800,
+          discountPercent: 60,
+        })],
+      }), 'en');
+      services.database.close();
+    },
+  );
+
+  it('expires a pending sale when a successful snapshot confirms it is missing', async () => {
+    const sender = createSender();
+    const services = createService('en', sender);
+    services.repository.markMissingItemsInactive(
+      services.config,
+      [],
+      '2026-08-21T00:06:00.000Z',
+    );
+
+    await expect(services.service.deliverPending('discord-user')).resolves.toEqual({
+      candidateCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+    });
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('expired');
+    expect(sender.send).not.toHaveBeenCalled();
+    services.database.close();
+  });
+
+  it('expires a suspended notification after a confirmed not-on-sale observation', async () => {
+    const sender = createSender();
+    const services = createService('en', sender);
+    services.repository.markObservationStatus(
+      services.config,
+      [services.candidate.appId],
+      'unknown',
+      '2026-08-21T00:06:00.000Z',
+    );
+    services.repository.recordObservation(services.config, {
+      item: {
+        ...saleItem,
+        onSale: false,
+        price: { ...saleItem.price!, finalMinor: 1_000, discountPercent: 0 },
+      },
+      saleKey: null,
+      observedAt: '2026-08-21T00:07:00.000Z',
+    });
+
+    await expect(services.service.deliverPending('discord-user')).resolves.toEqual({
+      candidateCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+    });
+    expect(sender.send).not.toHaveBeenCalled();
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('expired');
+    services.database.close();
+  });
+
+  it('waits instead of expiring or sending a candidate from a different active episode', async () => {
+    const sender = createSender();
+    const services = createService('en', sender);
+    services.database.prepare(
+      'UPDATE user_config SET minimum_discount_percent = 100 WHERE discord_user_id = ?',
+    ).run('discord-user');
+    services.repository.recordObservation(services.config, {
+      item: {
+        ...saleItem,
+        onSale: false,
+        price: { ...saleItem.price!, finalMinor: 1_000, discountPercent: 0 },
+      },
+      saleKey: null,
+      observedAt: '2026-08-21T00:06:00.000Z',
+    });
+    const nextEpisode = services.repository.recordObservation(services.config, {
+      item: saleItem,
+      saleKey: 'TRY:1000:750:25',
+      observedAt: '2026-08-21T00:07:00.000Z',
+    });
+    expect(nextEpisode.notificationCandidate).toBeNull();
+    expect(services.repository.findByDiscordUserAndAppId('discord-user', saleItem.appId))
+      .toMatchObject({ onSale: true, observationStatus: 'known' });
+
+    await expect(services.service.deliverPending('discord-user')).resolves.toEqual({
+      candidateCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+    });
+    expect(sender.send).not.toHaveBeenCalled();
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('candidate');
+    services.database.close();
+  });
+
+  it('waits instead of expiring or retrying a failed batch from a different active episode', async () => {
+    const sender = createSender(
+      vi.fn()
+        .mockRejectedValueOnce(new Error('temporary Discord failure'))
+        .mockResolvedValueOnce(undefined),
+    );
+    const services = createService('en', sender);
+    let now = new Date('2026-08-21T00:10:00.000Z');
+    const service = new NotificationService(
+      services.userConfigRepository,
+      services.repository,
+      sender,
+      { now: () => now, retryBaseDelayMs: 60_000 },
+    );
+    await expect(service.deliverPending('discord-user')).resolves.toMatchObject({
+      candidateCount: 1,
+      failedCount: 1,
+    });
+    services.database.prepare(
+      'UPDATE user_config SET minimum_discount_percent = 100 WHERE discord_user_id = ?',
+    ).run('discord-user');
+    services.repository.recordObservation(services.config, {
+      item: {
+        ...saleItem,
+        onSale: false,
+        price: { ...saleItem.price!, finalMinor: 1_000, discountPercent: 0 },
+      },
+      saleKey: null,
+      observedAt: '2026-08-21T00:10:30.000Z',
+    });
+    services.repository.recordObservation(services.config, {
+      item: saleItem,
+      saleKey: 'TRY:1000:750:25',
+      observedAt: '2026-08-21T00:10:40.000Z',
+    });
+    now = new Date('2026-08-21T00:11:00.000Z');
+
+    await expect(service.deliverPending('discord-user')).resolves.toEqual({
+      candidateCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+    });
+    expect(sender.send).toHaveBeenCalledOnce();
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('failed');
+    expect(services.database.prepare('SELECT status FROM notification_batch').get())
+      .toEqual({ status: 'failed' });
     services.database.close();
   });
 
@@ -543,7 +730,7 @@ describe('NotificationService', () => {
     services.database.close();
   });
 
-  it('does not reclaim a fresh sending candidate', async () => {
+  it('does not alter a fresh sending candidate when its observation becomes unknown', async () => {
     const sender = createSender();
     const services = createService('en', sender);
     const claimedBatch = services.repository.createAndClaimNotificationBatch(
@@ -553,6 +740,12 @@ describe('NotificationService', () => {
       '2026-08-21T00:15:00.000Z',
     );
     expect(claimedBatch).not.toBeNull();
+    services.repository.markObservationStatus(
+      services.config,
+      [services.candidate.appId],
+      'unknown',
+      '2026-08-21T00:16:00.000Z',
+    );
     const service = new NotificationService(
       new UserConfigRepository(services.database),
       services.repository,
@@ -740,6 +933,7 @@ describe('NotificationService', () => {
       'discord-user',
       '76561198000000001',
       'en',
+      'TR',
       '2026-08-21T01:00:00.000Z',
     );
 

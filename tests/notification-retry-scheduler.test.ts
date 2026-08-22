@@ -4,16 +4,22 @@ import {
   type NotificationRetryClock,
 } from '../src/application/notification-retry-scheduler.js';
 import type { UserConfig } from '../src/domain/user-config.js';
+import type { WishlistItem } from '../src/domain/steam.js';
+import { NotificationService } from '../src/application/notification-service.js';
 import { createDatabase } from '../src/persistence/database.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
+import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
 
 function user(discordUserId: string): UserConfig {
   return {
     discordUserId,
+    configurationId: 'configuration-id',
     steamId64: '76561198000000000',
     configVersion: 1,
     language: 'en',
+    storeCountryCode: 'TR',
     enabled: true,
+    minimumDiscountPercent: 0,
     createdAt: '2026-08-21T00:00:00.000Z',
     updatedAt: '2026-08-21T00:00:00.000Z',
   };
@@ -58,11 +64,87 @@ describe('NotificationRetryScheduler', () => {
     expect(deliverPending).toHaveBeenCalledTimes(2);
   });
 
+  it('does not send or expire a pending notification while its price is unknown', async () => {
+    const database = createDatabase(':memory:');
+    const userConfigRepository = new UserConfigRepository(database);
+    const wishlistStateRepository = new WishlistStateRepository(database);
+    const config = userConfigRepository.upsert(
+      'discord-user',
+      '76561198000000000',
+      'en',
+      'TR',
+      '2026-08-21T00:00:00.000Z',
+    );
+    const regularItem: WishlistItem = {
+      appId: 10,
+      name: 'Scheduler Test Game',
+      priority: null,
+      dateAdded: null,
+      price: {
+        currency: 'TRY',
+        initialMinor: 1_000,
+        finalMinor: 1_000,
+        discountPercent: 0,
+        isFree: false,
+      },
+      onSale: false,
+    };
+    wishlistStateRepository.recordObservation(config, {
+      item: regularItem,
+      saleKey: null,
+      observedAt: '2026-08-21T00:01:00.000Z',
+    });
+    const sale = wishlistStateRepository.recordObservation(config, {
+      item: {
+        ...regularItem,
+        onSale: true,
+        price: { ...regularItem.price!, finalMinor: 500, discountPercent: 50 },
+      },
+      saleKey: 'TRY:1000:500:50',
+      observedAt: '2026-08-21T00:02:00.000Z',
+    }).notificationCandidate;
+    if (!sale) {
+      throw new Error('Expected scheduler test candidate');
+    }
+    wishlistStateRepository.markObservationStatus(
+      config,
+      [sale.appId],
+      'unknown',
+      '2026-08-21T00:03:00.000Z',
+    );
+    const sender = {
+      plan: vi.fn((notifications: readonly typeof sale[]) => [{ notifications }]),
+      send: vi.fn().mockResolvedValue(undefined),
+    };
+    const scheduler = new NotificationRetryScheduler({
+      intervalSeconds: 60,
+      userConfigRepository,
+      notificationService: new NotificationService(
+        userConfigRepository,
+        wishlistStateRepository,
+        sender,
+      ),
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+
+    try {
+      await expect(scheduler.runOnce()).resolves.toMatchObject({
+        candidateCount: 0,
+        sentCount: 0,
+        failedCount: 0,
+      });
+      expect(sender.send).not.toHaveBeenCalled();
+      expect(wishlistStateRepository.findNotificationStatus(sale)).toBe('candidate');
+    } finally {
+      database.close();
+    }
+  });
+
   it('does not select disabled users for notification retries', async () => {
     const database = createDatabase(':memory:');
     const repository = new UserConfigRepository(database);
-    repository.upsert('enabled-user', '76561198000000000', 'en', '2026-08-21T00:00:00Z');
-    repository.upsert('disabled-user', '76561198000000001', 'en', '2026-08-21T00:00:00Z');
+    repository.upsert('enabled-user', '76561198000000000', 'en', 'TR', '2026-08-21T00:00:00Z');
+    repository.upsert('disabled-user', '76561198000000001', 'en', 'TR', '2026-08-21T00:00:00Z');
     repository.setEnabled('disabled-user', false, '2026-08-21T01:00:00Z');
     const deliverPending = vi.fn().mockResolvedValue({
       candidateCount: 0,

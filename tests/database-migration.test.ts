@@ -96,6 +96,7 @@ describe('database migration', () => {
         steamId64: '76561198000000000',
         configVersion: 1,
         minimumDiscountPercent: 0,
+        storeCountryCode: 'TR',
       });
       if (!config) {
         throw new Error('Expected migrated user configuration');
@@ -110,6 +111,8 @@ describe('database migration', () => {
         steamId64: '76561198000000000',
         configVersion: 1,
         onSale: true,
+        observationStatus: 'known',
+        storeCountryCode: 'TR',
       });
       expect(database.prepare(
         `SELECT notification_eligible FROM wishlist_item_state
@@ -122,7 +125,7 @@ describe('database migration', () => {
         saleEpisodeId: state?.saleEpisodeId,
       });
       expect((database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version)
-        .toBe(7);
+        .toBe(8);
       expect(database.prepare(
         `SELECT name FROM sqlite_master
          WHERE type = 'table' AND name IN ('notification_batch', 'notification_batch_item')
@@ -241,7 +244,7 @@ describe('database migration', () => {
         ).toEqual({ attempt_count: 0 });
         expect(
           (database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-          ).toBe(7);
+          ).toBe(8);
       } finally {
         database.close();
       }
@@ -260,6 +263,10 @@ describe('database migration', () => {
       current.exec(`
         DROP INDEX user_config_configuration_id_idx;
         ALTER TABLE user_config DROP COLUMN configuration_id;
+        ALTER TABLE user_config DROP COLUMN store_country_code;
+        ALTER TABLE wishlist_item_state DROP COLUMN observation_status;
+        ALTER TABLE wishlist_item_state DROP COLUMN store_country_code;
+        ALTER TABLE notification_log DROP COLUMN store_country_code;
         DROP TABLE game_discount_threshold;
         ALTER TABLE user_config DROP COLUMN minimum_discount_percent;
         ALTER TABLE wishlist_item_state DROP COLUMN notification_eligible;
@@ -295,7 +302,7 @@ describe('database migration', () => {
       try {
         expect(
           (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-        ).toBe(7);
+        ).toBe(8);
         expect(migrated.prepare(
           `SELECT last_success_completed_at, last_success_checked_count,
                   last_success_on_sale_count, last_success_free_count,

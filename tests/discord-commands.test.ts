@@ -3,7 +3,12 @@ import { MessageFlags } from 'discord.js';
 import { commands } from '../src/discord/register-commands.js';
 import { handleCheck } from '../src/discord/commands/check.js';
 import { handleSetup } from '../src/discord/commands/setup.js';
+import { handleRegion } from '../src/discord/commands/region.js';
 import { handleTestNotification } from '../src/discord/commands/test-notification.js';
+import {
+  findStoreCountryChoices,
+  handleStoreCountryAutocomplete,
+} from '../src/discord/store-country-options.js';
 import { SteamWishlistError } from '../src/domain/steam.js';
 import { SteamIdentityError } from '../src/domain/steam-identity.js';
 
@@ -11,6 +16,7 @@ describe('Discord slash commands', () => {
   it('registers the supported commands', () => {
     expect(commands.map((command) => command.name)).toEqual([
       'setup',
+      'region',
       'status',
       'check',
       'wishlist',
@@ -57,6 +63,67 @@ describe('Discord slash commands', () => {
         { name: 'Türkçe', value: 'tr' },
         { name: 'English', value: 'en' },
       ],
+    });
+    expect(options[2]).toMatchObject({
+      name: 'store-country',
+      required: true,
+      autocomplete: true,
+    });
+  });
+
+  it('registers autocomplete country selection for setup and region', () => {
+    const region = commands.find((command) => command.name === 'region')?.toJSON();
+    expect(region?.options).toEqual([
+      expect.objectContaining({ name: 'country', required: true, autocomplete: true }),
+    ]);
+    expect(findStoreCountryChoices('united st', 'en')[0]).toEqual({
+      name: 'United States (US)',
+      value: 'US',
+    });
+    expect(findStoreCountryChoices('almanya', 'tr')).toContainEqual({
+      name: 'Almanya (DE)',
+      value: 'DE',
+    });
+    expect(findStoreCountryChoices('', 'en')).toHaveLength(25);
+  });
+
+  it('responds to store-country autocomplete without an external request', async () => {
+    const interaction = {
+      commandName: 'setup',
+      locale: 'en-US',
+      options: { getFocused: vi.fn().mockReturnValue({ name: 'store-country', value: 'jap' }) },
+      respond: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await handleStoreCountryAutocomplete(interaction as never);
+
+    expect(interaction.respond).toHaveBeenCalledWith(expect.arrayContaining([
+      { name: 'Japan (JP)', value: 'JP' },
+    ]));
+  });
+
+  it('changes the configured Steam Store country through /region', async () => {
+    const interaction = {
+      user: { id: 'discord-user' },
+      locale: 'en-US',
+      options: { getString: vi.fn().mockReturnValue('DE') },
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      editReply: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = {
+      get: vi.fn().mockReturnValue({
+        language: 'en', storeCountryCode: 'US', configVersion: 1,
+      }),
+      setStoreCountry: vi.fn().mockResolvedValue({
+        language: 'en', storeCountryCode: 'DE', configVersion: 2,
+      }),
+    };
+
+    await handleRegion(interaction as never, service as never);
+
+    expect(service.setStoreCountry).toHaveBeenCalledWith('discord-user', 'DE');
+    expect(interaction.editReply).toHaveBeenCalledWith({
+      content: expect.stringContaining('Germany (DE)'),
     });
   });
 
@@ -164,7 +231,11 @@ describe('Discord slash commands', () => {
     const interaction = {
       user: { id: 'discord-user' },
       options: {
-        getString: vi.fn((name: string) => name === 'language' ? 'en' : '76561198000000000'),
+        getString: vi.fn((name: string) => {
+          if (name === 'language') return 'en';
+          if (name === 'store-country') return 'US';
+          return '76561198000000000';
+        }),
       },
       deferReply: vi.fn().mockResolvedValue(undefined),
       editReply: vi.fn().mockResolvedValue(undefined),
@@ -190,15 +261,20 @@ describe('Discord slash commands', () => {
     const interaction = {
       user: { id: 'discord-user' },
       options: {
-        getString: vi.fn((name: string) =>
-          name === 'language' ? language : 'steamcommunity.com/id/example-name'
-        ),
+        getString: vi.fn((name: string) => {
+          if (name === 'language') return language;
+          if (name === 'store-country') return 'US';
+          return 'steamcommunity.com/id/example-name';
+        }),
       },
       deferReply: vi.fn().mockResolvedValue(undefined),
       editReply: vi.fn().mockResolvedValue(undefined),
     };
     const service = {
-      configure: vi.fn().mockResolvedValue({ language }),
+      configure: vi.fn().mockResolvedValue({
+        config: { language },
+        summary: { status: 'sent', saleCount: 2 },
+      }),
     };
 
     await handleSetup(interaction as never, service as never);
@@ -207,10 +283,49 @@ describe('Discord slash commands', () => {
       'discord-user',
       'steamcommunity.com/id/example-name',
       language,
+      'US',
     );
     expect(interaction.editReply).toHaveBeenCalledWith({
       content: expect.stringContaining(expectedText),
     });
+  });
+
+  it.each([
+    ['steam-unavailable', 'Steam prices are currently unavailable'],
+    ['persistence-error', 'Steam prices are currently unavailable'],
+    ['dm-failed', 'initial summary DM could not be sent'],
+  ] as const)('keeps setup successful when the initial summary result is %s', async (
+    status,
+    expectedText,
+  ) => {
+    const interaction = {
+      user: { id: 'discord-user' },
+      options: {
+        getString: vi.fn((name: string) => {
+          if (name === 'language') return 'en';
+          if (name === 'store-country') return 'US';
+          return '76561198000000000';
+        }),
+      },
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      editReply: vi.fn().mockResolvedValue(undefined),
+    };
+
+    await handleSetup(
+      interaction as never,
+      {
+        configure: vi.fn().mockResolvedValue({
+          config: { language: 'en' },
+          summary: { status },
+        }),
+      } as never,
+    );
+
+    expect(interaction.editReply).toHaveBeenCalledWith({
+      content: expect.stringContaining(expectedText),
+    });
+    expect(interaction.editReply.mock.calls[0]?.[0].content)
+      .toContain('wishlist notifications are configured');
   });
 
   it('accepts the legacy steamid64 payload while global command changes propagate', async () => {
@@ -220,6 +335,7 @@ describe('Discord slash commands', () => {
         getString: vi.fn((name: string) => {
           if (name === 'steam-profile') return null;
           if (name === 'steamid64') return '76561198000000000';
+          if (name === 'store-country') return null;
           return 'en';
         }),
       },
@@ -227,7 +343,10 @@ describe('Discord slash commands', () => {
       editReply: vi.fn().mockResolvedValue(undefined),
     };
     const service = {
-      configure: vi.fn().mockResolvedValue({ language: 'en' }),
+      configure: vi.fn().mockResolvedValue({
+        config: { language: 'en' },
+        summary: { status: 'sent', saleCount: 0 },
+      }),
     };
 
     await handleSetup(interaction as never, service as never);
@@ -236,6 +355,7 @@ describe('Discord slash commands', () => {
       'discord-user',
       '76561198000000000',
       'en',
+      undefined,
     );
   });
 
@@ -264,15 +384,22 @@ describe('Discord slash commands', () => {
     const interaction = {
       user: { id: 'discord-user' },
       options: {
-        getString: vi.fn((name: string) => name === 'language' ? 'en' : 'example-name'),
+        getString: vi.fn((name: string) => {
+          if (name === 'language') return 'en';
+          if (name === 'store-country') return 'US';
+          return 'example-name';
+        }),
       },
       deferReply: vi.fn().mockResolvedValue(undefined),
       editReply: vi.fn().mockResolvedValue(undefined),
     };
 
-    await handleSetup(interaction as never, {
-      configure: vi.fn().mockRejectedValue(new SteamIdentityError(code, detail)),
-    } as never);
+    await handleSetup(
+      interaction as never,
+      {
+        configure: vi.fn().mockRejectedValue(new SteamIdentityError(code, detail)),
+      } as never,
+    );
 
     const content = interaction.editReply.mock.calls[0]?.[0].content;
     expect(content).toContain(expectedText);
@@ -301,7 +428,7 @@ describe('Discord slash commands', () => {
     );
 
     expect(interaction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
-    expect(testNotificationService.send).toHaveBeenCalledWith('invoking-user', 'tr');
+    expect(testNotificationService.send).toHaveBeenCalledWith('invoking-user', 'tr', 'TR');
     expect(interaction.editReply).toHaveBeenCalledWith({
       content: expect.stringContaining('DM olarak gönderildi'),
     });
@@ -322,7 +449,7 @@ describe('Discord slash commands', () => {
       testNotificationService as never,
     );
 
-    expect(testNotificationService.send).toHaveBeenCalledWith('invoking-user', 'en');
+    expect(testNotificationService.send).toHaveBeenCalledWith('invoking-user', 'en', 'TR');
     expect(interaction.editReply).toHaveBeenCalledWith({
       content: expect.stringContaining('sent by DM'),
     });

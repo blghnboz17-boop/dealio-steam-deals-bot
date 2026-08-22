@@ -1,4 +1,5 @@
 import type { Language } from '../domain/user-config.js';
+import type { StoreCountryCode } from '../domain/store-country.js';
 import type { NotificationSender, SaleNotification } from './notification-service.js';
 
 const exampleNotification: Omit<SaleNotification, 'discordUserId' | 'createdAt'> = {
@@ -10,6 +11,7 @@ const exampleNotification: Omit<SaleNotification, 'discordUserId' | 'createdAt'>
   normalPriceMinor: 105_000,
   finalPriceMinor: 10_500,
   discountPercent: 90,
+  storeCountryCode: 'TR',
 };
 
 export class TestNotificationCooldownError extends Error {
@@ -35,7 +37,11 @@ export class TestNotificationService {
     }
   }
 
-  public async send(discordUserId: string, language: Language): Promise<void> {
+  public async send(
+    discordUserId: string,
+    language: Language,
+    storeCountryCode: StoreCountryCode = 'TR',
+  ): Promise<void> {
     const startedAt = Date.now();
     const previousAttempt = this.attempts.get(discordUserId);
     if (previousAttempt !== undefined) {
@@ -56,6 +62,7 @@ export class TestNotificationService {
 
     const notification: SaleNotification = {
         ...exampleNotification,
+        storeCountryCode,
         discordUserId,
         createdAt: new Date().toISOString(),
     };

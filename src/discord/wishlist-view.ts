@@ -6,6 +6,7 @@ import {
   type APIEmbed,
 } from 'discord.js';
 import type { WishlistItem } from '../domain/steam.js';
+import { storeCountryLabel, type StoreCountryCode } from '../domain/store-country.js';
 import type { Language } from '../domain/user-config.js';
 import { embedTextLength, formatMinorPrice } from './notification-messages.js';
 import { messagesFor } from './messages.js';
@@ -24,6 +25,7 @@ export interface WishlistSnapshot {
   readonly items: readonly WishlistItem[];
   readonly failedItemCount: number;
   readonly capturedAt: string;
+  readonly storeCountryCode?: StoreCountryCode;
   readonly globalMinimumDiscountPercent?: number;
   readonly gameMinimumDiscountOverrides?: ReadonlyMap<number, number>;
 }
@@ -118,7 +120,15 @@ export function buildWishlistSummaryEmbed(
       {
         name: messages.wishlistFetchedAtLabel,
         value: Number.isSafeInteger(capturedAt) ? `<t:${capturedAt}:F>` : snapshot.capturedAt,
+        inline: true,
       },
+      ...(snapshot.storeCountryCode
+        ? [{
+            name: messages.statusStoreRegionLabel,
+            value: storeCountryLabel(snapshot.storeCountryCode, language),
+            inline: true,
+          }]
+        : []),
     ],
     footer: { text: messages.wishlistPage(pageIndex + 1, pageCount) },
   };

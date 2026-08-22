@@ -3,6 +3,11 @@ import {
   type SteamWishlistResult,
   type WishlistItem,
 } from '../domain/steam.js';
+import type { Language } from '../domain/user-config.js';
+import {
+  parseStoreCountryCode,
+  type StoreCountryCode,
+} from '../domain/store-country.js';
 import {
   parseAppDetailsResponse,
   parseWishlistResponse,
@@ -159,8 +164,18 @@ export class SteamClient {
     }
   }
 
-  public async getWishlist(steamId64: string): Promise<WishlistItem[]> {
-    const result = await this.getWishlistWithErrors(steamId64);
+  public async getWishlist(
+    steamId64: string,
+    storeCountryCode: StoreCountryCode,
+    language: Language,
+  ): Promise<WishlistItem[]> {
+    const result = await this.getWishlistWithErrors(steamId64, storeCountryCode, language);
+    if (result.items.length === 0 && result.errors.length > 0) {
+      throw new SteamWishlistError(
+        result.errors[0]?.code ?? 'STEAM_UPSTREAM_ERROR',
+        'Steam app details were unavailable for the entire wishlist',
+      );
+    }
     return result.items;
   }
 
@@ -168,7 +183,18 @@ export class SteamClient {
     await this.getWishlistEntries(steamId64);
   }
 
-  public async getWishlistWithErrors(steamId64: string): Promise<SteamWishlistResult> {
+  public async getWishlistWithErrors(
+    steamId64: string,
+    storeCountryInput: StoreCountryCode,
+    language: Language,
+  ): Promise<SteamWishlistResult> {
+    const storeCountryCode = parseStoreCountryCode(storeCountryInput);
+    if (!storeCountryCode || (language !== 'tr' && language !== 'en')) {
+      throw new SteamWishlistError(
+        'STEAM_INVALID_REQUEST',
+        'Steam store country or response language is invalid',
+      );
+    }
     const wishlistEntries = await this.getWishlistEntries(steamId64);
     const errors: SteamWishlistResult['errors'] = [];
 
@@ -179,8 +205,8 @@ export class SteamClient {
         try {
           const appDetailsUrl = new URL(appDetailsEndpoint);
           appDetailsUrl.searchParams.set('appids', String(entry.appId));
-          appDetailsUrl.searchParams.set('cc', 'TR');
-          appDetailsUrl.searchParams.set('l', 'turkish');
+          appDetailsUrl.searchParams.set('cc', storeCountryCode);
+          appDetailsUrl.searchParams.set('l', language === 'tr' ? 'turkish' : 'english');
 
           const appDetailsPayload = await this.requestJson(appDetailsUrl.toString());
           const appDetails = parseAppDetailsResponse(appDetailsPayload, entry.appId);
@@ -210,15 +236,10 @@ export class SteamClient {
       },
     );
 
-    const items = results.filter((item): item is WishlistItem => item !== null);
-    if (wishlistEntries.length > 0 && items.length === 0) {
-      throw new SteamWishlistError(
-        errors[0]?.code ?? 'STEAM_UPSTREAM_ERROR',
-        'Steam app details were unavailable for the entire wishlist',
-      );
-    }
-
-    return { items, errors };
+    return {
+      items: results.filter((item): item is WishlistItem => item !== null),
+      errors,
+    };
   }
 
   private async getWishlistEntries(

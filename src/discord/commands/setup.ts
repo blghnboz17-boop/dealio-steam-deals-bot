@@ -5,8 +5,8 @@ import {
 } from 'discord.js';
 import {
   InvalidUserConfigurationError,
-  UserConfigurationService,
 } from '../../application/user-configuration-service.js';
+import type { SetupService } from '../../application/setup-service.js';
 import { SteamWishlistError } from '../../domain/steam.js';
 import { SteamIdentityError } from '../../domain/steam-identity.js';
 import { messagesFor } from '../messages.js';
@@ -33,31 +33,51 @@ export const setupCommand = new SlashCommandBuilder()
         { name: 'English', value: 'en' },
       )
       .setRequired(true),
+  )
+  .addStringOption((option) =>
+    option
+      .setName('store-country')
+      .setDescription('Select the country configured for your Steam Store account; not Discord location')
+      .setDescriptionLocalizations({
+        tr: 'Steam mağaza hesabında ayarlı ülkeyi seç; Discord konumundan tahmin edilmez',
+      })
+      .setAutocomplete(true)
+      .setRequired(true),
   );
 
 export async function handleSetup(
   interaction: ChatInputCommandInteraction,
-  service: UserConfigurationService,
+  service: Pick<SetupService, 'configure'>,
 ): Promise<void> {
   const profileInput = interaction.options.getString('steam-profile')
     ?? interaction.options.getString('steamid64', true);
   const language = interaction.options.getString('language', true);
+  const storeCountry = interaction.options.getString('store-country') ?? undefined;
   const responseLanguage = language === 'en' ? 'en' : 'tr';
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
-    const config = await service.configure(
+    const { config, summary } = await service.configure(
       interaction.user.id,
       profileInput,
       language as 'tr' | 'en',
+      storeCountry,
     );
+    const messages = messagesFor(config.language);
+    const summaryMessage = summary.status === 'sent'
+      ? messages.setupSummarySent
+      : summary.status === 'dm-failed'
+        ? messages.setupSummaryDmFailed
+        : messages.setupSummaryUnavailable;
     await interaction.editReply({
-      content: messagesFor(config.language).setupSuccess,
+      content: `${messages.setupSuccess} ${summaryMessage}`,
     });
   } catch (error) {
     if (error instanceof InvalidUserConfigurationError) {
       await interaction.editReply({
-        content: messagesFor(responseLanguage).invalidSetup,
+        content: error.code === 'INVALID_STORE_COUNTRY'
+          ? messagesFor(responseLanguage).invalidStoreCountry
+          : messagesFor(responseLanguage).invalidSetup,
       });
       return;
     }

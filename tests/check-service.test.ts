@@ -54,6 +54,7 @@ function createServices(
     'discord-user',
     '76561198000000000',
     'tr',
+    'TR',
     '2026-08-21T00:00:00.000Z',
   );
 
@@ -93,6 +94,26 @@ describe('CheckService sale state', () => {
       saleKey: 'TRY:1000:500:50',
     });
     expect(services.wishlistStateRepository.countNotificationCandidates('discord-user')).toBe(0);
+    services.database.close();
+  });
+
+  it('passes the configured store country and notification language to Steam', async () => {
+    const steamClient = {
+      getWishlistWithErrors: vi.fn().mockResolvedValue({ items: [], errors: [] }),
+    };
+    const services = createServices(steamClient);
+    services.userConfigRepository.upsert(
+      'discord-user',
+      '76561198000000000',
+      'en',
+      'US',
+      '2026-08-21T00:01:00.000Z',
+    );
+
+    await services.checkService.check('discord-user');
+
+    expect(steamClient.getWishlistWithErrors)
+      .toHaveBeenCalledWith('76561198000000000', 'US', 'en');
     services.database.close();
   });
 
@@ -457,6 +478,88 @@ describe('CheckService sale state', () => {
     services.database.close();
   });
 
+  it('marks an existing sale unknown without changing its episode or price', async () => {
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({ items: [createItem(10, false)], errors: [] })
+        .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] })
+        .mockResolvedValueOnce({ items: [createItem(10, null)], errors: [] }),
+    };
+    const services = createServices(steamClient);
+    await services.checkService.check('discord-user');
+    await services.checkService.check('discord-user');
+    const active = services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10);
+
+    await services.checkService.check('discord-user');
+
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({
+        observationStatus: 'unknown',
+        onSale: true,
+        saleEpisodeId: active?.saleEpisodeId,
+        finalPriceMinor: 500,
+      });
+    services.database.close();
+  });
+
+  it('marks only a partially failed app detail as error instead of missing', async () => {
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] })
+        .mockResolvedValueOnce({
+          items: [createItem(20, false)],
+          errors: [{ appId: 10, code: 'STEAM_RATE_LIMITED' as const }],
+        }),
+    };
+    const services = createServices(steamClient);
+    await services.checkService.check('discord-user');
+    const active = services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10);
+
+    await services.checkService.check('discord-user');
+
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({
+        observationStatus: 'error',
+        onSale: true,
+        saleEpisodeId: active?.saleEpisodeId,
+      });
+    services.database.close();
+  });
+
+  it('suspends pending notifications when every app detail request fails', async () => {
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({ items: [createItem(10, false)], errors: [] })
+        .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] })
+        .mockResolvedValueOnce({
+          items: [],
+          errors: [{ appId: 10, code: 'STEAM_UPSTREAM_ERROR' as const }],
+        }),
+    };
+    const services = createServices(steamClient);
+    await services.checkService.check('discord-user');
+    const sale = await services.checkService.check('discord-user');
+    expect(sale).toMatchObject({ status: 'success', notificationCandidates: [{ appId: 10 }] });
+
+    await expect(services.checkService.check('discord-user')).resolves.toEqual({
+      status: 'unavailable',
+      errorCode: 'STEAM_UPSTREAM_ERROR',
+    });
+
+    const config = services.userConfigRepository.findByDiscordUserId('discord-user')!;
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({ observationStatus: 'error', onSale: true });
+    expect(services.wishlistStateRepository.findRetryableNotificationCandidates(
+      config,
+      '2026-08-21T01:00:00.000Z',
+    )).toEqual([]);
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')).toMatchObject({
+      lastStatus: 'unavailable',
+      lastErrorCode: 'STEAM_UPSTREAM_ERROR',
+    });
+    services.database.close();
+  });
+
   it('keeps concurrent checks for one user from running twice', async () => {
     let resolveCheck: ((value: { items: WishlistItem[]; errors: [] }) => void) | undefined;
     const steamClient = {
@@ -518,6 +621,7 @@ describe('CheckService sale state', () => {
       'discord-user',
       '76561198000000001',
       'tr',
+      'TR',
       '2026-08-21T01:00:00.000Z',
     );
     const result = await services.checkService.check('discord-user');
@@ -601,6 +705,120 @@ describe('CheckService sale state', () => {
       lastStatus: 'failed',
       lastErrorCode: 'PERSISTENCE_ERROR',
     });
+    services.database.close();
+  });
+
+  it('commits every item, candidate, missing transition, and metric as one snapshot', async () => {
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({
+          items: [createItem(10, false), createItem(20, false), createItem(30, true)],
+          errors: [],
+        })
+        .mockResolvedValueOnce({
+          items: [createItem(10, true), createItem(20, true)],
+          errors: [],
+        }),
+    };
+    const services = createServices(steamClient);
+    await services.checkService.check('discord-user');
+
+    const result = await services.checkService.check('discord-user');
+
+    expect(result).toMatchObject({
+      status: 'success',
+      checkedCount: 2,
+      notificationCandidates: [{ appId: 10 }, { appId: 20 }],
+    });
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({ onSale: true, observationStatus: 'known' });
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 20))
+      .toMatchObject({ onSale: true, observationStatus: 'known' });
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 30))
+      .toMatchObject({ onSale: false, observationStatus: 'missing', saleEpisodeId: null });
+    expect(services.wishlistStateRepository.countNotificationCandidates('discord-user')).toBe(2);
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')).toMatchObject({
+      lastStatus: 'success',
+      lastSuccessCheckedCount: 2,
+      lastSuccessOnSaleCount: 2,
+    });
+    services.database.close();
+  });
+
+  it('rolls back earlier items and candidates when a middle item write fails', async () => {
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({
+          items: [createItem(10, false), createItem(20, false)],
+          errors: [],
+        })
+        .mockResolvedValueOnce({
+          items: [createItem(10, true), createItem(20, true)],
+          errors: [],
+        }),
+    };
+    const services = createServices(steamClient);
+    await services.checkService.check('discord-user');
+    services.database.exec(`
+      CREATE TRIGGER fail_middle_item
+      BEFORE UPDATE ON wishlist_item_state
+      WHEN NEW.app_id = 20 AND NEW.on_sale = 1
+      BEGIN
+        SELECT RAISE(ABORT, 'injected middle item failure');
+      END;
+    `);
+
+    const result = await services.checkService.check('discord-user');
+
+    expect(result).toEqual({ status: 'failed', errorCode: 'PERSISTENCE_ERROR' });
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({ onSale: false, saleEpisodeId: null, observationStatus: 'known' });
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 20))
+      .toMatchObject({ onSale: false, saleEpisodeId: null, observationStatus: 'known' });
+    expect(services.wishlistStateRepository.countNotificationCandidates('discord-user')).toBe(0);
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')).toMatchObject({
+      lastStatus: 'failed',
+      lastErrorCode: 'PERSISTENCE_ERROR',
+      lastSuccessCheckedCount: 2,
+      lastSuccessOnSaleCount: 0,
+    });
+    services.database.close();
+  });
+
+  it('rolls back the complete wishlist snapshot when the success marker fails', async () => {
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({
+          items: [createItem(10, false), createItem(30, true)],
+          errors: [],
+        })
+        .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] }),
+    };
+    const services = createServices(steamClient);
+    await services.checkService.check('discord-user');
+    services.database.exec(`
+      CREATE TRIGGER fail_check_success
+      BEFORE UPDATE OF last_status ON check_state
+      WHEN NEW.last_status = 'success'
+      BEGIN
+        SELECT RAISE(ABORT, 'injected success failure');
+      END;
+    `);
+
+    const result = await services.checkService.check('discord-user');
+
+    expect(result).toEqual({ status: 'failed', errorCode: 'PERSISTENCE_ERROR' });
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({ onSale: false, saleEpisodeId: null, observationStatus: 'known' });
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 30))
+      .toMatchObject({ onSale: true, observationStatus: 'known' });
+    expect(services.wishlistStateRepository.countNotificationCandidates('discord-user')).toBe(0);
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user'))
+      .toMatchObject({
+        lastStatus: 'failed',
+        lastSuccessCheckedCount: 2,
+        lastSuccessOnSaleCount: 1,
+      });
     services.database.close();
   });
 

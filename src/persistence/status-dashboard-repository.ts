@@ -33,7 +33,7 @@ export class StatusDashboardRepository {
     const row = this.database.prepare(
       `WITH current_notifications AS (
          SELECT notification.*,
-                EXISTS (
+                 EXISTS (
                   SELECT 1
                   FROM wishlist_item_state AS state
                   WHERE state.discord_user_id = notification.discord_user_id
@@ -41,26 +41,42 @@ export class StatusDashboardRepository {
                     AND state.config_version = notification.config_version
                     AND state.app_id = notification.app_id
                     AND state.on_sale = 1
-                    AND state.sale_episode_id = notification.sale_episode_id
-                ) AS episode_active
+                     AND state.sale_episode_id = notification.sale_episode_id
+                ) AS episode_active,
+                EXISTS (
+                  SELECT 1
+                  FROM wishlist_item_state AS state
+                  WHERE state.discord_user_id = notification.discord_user_id
+                    AND state.steam_id64 = notification.steam_id64
+                    AND state.config_version = notification.config_version
+                    AND state.app_id = notification.app_id
+                    AND state.observation_status IN ('unknown', 'error')
+                ) AS observation_deferred
          FROM notification_log AS notification
          WHERE notification.discord_user_id = ?
            AND notification.steam_id64 = ?
            AND notification.config_version = ?
        )
        SELECT
-         COUNT(CASE WHEN status = 'candidate' AND episode_active = 1 THEN 1 END)
-           AS pending_count,
-         COUNT(CASE WHEN status = 'failed' AND episode_active = 1 THEN 1 END)
-           AS retry_count,
-         COUNT(CASE WHEN status = 'sending' AND episode_active = 1 THEN 1 END)
-           AS sending_count,
+          COUNT(CASE
+            WHEN status = 'candidate' AND (episode_active = 1 OR observation_deferred = 1)
+            THEN 1 END)
+            AS pending_count,
+          COUNT(CASE
+            WHEN status = 'failed' AND (episode_active = 1 OR observation_deferred = 1)
+            THEN 1 END)
+            AS retry_count,
+          COUNT(CASE
+            WHEN status = 'sending' AND (episode_active = 1 OR observation_deferred = 1)
+            THEN 1 END)
+            AS sending_count,
          COUNT(CASE WHEN status = 'sent' THEN 1 END) AS sent_count,
          COUNT(CASE WHEN status = 'terminal_failed' THEN 1 END)
            AS terminal_failed_count,
          COUNT(CASE
            WHEN status = 'expired'
-             OR (status IN ('candidate', 'failed', 'sending') AND episode_active = 0)
+              OR (status IN ('candidate', 'failed', 'sending')
+                  AND episode_active = 0 AND observation_deferred = 0)
            THEN 1
          END) AS expired_count
        FROM current_notifications`,
@@ -78,5 +94,26 @@ export class StatusDashboardRepository {
       terminalFailed: count(row.terminal_failed_count, 'terminal_failed'),
       expired: count(row.expired_count, 'expired'),
     };
+  }
+
+  public findLatestPriceCurrencies(config: UserConfig): string[] {
+    const rows = this.database.prepare(
+      `SELECT DISTINCT currency
+       FROM wishlist_item_state
+       WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
+         AND observation_status = 'known' AND currency IS NOT NULL
+       ORDER BY currency COLLATE BINARY ASC`,
+    ).all(
+      config.discordUserId,
+      config.steamId64,
+      config.configVersion,
+    ) as Array<{ currency: SQLOutputValue }>;
+
+    return rows.map((row) => {
+      if (typeof row.currency !== 'string' || !/^[A-Z]{3}$/.test(row.currency)) {
+        throw new Error('Invalid latest price currency');
+      }
+      return row.currency;
+    });
   }
 }

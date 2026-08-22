@@ -24,6 +24,45 @@ function expectSteamError(error: unknown, code: string): SteamWishlistError {
 }
 
 describe('SteamClient', () => {
+  it('uses the selected store country and text language while trusting Steam currency', async () => {
+    const fetchMock = createFetchMock()
+      .mockResolvedValueOnce(jsonResponse({ response: { items: [{ appid: 10 }] } }))
+      .mockResolvedValueOnce(jsonResponse({
+        '10': {
+          success: true,
+          data: {
+            steam_appid: 10,
+            name: 'Regional Game',
+            is_free: false,
+            price_overview: {
+              currency: 'USD',
+              initial: 2_000,
+              final: 1_000,
+              discount_percent: 50,
+            },
+          },
+        },
+      }));
+
+    const result = await new SteamClient({ fetchImpl: fetchMock })
+      .getWishlist('76561198000000000', 'US', 'en');
+    const appDetailsUrl = new URL(String(fetchMock.mock.calls[1]?.[0]));
+
+    expect(appDetailsUrl.searchParams.get('cc')).toBe('US');
+    expect(appDetailsUrl.searchParams.get('l')).toBe('english');
+    expect(result[0]?.price?.currency).toBe('USD');
+  });
+
+  it('rejects an unsupported store country before making a request', async () => {
+    const fetchMock = createFetchMock();
+    await expect(new SteamClient({ fetchImpl: fetchMock }).getWishlist(
+      '76561198000000000',
+      'XX' as never,
+      'en',
+    )).rejects.toMatchObject({ code: 'STEAM_INVALID_REQUEST' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('loads wishlist items and normalizes appdetails prices', async () => {
     const fetchMock = createFetchMock();
     fetchMock
@@ -75,7 +114,7 @@ describe('SteamClient', () => {
       );
 
     const client = new SteamClient({ fetchImpl: fetchMock });
-    const items = await client.getWishlist('76561198000000000');
+    const items = await client.getWishlist('76561198000000000', 'TR', 'tr');
 
     expect(items).toEqual([
       {
@@ -128,7 +167,7 @@ describe('SteamClient', () => {
     );
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000'),
+      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000', 'TR', 'tr'),
     ).resolves.toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -139,7 +178,7 @@ describe('SteamClient', () => {
     );
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000'),
+      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000', 'TR', 'tr'),
     ).rejects.toMatchObject({
       code: 'STEAM_WISHLIST_INACCESSIBLE',
       status: 200,
@@ -155,7 +194,7 @@ describe('SteamClient', () => {
     );
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000'),
+      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000', 'TR', 'tr'),
     ).rejects.toMatchObject({ code: 'STEAM_INVALID_RESPONSE' });
   });
 
@@ -200,6 +239,8 @@ describe('SteamClient', () => {
     await expect(
       new SteamClient({ fetchImpl: fetchMock, maxConcurrency: 1 }).getWishlistWithErrors(
         '76561198000000000',
+        'TR',
+        'tr',
       ),
     ).resolves.toMatchObject({
       items: [{ appId: 20, name: 'Başarılı Oyun' }],
@@ -224,7 +265,7 @@ describe('SteamClient', () => {
       );
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000'),
+      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000', 'TR', 'tr'),
     ).resolves.toMatchObject([
       { appId: 30, price: null, onSale: null },
     ]);
@@ -243,7 +284,7 @@ describe('SteamClient', () => {
       );
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000'),
+      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000', 'TR', 'tr'),
     ).resolves.toMatchObject([
       {
         appId: 40,
@@ -271,6 +312,8 @@ describe('SteamClient', () => {
     try {
       await new SteamClient({ fetchImpl: fetchMock, maxRetries: 0, requestLimiter: limiter }).getWishlist(
         '76561198000000000',
+        'TR',
+        'tr',
       );
       expect.fail('Expected a SteamWishlistError');
     } catch (error: unknown) {
@@ -293,6 +336,8 @@ describe('SteamClient', () => {
     await expect(
       new SteamClient({ fetchImpl: fetchMock, maxRetries: 1, requestLimiter: limiter }).getWishlist(
         '76561198000000000',
+        'TR',
+        'tr',
       ),
     ).resolves.toEqual([]);
     expect(sleep).toHaveBeenCalledWith(60_000, undefined);
@@ -314,10 +359,10 @@ describe('SteamClient', () => {
       }))
       .mockImplementation(() => Promise.resolve(jsonResponse({ response: {} })));
     const first = new SteamClient({ fetchImpl: fetchMock, maxRetries: 1, requestLimiter: limiter })
-      .getWishlist('76561198000000000');
+      .getWishlist('76561198000000000', 'TR', 'tr');
     await vi.waitFor(() => expect(sleep).toHaveBeenCalledWith(10_000, undefined));
     const second = new SteamClient({ fetchImpl: fetchMock, requestLimiter: limiter })
-      .getWishlist('76561198000000001');
+      .getWishlist('76561198000000001', 'TR', 'tr');
     await Promise.resolve();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -366,9 +411,9 @@ describe('SteamClient', () => {
       }),
     );
     const first = new SteamClient({ fetchImpl: fetchMock, requestLimiter: limiter })
-      .getWishlist('76561198000000000');
+      .getWishlist('76561198000000000', 'TR', 'tr');
     const second = new SteamClient({ fetchImpl: fetchMock, requestLimiter: limiter })
-      .getWishlist('76561198000000001');
+      .getWishlist('76561198000000001', 'TR', 'tr');
     await vi.waitFor(() => expect(releases).toHaveLength(1));
     releases[0]?.();
     await vi.waitFor(() => expect(releases).toHaveLength(2));
@@ -384,7 +429,7 @@ describe('SteamClient', () => {
     );
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000'),
+      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000', 'TR', 'tr'),
     ).rejects.toMatchObject({
       code: 'STEAM_UPSTREAM_ERROR',
       status: 503,
@@ -395,7 +440,7 @@ describe('SteamClient', () => {
     const fetchMock = createFetchMock().mockRejectedValueOnce(new Error('offline'));
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000'),
+      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000', 'TR', 'tr'),
     ).rejects.toMatchObject({ code: 'STEAM_NETWORK_ERROR' });
   });
 
@@ -418,6 +463,8 @@ describe('SteamClient', () => {
     await expect(
       new SteamClient({ fetchImpl: fetchMock, requestLimiter }).getWishlistWithErrors(
         '76561198000000000',
+        'TR',
+        'tr',
       ),
     ).rejects.toThrow('limiter defect');
   });
@@ -437,6 +484,8 @@ describe('SteamClient', () => {
     await expect(
       new SteamClient({ fetchImpl: fetchMock, timeoutMs: 5 }).getWishlist(
         '76561198000000000',
+        'TR',
+        'tr',
       ),
     ).rejects.toMatchObject({ code: 'STEAM_TIMEOUT' });
   });
@@ -449,6 +498,8 @@ describe('SteamClient', () => {
     await expect(
       new SteamClient({ fetchImpl: fetchMock, timeoutMs: 5 }).getWishlist(
         '76561198000000000',
+        'TR',
+        'tr',
       ),
     ).rejects.toMatchObject({ code: 'STEAM_TIMEOUT' });
   });
@@ -461,7 +512,7 @@ describe('SteamClient', () => {
     const request = new SteamClient({
       fetchImpl: fetchMock,
       lifecycleSignal: lifecycle.signal,
-    }).getWishlist('76561198000000000');
+    }).getWishlist('76561198000000000', 'TR', 'tr');
     const rejection = expect(request).rejects.toMatchObject({ code: 'STEAM_CANCELLED' });
     lifecycle.abort();
 
@@ -495,7 +546,7 @@ describe('SteamClient', () => {
       fetchImpl: fetchMock,
       maxConcurrency: 1,
       lifecycleSignal: lifecycle.signal,
-    }).getWishlistWithErrors('76561198000000000');
+    }).getWishlistWithErrors('76561198000000000', 'TR', 'tr');
     const rejection = expect(request).rejects.toMatchObject({ code: 'STEAM_CANCELLED' });
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     lifecycle.abort();
@@ -533,7 +584,7 @@ describe('SteamClient', () => {
     );
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000'),
+      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000', 'TR', 'tr'),
     ).rejects.toMatchObject({ code: 'STEAM_INVALID_RESPONSE' });
   });
 
@@ -543,7 +594,7 @@ describe('SteamClient', () => {
     );
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000'),
+      new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000', 'TR', 'tr'),
     ).rejects.toMatchObject({ code: 'STEAM_SCHEMA_INVALID' });
   });
 
@@ -553,8 +604,15 @@ describe('SteamClient', () => {
       .mockResolvedValueOnce(jsonResponse({ '50': { success: true, data: {} } }));
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlistWithErrors('76561198000000000'),
-    ).rejects.toMatchObject({ code: 'STEAM_SCHEMA_INVALID' });
+      new SteamClient({ fetchImpl: fetchMock }).getWishlistWithErrors(
+        '76561198000000000',
+        'TR',
+        'tr',
+      ),
+    ).resolves.toEqual({
+      items: [],
+      errors: [{ appId: 50, code: 'STEAM_SCHEMA_INVALID' }],
+    });
   });
 
   it('rejects malformed currency metadata before it reaches notification formatting', async () => {
@@ -577,8 +635,15 @@ describe('SteamClient', () => {
       }));
 
     await expect(
-      new SteamClient({ fetchImpl: fetchMock }).getWishlistWithErrors('76561198000000000'),
-    ).rejects.toMatchObject({ code: 'STEAM_SCHEMA_INVALID' });
+      new SteamClient({ fetchImpl: fetchMock }).getWishlistWithErrors(
+        '76561198000000000',
+        'TR',
+        'tr',
+      ),
+    ).resolves.toEqual({
+      items: [],
+      errors: [{ appId: 50, code: 'STEAM_SCHEMA_INVALID' }],
+    });
   });
 
   it('URL encodes the SteamID64 before requesting the wishlist', async () => {
@@ -586,7 +651,11 @@ describe('SteamClient', () => {
       jsonResponse({ response: {} }),
     );
 
-    await new SteamClient({ fetchImpl: fetchMock }).getWishlist('76561198000000000');
+    await new SteamClient({ fetchImpl: fetchMock }).getWishlist(
+      '76561198000000000',
+      'TR',
+      'tr',
+    );
 
     expect(fetchMock.mock.calls[0][0]).toContain('steamid=76561198000000000');
   });

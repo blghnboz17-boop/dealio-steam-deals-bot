@@ -22,6 +22,7 @@ function dashboard(enabled: boolean) {
       steamId64: '76561198000000000',
       configVersion: 1,
       language: 'en' as const,
+      storeCountryCode: 'US' as const,
       enabled,
       minimumDiscountPercent: 0,
       createdAt: '2026-08-21T00:00:00.000Z',
@@ -36,6 +37,7 @@ function dashboard(enabled: boolean) {
       terminalFailed: 0,
       expired: 0,
     },
+    latestPriceCurrencies: ['USD'],
     gameDiscountOverrideCount: 0,
   };
 }

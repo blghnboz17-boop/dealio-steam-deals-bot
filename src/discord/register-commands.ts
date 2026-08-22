@@ -6,9 +6,11 @@ import { statusCommand } from './commands/status.js';
 import { deleteDataCommand } from './commands/delete-data.js';
 import { testNotificationCommand } from './commands/test-notification.js';
 import { wishlistCommand } from './commands/wishlist.js';
+import { regionCommand } from './commands/region.js';
 
 export const commands = [
   setupCommand,
+  regionCommand,
   statusCommand,
   checkCommand,
   wishlistCommand,

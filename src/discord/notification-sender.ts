@@ -1,6 +1,10 @@
 import { Routes, type APIEmbed, type Client } from 'discord.js';
 import type { Language } from '../domain/user-config.js';
 import type { NotificationBatch } from '../domain/wishlist-state.js';
+import type {
+  InitialWishlistSummary,
+  InitialWishlistSummarySender,
+} from '../application/initial-wishlist-summary-service.js';
 import {
   NotificationDeliveryCancelledError,
   type NotificationSendOptions,
@@ -11,6 +15,12 @@ import {
   buildSaleNotificationEmbed,
   embedTextLength,
 } from './notification-messages.js';
+import {
+  buildInitialWishlistSaleEmbed,
+  initialWishlistContinuationMessage,
+  initialWishlistNoSaleMessage,
+  initialWishlistSaleMessage,
+} from './initial-wishlist-summary-messages.js';
 
 const maximumEmbedsPerMessage = 10;
 const maximumEmbedTextPerMessage = 6_000;
@@ -19,7 +29,7 @@ export class DiscordNotificationTimeoutError extends Error {
   public readonly name = 'DiscordNotificationTimeoutError';
 }
 
-export class DiscordNotificationSender implements NotificationSender {
+export class DiscordNotificationSender implements NotificationSender, InitialWishlistSummarySender {
   private readonly timeoutMs: number;
   private readonly lifecycleSignal?: AbortSignal;
 
@@ -57,6 +67,16 @@ export class DiscordNotificationSender implements NotificationSender {
       throw new Error('Notification batch must contain exactly one Discord recipient');
     }
 
+    await this.runWithDeadline((signal) => this.deliver(batch, language, options, signal));
+  }
+
+  public async sendInitialSummary(summary: InitialWishlistSummary): Promise<void> {
+    await this.runWithDeadline((signal) => this.deliverInitialSummary(summary, signal));
+  }
+
+  private async runWithDeadline(
+    operation: (signal: AbortSignal) => Promise<void>,
+  ): Promise<void> {
     if (this.lifecycleSignal?.aborted) {
       throw new NotificationDeliveryCancelledError('Notification delivery cancelled');
     }
@@ -81,7 +101,7 @@ export class DiscordNotificationSender implements NotificationSender {
 
     try {
       await Promise.race([
-        this.deliver(batch, language, options, controller.signal),
+        operation(controller.signal),
         abortPromise,
       ]);
     } finally {
@@ -114,6 +134,49 @@ export class DiscordNotificationSender implements NotificationSender {
       },
       signal,
     });
+  }
+
+  private async deliverInitialSummary(
+    summary: InitialWishlistSummary,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const channel = await this.client.rest.post(Routes.userChannels(), {
+      body: { recipient_id: summary.discordUserId },
+      signal,
+    }) as { id?: unknown };
+    if (typeof channel.id !== 'string' || !/^\d+$/.test(channel.id)) {
+      throw new Error('Discord returned an invalid DM channel');
+    }
+
+    const batches = partitionNotificationBatches(
+      summary.sales,
+      (sale) => buildInitialWishlistSaleEmbed(sale, summary),
+    );
+    if (batches.length === 0) {
+      await this.client.rest.post(Routes.channelMessages(channel.id), {
+        body: {
+          content: initialWishlistNoSaleMessage,
+          allowed_mentions: { parse: [] },
+        },
+        signal,
+      });
+      return;
+    }
+
+    for (const [index, batch] of batches.entries()) {
+      await this.client.rest.post(Routes.channelMessages(channel.id), {
+        body: {
+          content: index === 0
+            ? initialWishlistSaleMessage
+            : initialWishlistContinuationMessage,
+          embeds: batch.notifications.map((sale) =>
+            buildInitialWishlistSaleEmbed(sale, summary)
+          ),
+          allowed_mentions: { parse: [] },
+        },
+        signal,
+      });
+    }
   }
 }
 

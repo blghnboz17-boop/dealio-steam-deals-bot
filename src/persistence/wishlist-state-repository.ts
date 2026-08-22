@@ -1,19 +1,28 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
 import type { Language, UserConfig } from '../domain/user-config.js';
+import {
+  parseStoreCountryCode,
+  type StoreCountryCode,
+} from '../domain/store-country.js';
 import type {
   DurableNotificationBatch,
   NotificationCandidate,
   WishlistItemState,
   WishlistObservation,
+  WishlistObservationStatus,
 } from '../domain/wishlist-state.js';
 
-type WishlistScope = Pick<UserConfig, 'discordUserId' | 'steamId64' | 'configVersion'>;
+type WishlistScope = Pick<
+  UserConfig,
+  'discordUserId' | 'steamId64' | 'configVersion' | 'storeCountryCode'
+>;
 
 interface WishlistItemStateRow {
   discord_user_id: SQLOutputValue;
   steam_id64: SQLOutputValue;
   config_version: SQLOutputValue;
+  store_country_code: SQLOutputValue;
   app_id: SQLOutputValue;
   on_sale: SQLOutputValue;
   sale_episode_id: SQLOutputValue;
@@ -24,12 +33,14 @@ interface WishlistItemStateRow {
   final_price_minor: SQLOutputValue;
   discount_percent: SQLOutputValue;
   last_seen_at: SQLOutputValue;
+  observation_status: SQLOutputValue;
 }
 
 interface NotificationLogRow {
   discord_user_id: SQLOutputValue;
   steam_id64: SQLOutputValue;
   config_version: SQLOutputValue;
+  store_country_code: SQLOutputValue;
   app_id: SQLOutputValue;
   sale_episode_id: SQLOutputValue;
   sale_key: SQLOutputValue;
@@ -47,6 +58,10 @@ interface NotificationBatchRow {
   language: SQLOutputValue;
   attempt_count: SQLOutputValue;
   member_count: SQLOutputValue;
+}
+
+interface RecordObservationOptions {
+  readonly baseline?: boolean;
 }
 
 class BatchClaimConflictError extends Error {}
@@ -84,6 +99,22 @@ function nullableInteger(value: SQLOutputValue, column: string): number | null {
   return value === null ? null : integerValue(value, column);
 }
 
+function storeCountryCodeValue(value: SQLOutputValue): StoreCountryCode {
+  const code = parseStoreCountryCode(textValue(value, 'store_country_code'));
+  if (!code) {
+    throw new Error('Invalid store_country_code value in wishlist state');
+  }
+  return code;
+}
+
+function observationStatusValue(value: SQLOutputValue): WishlistObservationStatus {
+  const status = textValue(value, 'observation_status');
+  if (!['known', 'unknown', 'error', 'missing'].includes(status)) {
+    throw new Error('Invalid observation_status value in wishlist state');
+  }
+  return status as WishlistObservationStatus;
+}
+
 function toState(row: WishlistItemStateRow): WishlistItemState {
   const onSale = integerValue(row.on_sale, 'on_sale');
   if (onSale !== 0 && onSale !== 1) {
@@ -94,6 +125,7 @@ function toState(row: WishlistItemStateRow): WishlistItemState {
     discordUserId: textValue(row.discord_user_id, 'discord_user_id'),
     steamId64: textValue(row.steam_id64, 'steam_id64'),
     configVersion: integerValue(row.config_version, 'config_version'),
+    storeCountryCode: storeCountryCodeValue(row.store_country_code),
     appId: integerValue(row.app_id, 'app_id'),
     onSale: onSale === 1,
     saleEpisodeId: nullableText(row.sale_episode_id, 'sale_episode_id'),
@@ -104,6 +136,7 @@ function toState(row: WishlistItemStateRow): WishlistItemState {
     finalPriceMinor: nullableInteger(row.final_price_minor, 'final_price_minor'),
     discountPercent: nullableInteger(row.discount_percent, 'discount_percent'),
     lastSeenAt: textValue(row.last_seen_at, 'last_seen_at'),
+    observationStatus: observationStatusValue(row.observation_status),
   };
 }
 
@@ -112,6 +145,7 @@ function toNotificationCandidate(row: NotificationLogRow): NotificationCandidate
     discordUserId: textValue(row.discord_user_id, 'discord_user_id'),
     steamId64: textValue(row.steam_id64, 'steam_id64'),
     configVersion: integerValue(row.config_version, 'config_version'),
+    storeCountryCode: storeCountryCodeValue(row.store_country_code),
     appId: integerValue(row.app_id, 'app_id'),
     saleEpisodeId: textValue(row.sale_episode_id, 'sale_episode_id'),
     gameName: textValue(row.game_name, 'game_name'),
@@ -130,14 +164,15 @@ export interface ObservationResult {
   readonly notificationCandidate: NotificationCandidate | null;
 }
 
-const stateColumns = `discord_user_id, steam_id64, config_version, app_id, on_sale,
+const stateColumns = `discord_user_id, steam_id64, config_version, store_country_code, app_id, on_sale,
   sale_episode_id, sale_started_at, sale_key, currency, normal_price_minor,
-  final_price_minor, discount_percent, last_seen_at`;
+  final_price_minor, discount_percent, last_seen_at, observation_status`;
 
 const notificationColumns = `
   notification.discord_user_id AS discord_user_id,
   notification.steam_id64 AS steam_id64,
   notification.config_version AS config_version,
+  notification.store_country_code AS store_country_code,
   notification.app_id AS app_id,
   notification.sale_episode_id AS sale_episode_id,
   notification.sale_key AS sale_key,
@@ -151,6 +186,25 @@ const notificationColumns = `
 
 export class WishlistStateRepository {
   public constructor(private readonly database: DatabaseSync) {}
+
+  public runInImmediateTransaction<T>(operation: () => T): T {
+    const ownsTransaction = !this.database.isTransaction;
+    if (ownsTransaction) {
+      this.database.exec('BEGIN IMMEDIATE');
+    }
+    try {
+      const result = operation();
+      if (ownsTransaction) {
+        this.database.exec('COMMIT');
+      }
+      return result;
+    } catch (error: unknown) {
+      if (ownsTransaction && this.database.isTransaction) {
+        this.database.exec('ROLLBACK');
+      }
+      throw error;
+    }
+  }
 
   public findByDiscordUserAndAppId(
     discordUserId: string,
@@ -214,7 +268,8 @@ export class WishlistStateRepository {
              sale_episode_id = NULL,
              sale_started_at = NULL,
              sale_key = NULL,
-             last_seen_at = ?
+              last_seen_at = ?,
+              observation_status = 'missing'
          WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
            ${exclusion}`,
       )
@@ -226,6 +281,33 @@ export class WishlistStateRepository {
         ...uniqueAppIds,
       );
 
+    return Number(result.changes);
+  }
+
+  public markObservationStatus(
+    scope: WishlistScope,
+    appIds: readonly number[],
+    status: Exclude<WishlistObservationStatus, 'known' | 'missing'>,
+    observedAt: string,
+  ): number {
+    const uniqueAppIds = [...new Set(appIds)];
+    if (uniqueAppIds.length === 0) {
+      return 0;
+    }
+    const placeholders = uniqueAppIds.map(() => '?').join(', ');
+    const result = this.database.prepare(
+      `UPDATE wishlist_item_state
+       SET observation_status = ?, last_seen_at = ?
+       WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
+         AND app_id IN (${placeholders})`,
+    ).run(
+      status,
+      observedAt,
+      scope.discordUserId,
+      scope.steamId64,
+      scope.configVersion,
+      ...uniqueAppIds,
+    );
     return Number(result.changes);
   }
 
@@ -344,11 +426,22 @@ export class WishlistStateRepository {
                    WHERE state.discord_user_id = notification.discord_user_id
                      AND state.steam_id64 = notification.steam_id64
                      AND state.config_version = notification.config_version
-                     AND state.app_id = notification.app_id
-                     AND state.on_sale = 1
-                     AND state.sale_episode_id = notification.sale_episode_id
-                 )
-             )`,
+                      AND state.app_id = notification.app_id
+                      AND state.on_sale = 1
+                      AND state.sale_episode_id = notification.sale_episode_id
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM wishlist_item_state AS deferred_state
+                    WHERE deferred_state.discord_user_id = notification.discord_user_id
+                      AND deferred_state.steam_id64 = notification.steam_id64
+                      AND deferred_state.config_version = notification.config_version
+                      AND deferred_state.app_id = notification.app_id
+                      AND (
+                        deferred_state.on_sale = 1
+                        OR deferred_state.observation_status IN ('unknown', 'error')
+                      )
+                  )
+              )`,
         )
         .all(
           scope.discordUserId,
@@ -379,10 +472,21 @@ export class WishlistStateRepository {
                  WHERE state.discord_user_id = notification.discord_user_id
                    AND state.steam_id64 = notification.steam_id64
                    AND state.config_version = notification.config_version
-                   AND state.app_id = notification.app_id
-                   AND state.on_sale = 1
-                   AND state.sale_episode_id = notification.sale_episode_id
-               )`,
+                    AND state.app_id = notification.app_id
+                    AND state.on_sale = 1
+                    AND state.sale_episode_id = notification.sale_episode_id
+                )
+                AND NOT EXISTS (
+                  SELECT 1 FROM wishlist_item_state AS deferred_state
+                  WHERE deferred_state.discord_user_id = notification.discord_user_id
+                    AND deferred_state.steam_id64 = notification.steam_id64
+                    AND deferred_state.config_version = notification.config_version
+                    AND deferred_state.app_id = notification.app_id
+                    AND (
+                      deferred_state.on_sale = 1
+                      OR deferred_state.observation_status IN ('unknown', 'error')
+                    )
+                )`,
           )
           .run(batchId);
         expiredCount += Number(items.changes);
@@ -419,10 +523,21 @@ export class WishlistStateRepository {
                WHERE state.discord_user_id = notification.discord_user_id
                  AND state.steam_id64 = notification.steam_id64
                  AND state.config_version = notification.config_version
-                 AND state.app_id = notification.app_id
-                 AND state.on_sale = 1
-                 AND state.sale_episode_id = notification.sale_episode_id
-             )`,
+                AND state.app_id = notification.app_id
+                AND state.on_sale = 1
+                AND state.sale_episode_id = notification.sale_episode_id
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM wishlist_item_state AS deferred_state
+                WHERE deferred_state.discord_user_id = notification.discord_user_id
+                  AND deferred_state.steam_id64 = notification.steam_id64
+                  AND deferred_state.config_version = notification.config_version
+                  AND deferred_state.app_id = notification.app_id
+                  AND (
+                    deferred_state.on_sale = 1
+                    OR deferred_state.observation_status IN ('unknown', 'error')
+                  )
+              )`,
         )
         .run(scope.discordUserId, scope.steamId64, scope.configVersion);
       expiredCount += Number(unbatched.changes);
@@ -456,7 +571,8 @@ export class WishlistStateRepository {
               notification.status = 'candidate'
               OR (notification.status = 'failed' AND notification.next_attempt_at <= ?)
             )
-            AND state.on_sale = 1
+             AND state.on_sale = 1
+             AND state.observation_status = 'known'
             AND NOT EXISTS (
               SELECT 1 FROM notification_batch_item AS item
               JOIN notification_batch AS batch ON batch.batch_id = item.batch_id
@@ -489,7 +605,27 @@ export class WishlistStateRepository {
         `SELECT batch_id, language, attempt_count, member_count
          FROM notification_batch
          WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
-           AND status = 'failed' AND next_attempt_at <= ?
+            AND status = 'failed' AND next_attempt_at <= ?
+            AND NOT EXISTS (
+              SELECT 1
+              FROM notification_batch_item AS item
+              JOIN notification_log AS notification
+                ON notification.discord_user_id = item.discord_user_id
+               AND notification.config_version = item.config_version
+               AND notification.app_id = item.app_id
+               AND notification.sale_episode_id = item.sale_episode_id
+              WHERE item.batch_id = notification_batch.batch_id
+                AND NOT EXISTS (
+                  SELECT 1 FROM wishlist_item_state AS state
+                  WHERE state.discord_user_id = notification.discord_user_id
+                    AND state.steam_id64 = notification.steam_id64
+                    AND state.config_version = notification.config_version
+                    AND state.app_id = notification.app_id
+                    AND state.on_sale = 1
+                    AND state.observation_status = 'known'
+                    AND state.sale_episode_id = notification.sale_episode_id
+                )
+            )
          ORDER BY first_created_at ASC, first_app_id ASC,
                   first_sale_episode_id COLLATE BINARY ASC`,
       )
@@ -580,9 +716,10 @@ export class WishlistStateRepository {
                  WHERE state.discord_user_id = notification.discord_user_id
                    AND state.steam_id64 = notification.steam_id64
                    AND state.config_version = notification.config_version
-                   AND state.app_id = notification.app_id
-                   AND state.on_sale = 1
-                   AND state.sale_episode_id = notification.sale_episode_id
+                    AND state.app_id = notification.app_id
+                    AND state.on_sale = 1
+                    AND state.observation_status = 'known'
+                    AND state.sale_episode_id = notification.sale_episode_id
                )`,
           )
           .run(
@@ -658,9 +795,10 @@ export class WishlistStateRepository {
                WHERE state.discord_user_id = notification.discord_user_id
                  AND state.steam_id64 = notification.steam_id64
                  AND state.config_version = notification.config_version
-                 AND state.app_id = notification.app_id
-                 AND state.on_sale = 1
-                 AND state.sale_episode_id = notification.sale_episode_id
+                  AND state.app_id = notification.app_id
+                  AND state.on_sale = 1
+                  AND state.observation_status = 'known'
+                  AND state.sale_episode_id = notification.sale_episode_id
              )`,
         )
         .run(attemptedAt, batch.batchId);
@@ -786,12 +924,16 @@ export class WishlistStateRepository {
   public recordObservation(
     scope: WishlistScope,
     observation: WishlistObservation,
+    options: RecordObservationOptions = {},
   ): ObservationResult {
     const { item, saleKey, observedAt } = observation;
     const price = item.price;
     let notificationCandidate: NotificationCandidate | null = null;
 
-    this.database.exec('BEGIN IMMEDIATE');
+    const ownsTransaction = !this.database.isTransaction;
+    if (ownsTransaction) {
+      this.database.exec('BEGIN IMMEDIATE');
+    }
 
     try {
       const existing = this.findByDiscordUserAndAppId(
@@ -804,11 +946,13 @@ export class WishlistStateRepository {
       const existingEligibility = existing === null
         ? false
         : this.findNotificationEligibility(scope, item.appId);
-      const notificationEligible = isFirstObservation
+      const notificationEligible = options.baseline
         ? false
-        : continuingSale
-          ? existingEligibility
-          : item.onSale === true;
+        : isFirstObservation
+          ? false
+          : continuingSale
+            ? existingEligibility
+            : item.onSale === true;
       const saleEpisodeId = item.onSale
         ? continuingSale
           ? existing.saleEpisodeId ?? randomUUID()
@@ -822,15 +966,16 @@ export class WishlistStateRepository {
 
       this.database
         .prepare(
-          `INSERT INTO wishlist_item_state
-             (discord_user_id, steam_id64, config_version, app_id, on_sale,
+           `INSERT INTO wishlist_item_state
+             (discord_user_id, steam_id64, config_version, store_country_code, app_id, on_sale,
                sale_episode_id, sale_started_at, sale_key, currency,
                normal_price_minor, final_price_minor, discount_percent, last_seen_at,
-               notification_eligible)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                notification_eligible, observation_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'known')
            ON CONFLICT(discord_user_id, config_version, app_id) DO UPDATE SET
-             steam_id64 = excluded.steam_id64,
-             on_sale = excluded.on_sale,
+              steam_id64 = excluded.steam_id64,
+              store_country_code = excluded.store_country_code,
+              on_sale = excluded.on_sale,
              sale_episode_id = excluded.sale_episode_id,
              sale_started_at = excluded.sale_started_at,
              sale_key = excluded.sale_key,
@@ -839,12 +984,14 @@ export class WishlistStateRepository {
              final_price_minor = excluded.final_price_minor,
              discount_percent = excluded.discount_percent,
               last_seen_at = excluded.last_seen_at,
-              notification_eligible = excluded.notification_eligible`,
+               notification_eligible = excluded.notification_eligible,
+               observation_status = 'known'`,
         )
         .run(
           scope.discordUserId,
           scope.steamId64,
           scope.configVersion,
+          scope.storeCountryCode,
           item.appId,
           item.onSale ? 1 : 0,
           saleEpisodeId,
@@ -859,6 +1006,7 @@ export class WishlistStateRepository {
         );
 
       if (
+        !options.baseline &&
         notificationEligible &&
         item.onSale === true &&
         saleEpisodeId !== null &&
@@ -866,57 +1014,91 @@ export class WishlistStateRepository {
         price !== null &&
         price.currency !== null &&
         price.discountPercent > 0 &&
-        price.finalMinor < price.initialMinor &&
-        price.discountPercent >= this.findEffectiveMinimumDiscount(scope, item.appId)
+        price.finalMinor < price.initialMinor
       ) {
-        const result = this.database
+        const notificationExists = this.database
           .prepare(
-            `INSERT INTO notification_log
-                (discord_user_id, steam_id64, config_version, app_id, sale_episode_id,
-                 sale_key, game_name, currency, normal_price_minor,
-                 final_price_minor, discount_percent, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              ON CONFLICT(discord_user_id, config_version, app_id, sale_episode_id)
-              DO NOTHING`,
+            `SELECT 1
+             FROM notification_log
+             WHERE discord_user_id = ? AND config_version = ?
+               AND app_id = ? AND sale_episode_id = ?`,
           )
-          .run(
+          .get(
             scope.discordUserId,
-            scope.steamId64,
             scope.configVersion,
             item.appId,
             saleEpisodeId,
-            saleKey,
-            item.name,
-            price.currency,
-            price.initialMinor,
-            price.finalMinor,
-            price.discountPercent,
-            observedAt,
-          );
+          ) !== undefined;
+        const meetsThreshold = price.discountPercent >= this.findEffectiveMinimumDiscount(
+          scope,
+          item.appId,
+        );
+        if (notificationExists || meetsThreshold) {
+          const result = this.database
+            .prepare(
+             `INSERT INTO notification_log
+                  (discord_user_id, steam_id64, config_version, store_country_code,
+                   app_id, sale_episode_id,
+                    sale_key, game_name, currency, normal_price_minor,
+                    final_price_minor, discount_percent, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 ON CONFLICT(discord_user_id, config_version, app_id, sale_episode_id)
+                 DO UPDATE SET
+                   steam_id64 = excluded.steam_id64,
+                   store_country_code = excluded.store_country_code,
+                   sale_key = excluded.sale_key,
+                   game_name = excluded.game_name,
+                   currency = excluded.currency,
+                   normal_price_minor = excluded.normal_price_minor,
+                   final_price_minor = excluded.final_price_minor,
+                   discount_percent = excluded.discount_percent
+                 WHERE notification_log.status IN ('candidate', 'failed')`,
+            )
+            .run(
+              scope.discordUserId,
+              scope.steamId64,
+              scope.configVersion,
+              scope.storeCountryCode,
+              item.appId,
+              saleEpisodeId,
+              saleKey,
+              item.name,
+              price.currency,
+              price.initialMinor,
+              price.finalMinor,
+              price.discountPercent,
+              observedAt,
+            );
 
-        if (Number(result.changes) > 0) {
-          notificationCandidate = {
-            discordUserId: scope.discordUserId,
-            steamId64: scope.steamId64,
-            configVersion: scope.configVersion,
-            appId: item.appId,
-            saleEpisodeId,
-            gameName: item.name,
-            saleKey,
-            currency: price.currency,
-            normalPriceMinor: price.initialMinor,
-            finalPriceMinor: price.finalMinor,
-            discountPercent: price.discountPercent,
-            attemptCount: 0,
-            createdAt: observedAt,
-          };
+          if (!notificationExists && Number(result.changes) > 0) {
+            notificationCandidate = {
+              discordUserId: scope.discordUserId,
+              steamId64: scope.steamId64,
+              configVersion: scope.configVersion,
+              storeCountryCode: scope.storeCountryCode,
+              appId: item.appId,
+              saleEpisodeId,
+              gameName: item.name,
+              saleKey,
+              currency: price.currency,
+              normalPriceMinor: price.initialMinor,
+              finalPriceMinor: price.finalMinor,
+              discountPercent: price.discountPercent,
+              attemptCount: 0,
+              createdAt: observedAt,
+            };
+          }
         }
       }
 
-      this.database.exec('COMMIT');
+      if (ownsTransaction) {
+        this.database.exec('COMMIT');
+      }
       return { firstObservation: isFirstObservation, notificationCandidate };
     } catch (error: unknown) {
-      this.database.exec('ROLLBACK');
+      if (ownsTransaction && this.database.isTransaction) {
+        this.database.exec('ROLLBACK');
+      }
       throw error;
     }
   }

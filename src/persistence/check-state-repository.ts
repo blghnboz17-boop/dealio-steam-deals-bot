@@ -149,7 +149,7 @@ export class CheckStateRepository {
     configVersion: number,
     metrics: SuccessfulCheckMetrics,
   ): void {
-    this.database
+    const result = this.database
       .prepare(
         `UPDATE check_state
          SET last_started_at = ?,
@@ -181,6 +181,9 @@ export class CheckStateRepository {
         discordUserId,
         configVersion,
       );
+    if (Number(result.changes) !== 1) {
+      throw new Error('Successful check belongs to a stale user configuration');
+    }
   }
 
   public markFailed(

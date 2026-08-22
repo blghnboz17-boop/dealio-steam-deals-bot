@@ -31,7 +31,11 @@ export async function handleTestNotification(
 
   let content: string;
   try {
-    await testNotificationService.send(interaction.user.id, language);
+    await testNotificationService.send(
+      interaction.user.id,
+      language,
+      config?.storeCountryCode ?? 'TR',
+    );
     content = messages.testNotificationSent;
   } catch (error: unknown) {
     if (error instanceof TestNotificationCooldownError) {

@@ -5,14 +5,20 @@ import {
   type WishlistItemError,
 } from '../domain/steam.js';
 import type { Language, UserConfig } from '../domain/user-config.js';
+import type { StoreCountryCode } from '../domain/store-country.js';
 import type { DiscountThresholdRepository } from '../persistence/discount-threshold-repository.js';
+import { UserOperationCoordinator } from './user-operation-coordinator.js';
 
 export interface WishlistConfigReader {
   findByDiscordUserId(discordUserId: string): UserConfig | null;
 }
 
 export interface LiveWishlistReader {
-  getWishlistWithErrors(steamId64: string): Promise<{
+  getWishlistWithErrors(
+    steamId64: string,
+    storeCountryCode: StoreCountryCode,
+    language: Language,
+  ): Promise<{
     readonly items: WishlistItem[];
     readonly errors: WishlistItemError[];
   }>;
@@ -33,6 +39,7 @@ export type WishlistViewResult =
       readonly capturedAt: string;
       readonly configVersion: number;
       readonly configurationId: string;
+      readonly storeCountryCode: StoreCountryCode;
       readonly globalMinimumDiscountPercent: number;
       readonly gameMinimumDiscountOverrides: ReadonlyMap<number, number>;
     };
@@ -43,9 +50,19 @@ export class WishlistViewService {
     private readonly wishlistReader: LiveWishlistReader,
     private readonly now: () => Date = () => new Date(),
     private readonly thresholdReader?: Pick<DiscountThresholdRepository, 'findGameOverrides'>,
+    private readonly coordinator = new UserOperationCoordinator(),
   ) {}
 
   public async load(
+    discordUserId: string,
+    fallbackLanguage: Language,
+  ): Promise<WishlistViewResult> {
+    return this.coordinator.runExclusive(discordUserId, () =>
+      this.loadExclusive(discordUserId, fallbackLanguage),
+    );
+  }
+
+  private async loadExclusive(
     discordUserId: string,
     fallbackLanguage: Language,
   ): Promise<WishlistViewResult> {
@@ -55,7 +72,11 @@ export class WishlistViewService {
     }
 
     try {
-      const result = await this.wishlistReader.getWishlistWithErrors(config.steamId64);
+      const result = await this.wishlistReader.getWishlistWithErrors(
+        config.steamId64,
+        config.storeCountryCode,
+        config.language,
+      );
       if (result.items.length === 0 && result.errors.length > 0) {
         return {
           status: 'unavailable',
@@ -71,6 +92,7 @@ export class WishlistViewService {
         capturedAt: this.now().toISOString(),
         configVersion: config.configVersion,
         configurationId: config.configurationId,
+        storeCountryCode: config.storeCountryCode,
         globalMinimumDiscountPercent: config.minimumDiscountPercent,
         gameMinimumDiscountOverrides: this.thresholdReader?.findGameOverrides(
           config,

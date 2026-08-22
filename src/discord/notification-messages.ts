@@ -4,6 +4,7 @@ import type {
   SaleNotification,
 } from '../application/notification-service.js';
 import type { Language } from '../domain/user-config.js';
+import { storeCountryLabel } from '../domain/store-country.js';
 import { messagesFor } from './messages.js';
 
 const maxGameNameLength = 256;
@@ -78,7 +79,12 @@ export function buildSaleNotificationEmbed(
     image: {
       url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${notification.appId}/header.jpg`,
     },
-    footer: { text: messages.notificationFooter },
+    footer: {
+      text: `${messages.notificationFooter} · ${storeCountryLabel(
+        notification.storeCountryCode,
+        language,
+      )}`,
+    },
     timestamp: notification.createdAt,
   };
 }

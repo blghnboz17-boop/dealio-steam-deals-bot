@@ -1,4 +1,5 @@
 import type { Language } from '../domain/user-config.js';
+import type { StoreCountryCode } from '../domain/store-country.js';
 import type {
   DurableNotificationBatch,
   NotificationBatch,
@@ -25,6 +26,7 @@ export interface SaleNotification {
   readonly discordUserId: string;
   readonly appId: number;
   readonly saleEpisodeId: string;
+  readonly storeCountryCode: StoreCountryCode;
   readonly gameName: string;
   readonly currency: string;
   readonly normalPriceMinor: number;
