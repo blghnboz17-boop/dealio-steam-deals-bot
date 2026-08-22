@@ -64,6 +64,20 @@ The bot does not request or store Steam passwords, cookies, private-profile cred
 
 Stored user data is retained until the user runs `/delete-data confirm:true` or the operator deletes it. There is no automatic time-based retention policy. The delete command removes the user's configuration and cascades to check state, wishlist state, sale episodes, and notification history. SQLite `secure_delete` is enabled, and deletion is coordinated with active checks and notification delivery so those operations cannot recreate data after deletion completes. Copies already present in external filesystem backups are outside the bot's control and must be removed according to the operator's backup policy.
 
+## Legal Pages And GitHub Pages
+
+The English legal pages are in `docs/terms.html` and `docs/privacy.html`. Keep the operator's legal and contact information, effective dates, jurisdiction, venue, hosting arrangement, providers, and actual data practices up to date when the Service changes. The Privacy Policy currently describes the bot as running on an operator-controlled personal computer. Update the hosting, recipient, transfer, security, backup, and retention sections when the bot moves to a VDS or another provider.
+
+To publish them with GitHub Pages:
+
+1. Push the repository to GitHub.
+2. In the repository settings, open **Pages**.
+3. Select **Deploy from a branch**, choose the default branch, and select `/docs` as the folder.
+4. After deployment, verify that `/terms.html` and `/privacy.html` open in a private browser window.
+5. Add those two public HTTPS URLs to the Discord Developer Portal application's **Terms of Service URL** and **Privacy Policy URL** fields.
+
+The legal pages are static and do not need the bot process to be running. They must remain publicly reachable even if the source repository is private; use a public legal-pages repository or a Pages provider that supports this setup if GitHub does not expose a public site for the selected plan.
+
 ## License
 
 Licensed under the MIT License. See `LICENSE`.
