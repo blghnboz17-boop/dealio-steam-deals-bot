@@ -62,10 +62,6 @@ export class InitialWishlistSummaryService {
     if (result.status !== 'success') {
       return { status: 'persistence-error' };
     }
-    if (result.failedItems.length > 0 || result.unknownPriceCount > 0) {
-      return { status: 'steam-unavailable' };
-    }
-
     const sales = result.wishlistItems.flatMap((item): InitialWishlistSale[] => {
       const price = item.price;
       if (

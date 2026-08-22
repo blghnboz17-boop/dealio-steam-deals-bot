@@ -144,6 +144,35 @@ describe('InitialWishlistSummaryService', () => {
     services.database.close();
   });
 
+  it('sends confirmed sales while omitting unknown and failed wishlist items', async () => {
+    const unknownItem: WishlistItem = {
+      ...item(20, 0),
+      price: null,
+      onSale: null,
+    };
+    const services = fixture({
+      getWishlistWithErrors: vi.fn().mockResolvedValue({
+        items: [item(10, 50), unknownItem, item(30, 0)],
+        errors: [{ appId: 40, code: 'STEAM_RATE_LIMITED' }],
+      }),
+    });
+
+    await expect(services.service.send('discord-user')).resolves.toEqual({
+      status: 'sent',
+      saleCount: 1,
+    });
+    expect(services.sender.sendInitialSummary).toHaveBeenCalledWith(expect.objectContaining({
+      sales: [expect.objectContaining({ appId: 10, discountPercent: 50 })],
+    }));
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({ onSale: true, observationStatus: 'known' });
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 20))
+      .toBeNull();
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 40))
+      .toBeNull();
+    services.database.close();
+  });
+
   it('does not send a sale summary when Steam is unavailable', async () => {
     const services = fixture({
       getWishlistWithErrors: vi.fn().mockRejectedValue(
