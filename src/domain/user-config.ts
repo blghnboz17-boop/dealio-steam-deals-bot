@@ -2,12 +2,18 @@ export type Language = 'tr' | 'en';
 
 export interface UserConfig {
   readonly discordUserId: string;
+  readonly configurationId: string;
   readonly steamId64: string;
   readonly configVersion: number;
   readonly language: Language;
   readonly enabled: boolean;
+  readonly minimumDiscountPercent: number;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export function isMinimumDiscountPercent(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0 && value <= 100;
 }
 
 export function isSteamId64(value: string): boolean {

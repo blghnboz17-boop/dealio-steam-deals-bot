@@ -4,6 +4,8 @@ import {
   type NotificationRetryClock,
 } from '../src/application/notification-retry-scheduler.js';
 import type { UserConfig } from '../src/domain/user-config.js';
+import { createDatabase } from '../src/persistence/database.js';
+import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 
 function user(discordUserId: string): UserConfig {
   return {
@@ -54,6 +56,33 @@ describe('NotificationRetryScheduler', () => {
       errorCount: 0,
     });
     expect(deliverPending).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not select disabled users for notification retries', async () => {
+    const database = createDatabase(':memory:');
+    const repository = new UserConfigRepository(database);
+    repository.upsert('enabled-user', '76561198000000000', 'en', '2026-08-21T00:00:00Z');
+    repository.upsert('disabled-user', '76561198000000001', 'en', '2026-08-21T00:00:00Z');
+    repository.setEnabled('disabled-user', false, '2026-08-21T01:00:00Z');
+    const deliverPending = vi.fn().mockResolvedValue({
+      candidateCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+    });
+    const scheduler = new NotificationRetryScheduler({
+      intervalSeconds: 60,
+      userConfigRepository: repository,
+      notificationService: { deliverPending },
+      logger: { info: vi.fn(), error: vi.fn() },
+    });
+
+    try {
+      await expect(scheduler.runOnce()).resolves.toMatchObject({ userCount: 1 });
+      expect(deliverPending).toHaveBeenCalledOnce();
+      expect(deliverPending).toHaveBeenCalledWith('enabled-user');
+    } finally {
+      database.close();
+    }
   });
 
   it('runs immediately, repeats on its interval, and stops cleanly', async () => {

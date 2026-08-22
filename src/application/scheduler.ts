@@ -2,9 +2,10 @@ import type { CheckResult } from './check-service.js';
 import type { UserConfig } from '../domain/user-config.js';
 import type { UserConfigRepository } from '../persistence/user-config-repository.js';
 import { maxPollIntervalHours, minPollIntervalHours } from '../config/environment.js';
+import type { PollScheduleRepository } from '../persistence/poll-schedule-repository.js';
 
 export interface SchedulerCheckService {
-  check(discordUserId: string): Promise<CheckResult>;
+  check(discordUserId: string, source?: 'manual' | 'automatic'): Promise<CheckResult>;
 }
 
 export interface SchedulerNotificationService {
@@ -16,8 +17,8 @@ export interface SchedulerNotificationService {
 }
 
 export interface SchedulerClock {
-  setInterval(callback: () => void, delayMs: number): ReturnType<typeof setInterval>;
-  clearInterval(handle: ReturnType<typeof setInterval>): void;
+  setTimeout(callback: () => void, delayMs: number): ReturnType<typeof setTimeout>;
+  clearTimeout(handle: ReturnType<typeof setTimeout>): void;
 }
 
 export interface SchedulerLogger {
@@ -26,21 +27,27 @@ export interface SchedulerLogger {
 }
 
 const systemClock: SchedulerClock = {
-  setInterval: (callback, delayMs) => setInterval(callback, delayMs),
-  clearInterval: (handle) => clearInterval(handle),
+  setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimeout: (handle) => clearTimeout(handle),
 };
 
 const consoleLogger: SchedulerLogger = {
   info: (message) => console.log(`${new Date().toISOString()} [scheduler] ${message}`),
   error: (message) => console.error(`${new Date().toISOString()} [scheduler] ${message}`),
 };
+const schedulePersistenceRetryMs = 60_000;
 
 export interface SchedulerOptions {
   readonly intervalHours: number;
   readonly userConfigRepository: Pick<UserConfigRepository, 'findEnabled'>;
   readonly checkService: SchedulerCheckService;
   readonly notificationService: SchedulerNotificationService;
+  readonly scheduleRepository: Pick<
+    PollScheduleRepository,
+    'findNextScheduledAt' | 'setNextScheduledAt'
+  >;
   readonly clock?: SchedulerClock;
+  readonly now?: () => Date;
   readonly logger?: SchedulerLogger;
   readonly maxUserConcurrency?: number;
 }
@@ -55,8 +62,9 @@ export class WishlistScheduler {
   private readonly intervalMs: number;
   private readonly clock: SchedulerClock;
   private readonly logger: SchedulerLogger;
+  private readonly now: () => Date;
   private readonly maxUserConcurrency: number;
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: ReturnType<typeof setTimeout> | null = null;
   private started = false;
   private stopping = false;
   private activeRun: Promise<SchedulerRunSummary> | null = null;
@@ -75,6 +83,7 @@ export class WishlistScheduler {
 
     this.intervalMs = options.intervalHours * 60 * 60 * 1000;
     this.clock = options.clock ?? systemClock;
+    this.now = options.now ?? (() => new Date());
     this.logger = options.logger ?? consoleLogger;
     this.maxUserConcurrency = options.maxUserConcurrency ?? 3;
 
@@ -93,11 +102,31 @@ export class WishlistScheduler {
     }
 
     this.started = true;
-    this.timer = this.clock.setInterval(() => {
-      void this.runOnce();
-    }, this.intervalMs);
     this.logger.info(`Started with interval ${this.options.intervalHours} hours.`);
-    void this.runOnce();
+    let persistedTarget: string | null;
+    try {
+      persistedTarget = this.options.scheduleRepository.findNextScheduledAt();
+    } catch (_error: unknown) {
+      this.logger.error('Could not load the persisted wishlist schedule.');
+      this.retryStart();
+      return;
+    }
+
+    const nowMs = this.now().getTime();
+    const persistedMs = persistedTarget === null
+      ? Number.NaN
+      : new Date(persistedTarget).getTime();
+    if (Number.isFinite(persistedMs) && persistedMs > nowMs) {
+      const targetMs = Math.min(persistedMs, nowMs + this.intervalMs);
+      if (!this.persistNextRun(targetMs)) {
+        this.retryPersistNextRun(targetMs);
+        return;
+      }
+      this.armTimer(targetMs);
+      return;
+    }
+
+    void this.runAutomaticCycle();
   }
 
   public stop(): Promise<void> {
@@ -107,7 +136,7 @@ export class WishlistScheduler {
 
     this.stopping = true;
     if (this.timer !== null) {
-      this.clock.clearInterval(this.timer);
+      this.clock.clearTimeout(this.timer);
       this.timer = null;
     }
 
@@ -162,7 +191,7 @@ export class WishlistScheduler {
         this.logger.info(`Check started (${index + 1}/${users.length}).`);
 
         try {
-          const result = await this.options.checkService.check(user.discordUserId);
+          const result = await this.options.checkService.check(user.discordUserId, 'automatic');
           if (result.status === 'success') {
             const delivery = await this.options.notificationService.deliverPending(
               user.discordUserId,
@@ -205,5 +234,84 @@ export class WishlistScheduler {
       `Run completed: users=${users.length} completed=${completedCount} errors=${errorCount}.`,
     );
     return { userCount: users.length, completedCount, errorCount };
+  }
+
+  private async runAutomaticCycle(): Promise<void> {
+    const existingRun = this.activeRun;
+    if (existingRun !== null) {
+      await existingRun;
+    }
+    if (this.stopping) {
+      return;
+    }
+
+    try {
+      this.options.scheduleRepository.setNextScheduledAt(null);
+    } catch (_error: unknown) {
+      this.logger.error('Could not clear the due wishlist schedule.');
+      this.retryStart();
+      return;
+    }
+
+    await this.runOnce();
+    if (this.stopping) {
+      return;
+    }
+
+    const targetMs = this.now().getTime() + this.intervalMs;
+    if (this.persistNextRun(targetMs)) {
+      this.armTimer(targetMs);
+    } else {
+      this.retryPersistNextRun(targetMs);
+    }
+  }
+
+  private persistNextRun(targetMs: number): boolean {
+    try {
+      this.options.scheduleRepository.setNextScheduledAt(new Date(targetMs).toISOString());
+      return true;
+    } catch (_error: unknown) {
+      this.logger.error('Could not persist the next wishlist schedule.');
+      return false;
+    }
+  }
+
+  private armTimer(targetMs: number): void {
+    const delayMs = Math.max(0, targetMs - this.now().getTime());
+    this.timer = this.clock.setTimeout(() => {
+      this.timer = null;
+      void this.runAutomaticCycle();
+    }, delayMs);
+  }
+
+  private retryStart(): void {
+    if (this.stopping) {
+      return;
+    }
+    this.timer = this.clock.setTimeout(() => {
+      this.timer = null;
+      if (this.stopping) {
+        return;
+      }
+      this.started = false;
+      this.start();
+    }, schedulePersistenceRetryMs);
+  }
+
+  private retryPersistNextRun(targetMs: number): void {
+    if (this.stopping) {
+      return;
+    }
+    this.timer = this.clock.setTimeout(() => {
+      this.timer = null;
+      if (this.stopping) {
+        return;
+      }
+      if (this.persistNextRun(targetMs)) {
+        this.armTimer(targetMs);
+      } else {
+        this.retryPersistNextRun(targetMs);
+      }
+    }, schedulePersistenceRetryMs);
   }
 }

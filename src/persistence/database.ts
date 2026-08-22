@@ -78,6 +78,10 @@ export function createDatabase(databasePath: string): DatabaseSync {
     migrateNotificationLog(database);
     migrateSaleEpisodes(database);
     migrateNotificationBackoff(database);
+    migrateNotificationBatches(database);
+    migrateStatusDashboard(database);
+    migrateDiscountThresholds(database);
+    migrateConfigurationIdentity(database);
     return database;
   } catch (error: unknown) {
     try {
@@ -89,6 +93,68 @@ export function createDatabase(databasePath: string): DatabaseSync {
       );
     }
     throw new DatabaseInitializationError(error, true);
+  }
+}
+
+function migrateConfigurationIdentity(database: DatabaseSync): void {
+  const versionRow = database.prepare('PRAGMA user_version').get() as {
+    user_version: number;
+  };
+  if (versionRow.user_version >= 7) {
+    return;
+  }
+
+  database.exec('BEGIN');
+  try {
+    database.exec(`
+      ALTER TABLE user_config ADD COLUMN configuration_id TEXT;
+      UPDATE user_config
+      SET configuration_id = lower(hex(randomblob(16)))
+      WHERE configuration_id IS NULL;
+      CREATE UNIQUE INDEX user_config_configuration_id_idx
+        ON user_config(configuration_id);
+      PRAGMA user_version = 7;
+    `);
+    database.exec('COMMIT');
+  } catch (error: unknown) {
+    database.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+function migrateDiscountThresholds(database: DatabaseSync): void {
+  const versionRow = database.prepare('PRAGMA user_version').get() as {
+    user_version: number;
+  };
+  if (versionRow.user_version >= 6) {
+    return;
+  }
+
+  database.exec('BEGIN');
+  try {
+    database.exec(`
+      ALTER TABLE user_config ADD COLUMN minimum_discount_percent INTEGER NOT NULL DEFAULT 0
+        CHECK (minimum_discount_percent BETWEEN 0 AND 100);
+      ALTER TABLE wishlist_item_state ADD COLUMN notification_eligible INTEGER NOT NULL DEFAULT 0
+        CHECK (notification_eligible IN (0, 1));
+
+      CREATE TABLE game_discount_threshold (
+        discord_user_id TEXT NOT NULL,
+        config_version INTEGER NOT NULL CHECK (config_version > 0),
+        app_id INTEGER NOT NULL CHECK (app_id > 0),
+        minimum_discount_percent INTEGER NOT NULL
+          CHECK (minimum_discount_percent BETWEEN 0 AND 100),
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (discord_user_id, config_version, app_id),
+        FOREIGN KEY (discord_user_id) REFERENCES user_config(discord_user_id) ON DELETE CASCADE
+      );
+
+      PRAGMA user_version = 6;
+    `);
+    database.exec('COMMIT');
+  } catch (error: unknown) {
+    database.exec('ROLLBACK');
+    throw error;
   }
 }
 
@@ -318,6 +384,118 @@ function migrateNotificationBackoff(database: DatabaseSync): void {
       ON notification_log(discord_user_id, config_version, status, next_attempt_at);
     `);
     database.exec('PRAGMA user_version = 3');
+    database.exec('COMMIT');
+  } catch (error: unknown) {
+    database.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+function migrateNotificationBatches(database: DatabaseSync): void {
+  const versionRow = database.prepare('PRAGMA user_version').get() as {
+    user_version: number;
+  };
+
+  if (versionRow.user_version >= 4) {
+    return;
+  }
+
+  database.exec('BEGIN');
+
+  try {
+    database.exec(`
+      CREATE TABLE notification_batch (
+        batch_id TEXT PRIMARY KEY NOT NULL,
+        discord_user_id TEXT NOT NULL,
+        steam_id64 TEXT NOT NULL,
+        config_version INTEGER NOT NULL,
+        language TEXT NOT NULL CHECK (language IN ('tr', 'en')),
+        status TEXT NOT NULL CHECK (status IN (
+          'sending', 'failed', 'sent', 'terminal_failed', 'expired'
+        )),
+        member_count INTEGER NOT NULL CHECK (member_count BETWEEN 1 AND 10),
+        attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+        next_attempt_at TEXT,
+        created_at TEXT NOT NULL,
+        first_created_at TEXT NOT NULL,
+        first_app_id INTEGER NOT NULL,
+        first_sale_episode_id TEXT NOT NULL,
+        last_attempt_at TEXT,
+        last_error TEXT,
+        FOREIGN KEY (discord_user_id) REFERENCES user_config(discord_user_id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE notification_batch_item (
+        batch_id TEXT NOT NULL,
+        position INTEGER NOT NULL CHECK (position BETWEEN 0 AND 9),
+        discord_user_id TEXT NOT NULL,
+        config_version INTEGER NOT NULL,
+        app_id INTEGER NOT NULL,
+        sale_episode_id TEXT NOT NULL,
+        PRIMARY KEY (batch_id, position),
+        UNIQUE (batch_id, discord_user_id, config_version, app_id, sale_episode_id),
+        FOREIGN KEY (batch_id) REFERENCES notification_batch(batch_id) ON DELETE CASCADE,
+        FOREIGN KEY (discord_user_id, config_version, app_id, sale_episode_id)
+          REFERENCES notification_log(discord_user_id, config_version, app_id, sale_episode_id)
+          ON DELETE CASCADE
+      );
+
+      CREATE INDEX notification_batch_retry_due_idx
+      ON notification_batch(
+        discord_user_id, config_version, status, next_attempt_at,
+        first_created_at, first_app_id, first_sale_episode_id
+      );
+
+      CREATE INDEX notification_batch_item_notification_idx
+      ON notification_batch_item(discord_user_id, config_version, app_id, sale_episode_id);
+
+      PRAGMA user_version = 4;
+    `);
+    database.exec('COMMIT');
+  } catch (error: unknown) {
+    database.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+function migrateStatusDashboard(database: DatabaseSync): void {
+  const versionRow = database.prepare('PRAGMA user_version').get() as {
+    user_version: number;
+  };
+
+  if (versionRow.user_version >= 5) {
+    return;
+  }
+
+  database.exec('BEGIN');
+  try {
+    database.exec(`
+      ALTER TABLE check_state ADD COLUMN last_success_completed_at TEXT;
+      ALTER TABLE check_state ADD COLUMN last_success_checked_count INTEGER
+        CHECK (last_success_checked_count IS NULL OR last_success_checked_count >= 0);
+      ALTER TABLE check_state ADD COLUMN last_success_on_sale_count INTEGER
+        CHECK (last_success_on_sale_count IS NULL OR last_success_on_sale_count >= 0);
+      ALTER TABLE check_state ADD COLUMN last_success_free_count INTEGER
+        CHECK (last_success_free_count IS NULL OR last_success_free_count >= 0);
+      ALTER TABLE check_state ADD COLUMN last_success_unknown_price_count INTEGER
+        CHECK (last_success_unknown_price_count IS NULL OR last_success_unknown_price_count >= 0);
+      ALTER TABLE check_state ADD COLUMN last_success_failed_item_count INTEGER
+        CHECK (last_success_failed_item_count IS NULL OR last_success_failed_item_count >= 0);
+
+      UPDATE check_state
+      SET last_success_completed_at = last_completed_at
+      WHERE last_status = 'success';
+
+      CREATE TABLE wishlist_poll_schedule (
+        schedule_name TEXT PRIMARY KEY NOT NULL CHECK (schedule_name = 'wishlist'),
+        next_scheduled_at TEXT
+      );
+
+      INSERT INTO wishlist_poll_schedule (schedule_name, next_scheduled_at)
+      VALUES ('wishlist', NULL);
+
+      PRAGMA user_version = 5;
+    `);
     database.exec('COMMIT');
   } catch (error: unknown) {
     database.exec('ROLLBACK');

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildSaleNotificationMessage,
+  buildSaleNotificationEmbed,
   formatMinorPrice,
   sanitizeGameName,
 } from '../src/discord/notification-messages.js';
@@ -29,28 +29,50 @@ describe('notification messages', () => {
     expect(formatMinorPrice(12_345, 'TRY', 'tr')).toContain('TRY');
   });
 
-  it('builds a Turkish sale message with all sale details', () => {
-    const message = buildSaleNotificationMessage(candidate, 'tr');
+  it('displays the Steam currency code without conversion', () => {
+    const embed = buildSaleNotificationEmbed({ ...candidate, currency: 'EUR' }, 'en');
+    const serialized = JSON.stringify(embed);
 
-    expect(message).toContain('Test Game');
-    expect(message).toContain('%20');
-    expect(message).toContain('123,45');
-    expect(message).toContain('98,76');
-    expect(message).toContain('TRY');
-    expect(message).toContain('https://store.steampowered.com/app/10/');
-    expect(message).toContain('İndirimli fiyat');
+    expect(serialized).toContain('EUR');
+    expect(serialized).not.toContain('TRY');
+    expect(serialized).toContain('123.45');
   });
 
-  it('builds an English sale message with all sale details', () => {
-    const message = buildSaleNotificationMessage(candidate, 'en');
+  it('builds a Turkish sale embed with all sale details', () => {
+    const embed = buildSaleNotificationEmbed(candidate, 'tr');
+    const serialized = JSON.stringify(embed);
 
-    expect(message).toContain('Test Game');
-    expect(message).toContain('20%');
-    expect(message).toContain('123.45');
-    expect(message).toContain('98.76');
-    expect(message).toContain('TRY');
-    expect(message).toContain('https://store.steampowered.com/app/10/');
-    expect(message).toContain('Sale price');
+    expect(embed.title).toBe('Test Game');
+    expect(embed.url).toBe('https://store.steampowered.com/app/10/');
+    expect(embed.image?.url).toContain('/steam/apps/10/header.jpg');
+    expect(serialized).toContain('%20');
+    expect(serialized).toContain('123,45');
+    expect(serialized).toContain('98,76');
+    expect(serialized).toContain('TRY');
+    expect(serialized).toContain('İndirimli fiyat');
+  });
+
+  it('builds an English sale embed with all sale details', () => {
+    const embed = buildSaleNotificationEmbed(candidate, 'en');
+    const serialized = JSON.stringify(embed);
+
+    expect(embed.title).toBe('Test Game');
+    expect(serialized).toContain('20%');
+    expect(serialized).toContain('123.45');
+    expect(serialized).toContain('98.76');
+    expect(serialized).toContain('TRY');
+    expect(serialized).toContain('https://store.steampowered.com/app/10/');
+    expect(serialized).toContain('Sale price');
+  });
+
+  it('clearly labels localized test notifications', () => {
+    const turkish = buildSaleNotificationEmbed(candidate, 'tr', { test: true });
+    const english = buildSaleNotificationEmbed(candidate, 'en', { test: true });
+
+    expect(turkish.author?.name).toBe('Dealio test bildirimi');
+    expect(turkish.description).toContain('yalnızca örnektir');
+    expect(english.author?.name).toBe('Dealio test notification');
+    expect(english.description).toContain('only an example');
   });
 
   it('removes control characters, escapes formatting, and truncates game names', () => {
@@ -59,6 +81,6 @@ describe('notification messages', () => {
     expect(sanitized).not.toContain('\n');
     expect(sanitized).toContain('\\*\\*\\[unsafe\\]\\(url\\)\\*\\*');
     expect(sanitized.endsWith('...')).toBe(true);
-    expect(sanitized.length).toBeLessThanOrEqual(280);
+    expect(sanitized.length).toBeLessThanOrEqual(256);
   });
 });

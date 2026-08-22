@@ -95,6 +95,7 @@ describe('database migration', () => {
       expect(config).toMatchObject({
         steamId64: '76561198000000000',
         configVersion: 1,
+        minimumDiscountPercent: 0,
       });
       if (!config) {
         throw new Error('Expected migrated user configuration');
@@ -110,6 +111,10 @@ describe('database migration', () => {
         configVersion: 1,
         onSale: true,
       });
+      expect(database.prepare(
+        `SELECT notification_eligible FROM wishlist_item_state
+         WHERE discord_user_id = 'discord-user' AND app_id = 10`,
+      ).get()).toEqual({ notification_eligible: 0 });
       expect(state?.saleEpisodeId).toBeTruthy();
       expect(candidates).toHaveLength(1);
       expect(candidates[0]).toMatchObject({
@@ -117,7 +122,20 @@ describe('database migration', () => {
         saleEpisodeId: state?.saleEpisodeId,
       });
       expect((database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version)
-        .toBe(3);
+        .toBe(7);
+      expect(database.prepare(
+        `SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name IN ('notification_batch', 'notification_batch_item')
+         ORDER BY name`,
+      ).all()).toEqual([
+        { name: 'notification_batch' },
+        { name: 'notification_batch_item' },
+      ]);
+      expect(database.prepare(
+        `SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name = 'game_discount_threshold'`,
+      ).get()).toEqual({ name: 'game_discount_threshold' });
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
       database.close();
     } finally {
       rmSync(directory, { recursive: true, force: true });
@@ -223,9 +241,84 @@ describe('database migration', () => {
         ).toEqual({ attempt_count: 0 });
         expect(
           (database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-        ).toBe(3);
+          ).toBe(7);
       } finally {
         database.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('migrates version 4 check state to nullable v5 success metrics safely', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'wishlist-bot-v4-migration-'));
+    const databasePath = join(directory, 'wishlist.db');
+
+    try {
+      const current = createDatabase(databasePath);
+      current.exec('PRAGMA foreign_keys = OFF');
+      current.exec(`
+        DROP INDEX user_config_configuration_id_idx;
+        ALTER TABLE user_config DROP COLUMN configuration_id;
+        DROP TABLE game_discount_threshold;
+        ALTER TABLE user_config DROP COLUMN minimum_discount_percent;
+        ALTER TABLE wishlist_item_state DROP COLUMN notification_eligible;
+        DROP TABLE wishlist_poll_schedule;
+        ALTER TABLE check_state RENAME TO check_state_v5;
+        CREATE TABLE check_state (
+          discord_user_id TEXT PRIMARY KEY NOT NULL,
+          last_started_at TEXT,
+          last_completed_at TEXT,
+          last_status TEXT,
+          last_error_code TEXT,
+          next_scheduled_at TEXT,
+          FOREIGN KEY (discord_user_id) REFERENCES user_config(discord_user_id) ON DELETE CASCADE
+        );
+        DROP TABLE check_state_v5;
+        INSERT INTO user_config
+          (discord_user_id, steam_id64, config_version, language, enabled, created_at, updated_at)
+        VALUES
+          ('success-user', '76561198000000000', 1, 'tr', 1,
+           '2026-08-20T00:00:00.000Z', '2026-08-20T00:00:00.000Z'),
+          ('failed-user', '76561198000000001', 1, 'en', 1,
+           '2026-08-20T00:00:00.000Z', '2026-08-20T00:00:00.000Z');
+        INSERT INTO check_state VALUES
+          ('success-user', '2026-08-21T00:00:00.000Z', '2026-08-21T00:01:00.000Z',
+           'success', NULL, '2026-08-21T06:00:00.000Z'),
+          ('failed-user', '2026-08-21T00:00:00.000Z', '2026-08-21T00:01:00.000Z',
+           'failed', 'INTERNAL_ERROR', '2026-08-21T06:00:00.000Z');
+        PRAGMA user_version = 4;
+      `);
+      current.close();
+
+      const migrated = createDatabase(databasePath);
+      try {
+        expect(
+          (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
+        ).toBe(7);
+        expect(migrated.prepare(
+          `SELECT last_success_completed_at, last_success_checked_count,
+                  last_success_on_sale_count, last_success_free_count,
+                  last_success_unknown_price_count, last_success_failed_item_count
+           FROM check_state WHERE discord_user_id = 'success-user'`,
+        ).get()).toEqual({
+          last_success_completed_at: '2026-08-21T00:01:00.000Z',
+          last_success_checked_count: null,
+          last_success_on_sale_count: null,
+          last_success_free_count: null,
+          last_success_unknown_price_count: null,
+          last_success_failed_item_count: null,
+        });
+        expect(migrated.prepare(
+          `SELECT last_success_completed_at
+           FROM check_state WHERE discord_user_id = 'failed-user'`,
+        ).get()).toEqual({ last_success_completed_at: null });
+        expect(migrated.prepare(
+          `SELECT next_scheduled_at FROM wishlist_poll_schedule
+           WHERE schedule_name = 'wishlist'`,
+        ).get()).toEqual({ next_scheduled_at: null });
+      } finally {
+        migrated.close();
       }
     } finally {
       rmSync(directory, { recursive: true, force: true });

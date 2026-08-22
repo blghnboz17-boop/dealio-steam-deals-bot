@@ -5,6 +5,7 @@ import { createDatabase } from '../src/persistence/database.js';
 import { CheckStateRepository } from '../src/persistence/check-state-repository.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
+import { DiscountThresholdRepository } from '../src/persistence/discount-threshold-repository.js';
 import type { SteamClient } from '../src/steam/steam-client.js';
 
 function createItem(
@@ -39,6 +40,7 @@ function createServices(
   const userConfigRepository = new UserConfigRepository(database);
   const checkStateRepository = new CheckStateRepository(database);
   const wishlistStateRepository = new WishlistStateRepository(database);
+  const discountThresholdRepository = new DiscountThresholdRepository(database);
   const checkService = new CheckService(
     userConfigRepository,
     checkStateRepository,
@@ -61,6 +63,7 @@ function createServices(
     checkStateRepository,
     userConfigRepository,
     wishlistStateRepository,
+    discountThresholdRepository,
   };
 }
 
@@ -116,6 +119,87 @@ describe('CheckService sale state', () => {
       ],
     });
     expect(services.wishlistStateRepository.countNotificationCandidates('discord-user')).toBe(1);
+    services.database.close();
+  });
+
+  it('creates one candidate when an active eligible sale reaches the global threshold', async () => {
+    const itemAt = (discountPercent: number): WishlistItem => ({
+      ...createItem(10, true),
+      price: {
+        currency: 'TRY',
+        initialMinor: 1_000,
+        finalMinor: 1_000 - discountPercent * 10,
+        discountPercent,
+        isFree: false,
+      },
+    });
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({ items: [createItem(10, false)], errors: [] })
+        .mockResolvedValueOnce({ items: [itemAt(50)], errors: [] })
+        .mockResolvedValueOnce({ items: [itemAt(70)], errors: [] })
+        .mockResolvedValueOnce({ items: [itemAt(80)], errors: [] }),
+    };
+    const services = createServices(steamClient);
+    services.userConfigRepository.setMinimumDiscountPercent(
+      'discord-user',
+      60,
+      '2026-08-21T00:01:00.000Z',
+    );
+
+    await services.checkService.check('discord-user');
+    await expect(services.checkService.check('discord-user')).resolves.toMatchObject({
+      notificationCandidates: [],
+    });
+    await expect(services.checkService.check('discord-user')).resolves.toMatchObject({
+      notificationCandidates: [{ appId: 10, discountPercent: 70 }],
+    });
+    await expect(services.checkService.check('discord-user')).resolves.toMatchObject({
+      notificationCandidates: [],
+    });
+    expect(services.wishlistStateRepository.countNotificationCandidates('discord-user')).toBe(1);
+    services.database.close();
+  });
+
+  it('uses a game override instead of the global threshold', async () => {
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({ items: [createItem(10, false)], errors: [] })
+        .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] }),
+    };
+    const services = createServices(steamClient);
+    const config = services.userConfigRepository.setMinimumDiscountPercent(
+      'discord-user',
+      20,
+      '2026-08-21T00:01:00.000Z',
+    )!;
+    services.discountThresholdRepository.setGameOverride(
+      config,
+      10,
+      80,
+      '2026-08-21T00:02:00.000Z',
+    );
+
+    await services.checkService.check('discord-user');
+    await expect(services.checkService.check('discord-user')).resolves.toMatchObject({
+      notificationCandidates: [],
+    });
+    services.database.close();
+  });
+
+  it('keeps an initially active sale as baseline on repeated checks', async () => {
+    const services = createServices({
+      getWishlistWithErrors: vi.fn().mockResolvedValue({
+        items: [createItem(10, true)],
+        errors: [],
+      }),
+    });
+
+    await services.checkService.check('discord-user');
+    await expect(services.checkService.check('discord-user')).resolves.toMatchObject({
+      notificationCandidates: [],
+    });
+    expect(services.wishlistStateRepository.countNotificationCandidates('discord-user')).toBe(0);
     services.database.close();
   });
 
@@ -208,6 +292,71 @@ describe('CheckService sale state', () => {
     expect(services.checkStateRepository.findByDiscordUserId('discord-user')).toMatchObject({
       lastStatus: 'unavailable',
       lastErrorCode: 'STEAM_TIMEOUT',
+    });
+    services.database.close();
+  });
+
+  it('persists successful wishlist metrics and preserves them after an unavailable check', async () => {
+    const freeItem: WishlistItem = {
+      ...createItem(30, false),
+      price: {
+        currency: null,
+        initialMinor: 0,
+        finalMinor: 0,
+        discountPercent: 0,
+        isFree: true,
+      },
+    };
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({
+          items: [
+            createItem(10, false),
+            createItem(20, true),
+            freeItem,
+            createItem(40, null),
+          ],
+          errors: [{ appId: 50, code: 'STEAM_APP_NOT_FOUND' as const }],
+        })
+        .mockRejectedValueOnce(new SteamWishlistError('STEAM_TIMEOUT', 'timed out'))
+        .mockRejectedValueOnce(new TypeError('unexpected Steam defect')),
+    };
+    const services = createServices(steamClient);
+
+    await services.checkService.check('discord-user');
+    const successfulState = services.checkStateRepository.findByDiscordUserId('discord-user');
+    expect(successfulState).toMatchObject({
+      lastStatus: 'success',
+      lastSuccessCheckedCount: 4,
+      lastSuccessOnSaleCount: 1,
+      lastSuccessFreeCount: 1,
+      lastSuccessUnknownPriceCount: 1,
+      lastSuccessFailedItemCount: 1,
+    });
+    expect(successfulState?.lastSuccessCompletedAt).not.toBeNull();
+
+    await services.checkService.check('discord-user');
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')).toMatchObject({
+      lastStatus: 'unavailable',
+      lastErrorCode: 'STEAM_TIMEOUT',
+      lastSuccessCompletedAt: successfulState?.lastSuccessCompletedAt,
+      lastSuccessCheckedCount: 4,
+      lastSuccessOnSaleCount: 1,
+      lastSuccessFreeCount: 1,
+      lastSuccessUnknownPriceCount: 1,
+      lastSuccessFailedItemCount: 1,
+    });
+
+    await services.checkService.check('discord-user');
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')).toMatchObject({
+      lastStatus: 'failed',
+      lastErrorCode: 'INTERNAL_ERROR',
+      lastSuccessCompletedAt: successfulState?.lastSuccessCompletedAt,
+      lastSuccessCheckedCount: 4,
+      lastSuccessOnSaleCount: 1,
+      lastSuccessFreeCount: 1,
+      lastSuccessUnknownPriceCount: 1,
+      lastSuccessFailedItemCount: 1,
     });
     services.database.close();
   });
@@ -327,6 +476,30 @@ describe('CheckService sale state', () => {
 
     expect(secondResult).toEqual({ status: 'already-running' });
     expect(firstResult).toMatchObject({ status: 'success', checkedCount: 0 });
+    services.database.close();
+  });
+
+  it('skips automatic checks while allowing a disabled user to check manually', async () => {
+    const steamClient = steamSequence([createItem(10, true)]);
+    const services = createServices(steamClient);
+    services.userConfigRepository.setEnabled(
+      'discord-user',
+      false,
+      '2026-08-21T01:00:00.000Z',
+    );
+
+    await expect(services.checkService.check('discord-user', 'automatic')).resolves.toEqual({
+      status: 'disabled',
+    });
+    expect(steamClient.getWishlistWithErrors).not.toHaveBeenCalled();
+
+    await expect(services.checkService.check('discord-user')).resolves.toMatchObject({
+      status: 'success',
+      checkedCount: 1,
+    });
+    expect(steamClient.getWishlistWithErrors).toHaveBeenCalledOnce();
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')?.lastStatus)
+      .toBe('success');
     services.database.close();
   });
 

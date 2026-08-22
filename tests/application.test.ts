@@ -9,8 +9,17 @@ import { createDatabase } from '../src/persistence/database.js';
 import { CheckStateRepository } from '../src/persistence/check-state-repository.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
+import { StatusDashboardRepository } from '../src/persistence/status-dashboard-repository.js';
+import { PollScheduleRepository } from '../src/persistence/poll-schedule-repository.js';
+import { DiscountThresholdRepository } from '../src/persistence/discount-threshold-repository.js';
+import {
+  DiscountThresholdService,
+  InvalidDiscountThresholdError,
+} from '../src/application/discount-threshold-service.js';
+import { UserOperationCoordinator } from '../src/application/user-operation-coordinator.js';
 import type { SteamClient } from '../src/steam/steam-client.js';
 import { SteamWishlistError } from '../src/domain/steam.js';
+import { SteamIdentityError } from '../src/domain/steam-identity.js';
 
 function createServices(
   steamClient: Pick<SteamClient, 'getWishlistWithErrors'> = {
@@ -19,19 +28,29 @@ function createServices(
   wishlistAccessValidator = {
     validateWishlistAccess: vi.fn().mockResolvedValue(undefined),
   },
+  identityResolver = { resolve: vi.fn(async (value: string) => value) },
 ) {
   const database = createDatabase(':memory:');
   const userConfigRepository = new UserConfigRepository(database);
   const checkStateRepository = new CheckStateRepository(database);
   const wishlistStateRepository = new WishlistStateRepository(database);
+  const discountThresholdRepository = new DiscountThresholdRepository(database);
+  const coordinator = new UserOperationCoordinator();
 
   return {
     database,
     userConfigurationService: new UserConfigurationService(
       userConfigRepository,
+      identityResolver,
       wishlistAccessValidator,
+      coordinator,
     ),
-    statusService: new StatusService(userConfigRepository, checkStateRepository),
+    statusService: new StatusService(
+      userConfigRepository,
+      checkStateRepository,
+      new StatusDashboardRepository(database),
+      discountThresholdRepository,
+    ),
     checkService: new CheckService(
       userConfigRepository,
       checkStateRepository,
@@ -41,6 +60,14 @@ function createServices(
     checkStateRepository,
     userConfigRepository,
     wishlistStateRepository,
+    discountThresholdRepository,
+    discountThresholdService: new DiscountThresholdService(
+      userConfigRepository,
+      discountThresholdRepository,
+      coordinator,
+    ),
+    identityResolver,
+    wishlistAccessValidator,
   };
 }
 
@@ -71,12 +98,62 @@ describe('user configuration', () => {
     services.database.close();
   });
 
-  it('rejects an invalid SteamID64', () => {
+  it('rejects an invalid resolved SteamID64', async () => {
     const services = createServices();
 
-    expect(() =>
-      services.userConfigurationService.configure('discord-user', '123', 'tr'),
-    ).toThrow(InvalidUserConfigurationError);
+    await expect(services.userConfigurationService.configure('discord-user', '123', 'tr'))
+      .rejects.toBeInstanceOf(InvalidUserConfigurationError);
+    services.database.close();
+  });
+
+  it('resolves profile input before validating and persists only canonical SteamID64', async () => {
+    const identityResolver = {
+      resolve: vi.fn().mockResolvedValue('76561198000000000'),
+    };
+    const wishlistAccessValidator = {
+      validateWishlistAccess: vi.fn().mockResolvedValue(undefined),
+    };
+    const services = createServices(undefined, wishlistAccessValidator, identityResolver);
+
+    const config = await services.userConfigurationService.configure(
+      'discord-user',
+      'https://steamcommunity.com/id/RawVanity?tracking=1',
+      'en',
+    );
+
+    expect(identityResolver.resolve).toHaveBeenCalledWith(
+      'https://steamcommunity.com/id/RawVanity?tracking=1',
+    );
+    expect(wishlistAccessValidator.validateWishlistAccess)
+      .toHaveBeenCalledWith('76561198000000000');
+    expect(config.steamId64).toBe('76561198000000000');
+    expect(JSON.stringify(services.database.prepare('SELECT * FROM user_config').all()))
+      .not.toContain('RawVanity');
+    services.database.close();
+  });
+
+  it('preserves existing configuration when identity resolution fails', async () => {
+    const identityResolver = {
+      resolve: vi.fn()
+        .mockResolvedValueOnce('76561198000000000')
+        .mockRejectedValueOnce(new SteamIdentityError(
+          'STEAM_VANITY_UNAVAILABLE',
+          'safe unavailable error',
+        )),
+    };
+    const services = createServices(undefined, undefined, identityResolver);
+    const existing = await services.userConfigurationService.configure(
+      'discord-user',
+      'first-name',
+      'tr',
+    );
+
+    await expect(services.userConfigurationService.configure(
+      'discord-user',
+      'second-name',
+      'en',
+    )).rejects.toMatchObject({ code: 'STEAM_VANITY_UNAVAILABLE' });
+    expect(services.userConfigRepository.findByDiscordUserId('discord-user')).toEqual(existing);
     services.database.close();
   });
 
@@ -101,7 +178,149 @@ describe('user configuration', () => {
       lastCompletedAt: null,
       lastStatus: null,
       lastErrorCode: null,
+      lastSuccessCompletedAt: null,
+      lastSuccessCheckedCount: null,
+      lastSuccessOnSaleCount: null,
+      lastSuccessFreeCount: null,
+      lastSuccessUnknownPriceCount: null,
+      lastSuccessFailedItemCount: null,
     });
+    services.database.close();
+  });
+
+  it('preserves successful metrics when only the configured language changes', async () => {
+    const services = createServices();
+    await services.userConfigurationService.configure(
+      'discord-user',
+      '76561198000000000',
+      'tr',
+    );
+    await services.checkService.check('discord-user');
+
+    const updated = await services.userConfigurationService.configure(
+      'discord-user',
+      '76561198000000000',
+      'en',
+    );
+
+    expect(updated).toMatchObject({ configVersion: 1, language: 'en' });
+    expect(services.statusService.get('discord-user').checkState).toMatchObject({
+      lastStatus: 'success',
+      lastSuccessCheckedCount: 0,
+      lastSuccessOnSaleCount: 0,
+      lastSuccessFreeCount: 0,
+      lastSuccessUnknownPriceCount: 0,
+      lastSuccessFailedItemCount: 0,
+    });
+    services.database.close();
+  });
+
+  it('atomically toggles enabled state without changing account generation or history', async () => {
+    const services = createServices();
+    let now = new Date('2026-08-21T00:00:00.000Z');
+    const toggleService = new UserConfigurationService(
+      services.userConfigRepository,
+      { resolve: vi.fn(async (value: string) => value) },
+      { validateWishlistAccess: vi.fn().mockResolvedValue(undefined) },
+      new UserOperationCoordinator(),
+      () => now,
+    );
+    const created = await toggleService.configure(
+      'discord-user',
+      '76561198000000000',
+      'en',
+    );
+    await services.checkService.check('discord-user');
+    new PollScheduleRepository(services.database)
+      .setNextScheduledAt('2026-08-21T06:00:00.000Z');
+
+    now = new Date('2026-08-21T01:00:00.000Z');
+    const disabled = await toggleService.setEnabled('discord-user', false);
+    expect(disabled).toMatchObject({
+      enabled: false,
+      updatedAt: '2026-08-21T01:00:00.000Z',
+      configVersion: created.configVersion,
+      steamId64: created.steamId64,
+    });
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')).toMatchObject({
+      nextScheduledAt: null,
+      lastStatus: 'success',
+      lastSuccessCheckedCount: 0,
+    });
+
+    now = new Date('2026-08-21T02:00:00.000Z');
+    const enabled = await toggleService.setEnabled('discord-user', true);
+    expect(enabled).toMatchObject({
+      enabled: true,
+      updatedAt: '2026-08-21T02:00:00.000Z',
+      configVersion: created.configVersion,
+    });
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')?.nextScheduledAt)
+      .toBe('2026-08-21T06:00:00.000Z');
+    await expect(toggleService.setEnabled('missing-user', false)).resolves.toBeNull();
+    services.database.close();
+  });
+
+  it('stores validated global and generation-scoped game discount thresholds', async () => {
+    const services = createServices();
+    const created = await services.userConfigurationService.configure(
+      'discord-user',
+      '76561198000000000',
+      'en',
+    );
+
+    await expect(services.discountThresholdService.setGlobal('discord-user', 35))
+      .resolves.toMatchObject({ minimumDiscountPercent: 35, configVersion: 1 });
+    await expect(services.discountThresholdService.setGame('discord-user', 10, 60))
+      .resolves.toMatchObject({ appId: 10, overridePercent: 60, effectivePercent: 60 });
+    expect(services.discountThresholdRepository.findGameOverride(created, 10)).toBe(60);
+    expect(services.statusService.getDashboard('discord-user', 'en')).toMatchObject({
+      status: 'ready',
+      gameDiscountOverrideCount: 1,
+    });
+
+    await services.userConfigurationService.configure(
+      'discord-user',
+      '76561198000000001',
+      'tr',
+    );
+    const changed = services.userConfigRepository.findByDiscordUserId('discord-user')!;
+    expect(changed).toMatchObject({ configVersion: 2, minimumDiscountPercent: 35 });
+    expect(services.discountThresholdRepository.findGameOverride(changed, 10)).toBeNull();
+    expect(services.statusService.getDashboard('discord-user', 'en')).toMatchObject({
+      status: 'ready',
+      gameDiscountOverrideCount: 0,
+    });
+    await expect(services.discountThresholdService.setGame(
+      'discord-user',
+      20,
+      50,
+      1,
+      created.configurationId,
+    ))
+      .resolves.toBeNull();
+    expect(services.discountThresholdRepository.findGameOverride(changed, 20)).toBeNull();
+    expect(services.discountThresholdRepository.findGameOverride(created, 10)).toBe(60);
+
+    await expect(services.discountThresholdService.setGame('discord-user', 10, null))
+      .resolves.toMatchObject({ overridePercent: null, effectivePercent: 35 });
+    expect(() => services.discountThresholdService.setGlobal('discord-user', 101))
+      .toThrow(InvalidDiscountThresholdError);
+    const previousConfigurationId = changed.configurationId;
+    await services.userConfigurationService.deleteData('discord-user');
+    const recreated = await services.userConfigurationService.configure(
+      'discord-user',
+      '76561198000000001',
+      'en',
+    );
+    expect(recreated.configurationId).not.toBe(previousConfigurationId);
+    await expect(services.discountThresholdService.setGlobal(
+      'discord-user',
+      70,
+      previousConfigurationId,
+    )).resolves.toBeNull();
+    expect(services.userConfigRepository.findByDiscordUserId('discord-user'))
+      .toMatchObject({ minimumDiscountPercent: 0 });
     services.database.close();
   });
 
@@ -162,7 +381,7 @@ describe('user configuration', () => {
       saleKey: null,
       observedAt: '2026-08-21T00:00:00.000Z',
     });
-    services.wishlistStateRepository.recordObservation(config, {
+    const saleObservation = services.wishlistStateRepository.recordObservation(config, {
       item: {
         ...baseItem,
         onSale: true,
@@ -171,6 +390,21 @@ describe('user configuration', () => {
       saleKey: 'TRY:1000:500:50',
       observedAt: '2026-08-21T01:00:00.000Z',
     });
+    if (!saleObservation.notificationCandidate) {
+      throw new Error('Expected deletion test notification candidate');
+    }
+    services.wishlistStateRepository.createAndClaimNotificationBatch(
+      config,
+      'tr',
+      [saleObservation.notificationCandidate],
+      '2026-08-21T01:01:00.000Z',
+    );
+    services.discountThresholdRepository.setGameOverride(
+      config,
+      10,
+      40,
+      '2026-08-21T01:02:00.000Z',
+    );
 
     await expect(services.userConfigurationService.deleteData('discord-user')).resolves.toBe(true);
 
@@ -184,6 +418,9 @@ describe('user configuration', () => {
       'check_state',
       'wishlist_item_state',
       'notification_log',
+      'notification_batch',
+      'notification_batch_item',
+      'game_discount_threshold',
     ]) {
       const row = services.database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as {
         count: number;

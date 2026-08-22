@@ -13,7 +13,7 @@ Kesinleşen kararlar:
 - Steam hesabı için yalnızca SteamID64 kullanılacak.
 - Steam profili public olacak; parola, cookie veya Steam oturum bilgisi
   istenmeyecek ve saklanmayacak.
-- Slash komutları guild içinde kullanılacak.
+- Slash komutları global application command olarak kaydedilecek ve botun eklendiği tüm guild'lerde kullanılacak.
 - `/check` yalnızca komutu çalıştıran kullanıcının wishlist'ini kontrol edecek.
 - İndirim bulunduğunda kullanıcıya DM gönderilecek.
 - Her indirimli oyun için mümkünse ayrı bir DM mesajı gönderilecek.
@@ -205,7 +205,7 @@ union tipi kullanılmalıdır: `tr | en`.
 
 ### OAuth2 kurulum bağlantısı
 
-Botu test guild'ine eklemek için OAuth2 URL Generator'da şu scope'lar seçilir:
+Botu kullanılacağı guild'lere eklemek için OAuth2 URL Generator'da şu scope'lar seçilir:
 
 - `bot`
 - `applications.commands`
@@ -218,10 +218,12 @@ ancak kullanıcı botun DM göndermesine izin vermeli ve botu engellememiş olma
 İlk sürümde yalnızca `Guilds` gateway intent'i yeterlidir. `Message Content`,
 `Guild Members` veya `Presence` gibi privileged intent'ler açılmamalıdır.
 
-### Guild ID nedir?
+### Opsiyonel legacy Guild ID
 
-Guild ID, Discord sunucusunun benzersiz sayısal ID'sidir. Komutları geliştirme
-sırasında yalnızca bir sunucuda hızlıca görünür yapmak için kullanılır.
+Guild ID, Discord sunucusunun benzersiz sayısal ID'sidir. Güncel uygulama slash
+komutlarını global kaydettiği için normal çalışmada bu değere ihtiyaç duymaz.
+`DISCORD_GUILD_ID`, yalnızca daha önce guild-specific kaydedilmiş komutları ilgili
+test sunucusundan temizleyen migration adımı için opsiyonel olarak kullanılabilir.
 
 Bulma adımları:
 
@@ -229,9 +231,10 @@ Bulma adımları:
 2. Test sunucusunun adına veya ikonuna sağ tıkla.
 3. **Copy Server ID** seçeneğini kullan.
 
-Bu değer `.env` içinde örneğin `DISCORD_GUILD_ID` olarak tutulmalıdır. Guild
-command registration geliştirme sırasında anında görünür; global komutların
-Discord tarafından yayılması daha uzun sürebilir.
+Legacy komut temizliği gerekiyorsa bu değer geçici olarak `.env` içinde
+`DISCORD_GUILD_ID` olarak tutulabilir. Temizlik başarıyla tamamlandıktan sonra
+kaldırılabilir. Global komutların Discord tarafından tüm guild'lere yayılması
+zaman alabilir.
 
 ### Environment değişkenleri
 
@@ -240,6 +243,11 @@ Zorunlu:
 ```env
 DISCORD_TOKEN=
 DISCORD_CLIENT_ID=
+```
+
+Opsiyonel migration değişkeni:
+
+```env
 DISCORD_GUILD_ID=
 ```
 
@@ -257,8 +265,8 @@ etmemeli; açık bir yapılandırma hatasıyla başlamayı durdurmalıdır.
 
 Komut tanımları ile Discord API'ye komut kaydı ayrı tutulmalıdır.
 
-- Geliştirme: `Routes.applicationGuildCommands(clientId, guildId, commands)`
-- Production: ihtiyaç kesinleştiğinde global application commands
+- Global kayıt: `Routes.applicationCommands(clientId)`
+- Legacy temizlik: `DISCORD_GUILD_ID` varsa `Routes.applicationGuildCommands(clientId, guildId)` route'una boş komut listesi yazılır.
 - Client login sonrasında komutların tekrar tekrar gereksiz kayıt edilmesi
   engellenmeli veya ayrı bir deployment adımı kullanılmalı.
 
@@ -267,8 +275,8 @@ Uygulama başlangıcı:
 1. Environment doğrulaması
 2. SQLite bağlantısı ve şema hazırlığı
 3. Discord client oluşturulması
-4. Sadece `Guilds` intent'iyle login
-5. Slash command registration
+4. Global slash command registration ve opsiyonel legacy guild cleanup
+5. Sadece `Guilds` intent'iyle login
 6. Bot hazır durumunun loglanması
 
 Scheduler, Discord client'tan ve Steam istemcisinden ayrı olmalıdır. Varsayılan
@@ -304,7 +312,7 @@ Test planı:
 
 Kullanıcıdan gereken bilgiler:
 
-1. Geliştirme için kullanılacak Discord test guild'inin ID'si.
+1. Legacy guild-specific komut temizliği gerekiyorsa Discord test guild'inin ID'si.
 2. Steam mağaza fiyatlarının hangi ülke/para birimine göre okunacağı. Önerim,
    kullanıcının mağaza bölgesini veya ilk sürümde sabit `TR` bölgesini kullanmak;
    bunun teknik kararı Steam entegrasyonu başlamadan verilmelidir.

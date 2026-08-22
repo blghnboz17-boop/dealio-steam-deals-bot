@@ -31,23 +31,37 @@ export async function handleCheck(
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await checkService.check(interaction.user.id);
-  const delivery = result.status === 'success'
+  const currentConfig = result.status === 'success'
+    ? statusService.get(interaction.user.id).config
+    : config;
+  const currentLanguage = currentConfig?.language ?? language;
+  const notificationsEnabled = currentConfig?.enabled === true;
+  const delivery = result.status === 'success' && notificationsEnabled
     ? await notificationService.deliverPending(interaction.user.id)
     : { sentCount: 0, failedCount: 0, candidateCount: 0 };
 
   const content = result.status === 'already-running'
-    ? messagesFor(language).alreadyRunning
+    ? messagesFor(currentLanguage).alreadyRunning
     : result.status === 'cooldown'
-      ? messagesFor(language).cooldown(result.retryAfterSeconds)
+      ? messagesFor(currentLanguage).cooldown(result.retryAfterSeconds)
     : result.status === 'not-configured'
-      ? messagesFor(language).notConfigured
+      ? messagesFor(currentLanguage).notConfigured
     : result.status === 'unavailable'
       ? result.errorCode === 'STEAM_WISHLIST_INACCESSIBLE'
-        ? messagesFor(language).wishlistInaccessible
-        : messagesFor(language).unavailable
-      : result.status === 'failed'
-        ? messagesFor(language).failed
-      : messagesFor(language).checkCompleted(
+        ? messagesFor(currentLanguage).wishlistInaccessible
+        : messagesFor(currentLanguage).unavailable
+       : result.status === 'disabled'
+         ? messagesFor(currentLanguage).statusDisabled
+       : result.status === 'failed'
+        ? messagesFor(currentLanguage).failed
+       : !notificationsEnabled
+         ? messagesFor(currentLanguage).checkCompletedNotificationsDisabled(
+             result.checkedCount,
+             result.notificationCandidates.length,
+             result.failedItems.length,
+             result.unknownPriceCount,
+           )
+       : messagesFor(currentLanguage).checkCompleted(
             result.checkedCount,
             delivery.candidateCount,
             result.failedItems.length,

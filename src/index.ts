@@ -20,6 +20,9 @@ import { UserConfigurationService } from './application/user-configuration-servi
 import { UserOperationCoordinator } from './application/user-operation-coordinator.js';
 import { ProcessLock } from './application/process-lock.js';
 import { RuntimeHealth } from './application/runtime-health.js';
+import { TestNotificationService } from './application/test-notification-service.js';
+import { WishlistViewService } from './application/wishlist-view-service.js';
+import { DiscountThresholdService } from './application/discount-threshold-service.js';
 import { loadEnvironment, type EnvironmentConfig } from './config/environment.js';
 import {
   createDatabase,
@@ -28,12 +31,18 @@ import {
 import { CheckStateRepository } from './persistence/check-state-repository.js';
 import { UserConfigRepository } from './persistence/user-config-repository.js';
 import { WishlistStateRepository } from './persistence/wishlist-state-repository.js';
+import { PollScheduleRepository } from './persistence/poll-schedule-repository.js';
+import { StatusDashboardRepository } from './persistence/status-dashboard-repository.js';
+import { DiscountThresholdRepository } from './persistence/discount-threshold-repository.js';
 import { SteamClient } from './steam/steam-client.js';
+import { SteamIdentityResolver } from './steam/steam-identity-resolver.js';
 import { createDiscordClient } from './discord/client.js';
 import { handleCheck } from './discord/commands/check.js';
 import { handleSetup } from './discord/commands/setup.js';
 import { handleStatus } from './discord/commands/status.js';
 import { handleDeleteData } from './discord/commands/delete-data.js';
+import { handleTestNotification } from './discord/commands/test-notification.js';
+import { handleWishlist } from './discord/commands/wishlist.js';
 import { DiscordNotificationSender } from './discord/notification-sender.js';
 import { registerCommands } from './discord/register-commands.js';
 
@@ -77,18 +86,31 @@ export async function startBot(
     const userConfigRepository = new UserConfigRepository(database);
     const checkStateRepository = new CheckStateRepository(database);
     const wishlistStateRepository = new WishlistStateRepository(database);
+    const pollScheduleRepository = new PollScheduleRepository(database);
+    const statusDashboardRepository = new StatusDashboardRepository(database);
+    const discountThresholdRepository = new DiscountThresholdRepository(database);
     const taskTracker = new ApplicationTaskTracker();
     const userOperationCoordinator = new UserOperationCoordinator();
     const applicationAbortController = new AbortController();
     const steamClient = new SteamClient({
       lifecycleSignal: applicationAbortController.signal,
     });
+    const steamIdentityResolver = new SteamIdentityResolver({
+      apiKey: environment.steamWebApiKey,
+      lifecycleSignal: applicationAbortController.signal,
+    });
     const userConfigurationService = new UserConfigurationService(
       userConfigRepository,
+      steamIdentityResolver,
       steamClient,
       userOperationCoordinator,
     );
-    const statusService = new StatusService(userConfigRepository, checkStateRepository);
+    const statusService = new StatusService(
+      userConfigRepository,
+      checkStateRepository,
+      statusDashboardRepository,
+      discountThresholdRepository,
+    );
     const checkService = new CheckService(
       userConfigRepository,
       checkStateRepository,
@@ -96,24 +118,38 @@ export async function startBot(
       steamClient,
       userOperationCoordinator,
     );
+    const discountThresholdService = new DiscountThresholdService(
+      userConfigRepository,
+      discountThresholdRepository,
+      userOperationCoordinator,
+    );
     const client = createDiscordClient();
     health?.setDiscordReadyProbe(() => client.isReady());
+    const notificationSender = new DiscordNotificationSender(client, {
+      lifecycleSignal: applicationAbortController.signal,
+    });
     const notificationService = new NotificationService(
       userConfigRepository,
       wishlistStateRepository,
-      new DiscordNotificationSender(client, {
-        lifecycleSignal: applicationAbortController.signal,
-      }),
+      notificationSender,
       {
         coordinator: userOperationCoordinator,
         lifecycleSignal: applicationAbortController.signal,
       },
+    );
+    const testNotificationService = new TestNotificationService(notificationSender);
+    const wishlistViewService = new WishlistViewService(
+      userConfigRepository,
+      steamClient,
+      undefined,
+      discountThresholdRepository,
     );
     const scheduler = new WishlistScheduler({
       intervalHours: environment.pollIntervalHours,
       userConfigRepository,
       checkService,
       notificationService,
+      scheduleRepository: pollScheduleRepository,
     });
     const notificationRetryScheduler = new NotificationRetryScheduler({
       intervalSeconds: environment.notificationRetryIntervalSeconds,
@@ -161,6 +197,10 @@ export async function startBot(
             statusService,
             checkService,
             notificationService,
+            testNotificationService,
+            wishlistViewService,
+            discountThresholdService,
+            applicationAbortController.signal,
           );
         } catch (error: unknown) {
           console.error('Discord interaction failed', error);
@@ -219,16 +259,41 @@ async function handleInteraction(
   statusService: StatusService,
   checkService: CheckService,
   notificationService: NotificationService,
+  testNotificationService: TestNotificationService,
+  wishlistViewService: WishlistViewService,
+  discountThresholdService: DiscountThresholdService,
+  lifecycleSignal?: AbortSignal,
 ): Promise<void> {
   switch (interaction.commandName) {
     case 'setup':
       await handleSetup(interaction, userConfigurationService);
       return;
     case 'status':
-      await handleStatus(interaction, statusService);
+      await handleStatus(
+        interaction,
+        statusService,
+        userConfigurationService,
+        lifecycleSignal,
+        discountThresholdService,
+      );
       return;
     case 'check':
       await handleCheck(interaction, checkService, statusService, notificationService);
+      return;
+    case 'wishlist':
+      await handleWishlist(
+        interaction,
+        wishlistViewService,
+        lifecycleSignal,
+        discountThresholdService,
+      );
+      return;
+    case 'test-notification':
+      await handleTestNotification(
+        interaction,
+        userConfigurationService,
+        testNotificationService,
+      );
       return;
     case 'delete-data':
       await handleDeleteData(interaction, userConfigurationService);

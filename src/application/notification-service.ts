@@ -1,11 +1,40 @@
 import type { Language } from '../domain/user-config.js';
-import type { NotificationCandidate } from '../domain/wishlist-state.js';
+import type {
+  DurableNotificationBatch,
+  NotificationBatch,
+  NotificationCandidate,
+} from '../domain/wishlist-state.js';
 import { UserConfigRepository } from '../persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../persistence/wishlist-state-repository.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
 
 export interface NotificationSender {
-  send(candidate: NotificationCandidate, language: Language): Promise<void>;
+  plan<T extends SaleNotification>(
+    notifications: readonly T[],
+    language: Language,
+    options?: NotificationSendOptions,
+  ): readonly NotificationBatch<T>[];
+  send(
+    batch: NotificationBatch<SaleNotification>,
+    language: Language,
+    options?: NotificationSendOptions,
+  ): Promise<void>;
+}
+
+export interface SaleNotification {
+  readonly discordUserId: string;
+  readonly appId: number;
+  readonly saleEpisodeId: string;
+  readonly gameName: string;
+  readonly currency: string;
+  readonly normalPriceMinor: number;
+  readonly finalPriceMinor: number;
+  readonly discountPercent: number;
+  readonly createdAt: string;
+}
+
+export interface NotificationSendOptions {
+  readonly test?: boolean;
 }
 
 export class NotificationDeliveryCancelledError extends Error {
@@ -16,6 +45,12 @@ export interface NotificationDeliveryResult {
   readonly candidateCount: number;
   readonly sentCount: number;
   readonly failedCount: number;
+}
+
+interface BatchDeliveryOutcome {
+  readonly sentCount: number;
+  readonly failedCount: number;
+  readonly cancelled: boolean;
 }
 
 export interface NotificationServiceOptions {
@@ -89,84 +124,172 @@ export class NotificationService {
 
     const config = this.userConfigRepository.findByDiscordUserId(discordUserId);
 
-    if (!config) {
+    if (!config?.enabled) {
       return { candidateCount: 0, sentCount: 0, failedCount: 0 };
     }
 
     const staleBefore = new Date(this.now().getTime() - this.sendingTimeoutMs).toISOString();
     this.wishlistStateRepository.recoverStaleSending(config, staleBefore);
     this.wishlistStateRepository.expireInactiveNotifications(config);
+    const now = this.now().toISOString();
+    const retryableBatches = this.wishlistStateRepository.findRetryableNotificationBatches(
+      config,
+      now,
+    );
     const candidates = this.wishlistStateRepository.findRetryableNotificationCandidates(
       config,
-      this.now().toISOString(),
+      now,
+    );
+    const candidateCount = candidates.length + retryableBatches.reduce(
+      (total, batch) => total + batch.notifications.length,
+      0,
     );
     let sentCount = 0;
     let failedCount = 0;
+    let cancelled = false;
 
-    for (const candidate of candidates) {
+    for (const batch of retryableBatches) {
       if (this.lifecycleSignal?.aborted) {
         break;
       }
 
-      if (candidate.attemptCount >= this.maxAttempts) {
-        this.wishlistStateRepository.markNotificationTerminal(
-          candidate,
+      if (batch.attemptCount >= this.maxAttempts) {
+        this.wishlistStateRepository.markNotificationBatchTerminal(
+          batch,
           'Maximum delivery attempt count reached',
         );
-        failedCount += 1;
+        failedCount += batch.notifications.length;
         continue;
       }
 
-      const claimed = this.wishlistStateRepository.claimNotificationCandidate(
-        candidate,
+      const claimed = this.wishlistStateRepository.claimNotificationBatch(
+        batch,
         this.now().toISOString(),
       );
-
       if (!claimed) {
         continue;
       }
 
-      try {
-        await this.sender.send(candidate, config.language);
-      } catch (error: unknown) {
-        if (error instanceof NotificationDeliveryCancelledError) {
-          break;
+      const outcome = await this.deliverClaimedBatch(batch);
+      sentCount += outcome.sentCount;
+      failedCount += outcome.failedCount;
+      cancelled = outcome.cancelled;
+      if (cancelled) {
+        break;
+      }
+    }
+
+    const plannedBatches: NotificationBatch<NotificationCandidate>[] = [];
+    if (!cancelled && !this.lifecycleSignal?.aborted) {
+      let currentAttemptCount: number | undefined;
+      let currentCandidates: NotificationCandidate[] = [];
+
+      const flushCandidates = (): void => {
+        if (currentCandidates.length > 0) {
+          plannedBatches.push(...this.sender.plan(currentCandidates, config.language));
+          currentCandidates = [];
+        }
+      };
+
+      for (const candidate of candidates) {
+        if (candidate.attemptCount >= this.maxAttempts) {
+          flushCandidates();
+          currentAttemptCount = undefined;
+          this.wishlistStateRepository.markNotificationTerminal(
+            candidate,
+            'Maximum delivery attempt count reached',
+          );
+          failedCount += 1;
+          continue;
         }
 
-        const message = error instanceof Error ? error.message : 'Unknown Discord error';
-        const attemptCount = candidate.attemptCount + 1;
-        const terminal = isPermanentDiscordError(error) || attemptCount >= this.maxAttempts;
-        const retryDelayMs = Math.min(
-          this.retryBaseDelayMs * (2 ** Math.max(0, attemptCount - 1)),
-          this.maxRetryDelayMs,
-        );
-        const nextAttemptAt = terminal
-          ? null
-          : new Date(this.now().getTime() + retryDelayMs).toISOString();
-        this.wishlistStateRepository.markNotificationFailed(
-          candidate,
-          message,
-          nextAttemptAt,
-          terminal,
-        );
-        failedCount += 1;
+        if (currentAttemptCount !== undefined && candidate.attemptCount !== currentAttemptCount) {
+          flushCandidates();
+        }
+        currentAttemptCount = candidate.attemptCount;
+        currentCandidates.push(candidate);
+      }
+      flushCandidates();
+    }
+
+    for (const plannedBatch of plannedBatches) {
+      if (this.lifecycleSignal?.aborted) {
+        break;
+      }
+
+      const batch = this.wishlistStateRepository.createAndClaimNotificationBatch(
+        config,
+        config.language,
+        plannedBatch.notifications,
+        this.now().toISOString(),
+      );
+      if (!batch) {
         continue;
       }
 
-      try {
-        this.wishlistStateRepository.markNotificationSent(candidate);
-        sentCount += 1;
-      } catch (_error: unknown) {
-        // Keep the sending state to avoid a second DM after an uncertain database write.
-        failedCount += 1;
+      const outcome = await this.deliverClaimedBatch(batch);
+      sentCount += outcome.sentCount;
+      failedCount += outcome.failedCount;
+      if (outcome.cancelled) {
+        break;
       }
     }
 
     return {
-      candidateCount: candidates.length,
+      candidateCount,
       sentCount,
       failedCount,
     };
+  }
+
+  private async deliverClaimedBatch(
+    batch: DurableNotificationBatch,
+  ): Promise<BatchDeliveryOutcome> {
+    try {
+      await this.sender.send(batch, batch.language);
+    } catch (error: unknown) {
+      if (error instanceof NotificationDeliveryCancelledError) {
+        return { sentCount: 0, failedCount: 0, cancelled: true };
+      }
+
+      const message = error instanceof Error ? error.message : 'Unknown Discord error';
+      const attemptCount = batch.attemptCount + 1;
+      const terminal = isPermanentDiscordError(error) || attemptCount >= this.maxAttempts;
+      const retryDelayMs = Math.min(
+        this.retryBaseDelayMs * (2 ** Math.max(0, attemptCount - 1)),
+        this.maxRetryDelayMs,
+      );
+      const nextAttemptAt = terminal
+        ? null
+        : new Date(this.now().getTime() + retryDelayMs).toISOString();
+      this.wishlistStateRepository.markNotificationBatchFailed(
+        batch,
+        message,
+        nextAttemptAt,
+        terminal,
+      );
+      return {
+        sentCount: 0,
+        failedCount: batch.notifications.length,
+        cancelled: false,
+      };
+    }
+
+    try {
+      this.wishlistStateRepository.markNotificationBatchSent(batch);
+      return {
+        sentCount: batch.notifications.length,
+        failedCount: 0,
+        cancelled: false,
+      };
+    } catch (_error: unknown) {
+      // The transaction rolls back to sending; stale recovery preserves at-least-once delivery.
+      return {
+        sentCount: 0,
+        failedCount: batch.notifications.length,
+        cancelled: false,
+      };
+    }
   }
 }
 

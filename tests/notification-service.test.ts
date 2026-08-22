@@ -8,6 +8,7 @@ import { createDatabase } from '../src/persistence/database.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
 import type { WishlistItem } from '../src/domain/steam.js';
+import type { NotificationCandidate } from '../src/domain/wishlist-state.js';
 import { UserConfigurationService } from '../src/application/user-configuration-service.js';
 import { UserOperationCoordinator } from '../src/application/user-operation-coordinator.js';
 
@@ -25,6 +26,19 @@ const saleItem: WishlistItem = {
   },
   onSale: true,
 };
+
+function createSender(send = vi.fn().mockResolvedValue(undefined)) {
+  return {
+    plan: vi.fn((notifications: readonly NotificationCandidate[]) => {
+      const batches = [];
+      for (let index = 0; index < notifications.length; index += 10) {
+        batches.push({ notifications: notifications.slice(index, index + 10) });
+      }
+      return batches;
+    }),
+    send,
+  };
+}
 
 function createService(
   language: 'tr' | 'en',
@@ -64,21 +78,54 @@ function createService(
   };
 }
 
+function addCandidate(
+  services: ReturnType<typeof createService>,
+  appId: number,
+  observedAt = '2026-08-21T00:02:00.000Z',
+): NotificationCandidate {
+  const regularItem: WishlistItem = {
+    ...saleItem,
+    appId,
+    name: `Test Game ${appId}`,
+    onSale: false,
+    price: { ...saleItem.price, finalMinor: 1_000, discountPercent: 0 },
+  };
+  services.repository.recordObservation(services.config, {
+    item: regularItem,
+    saleKey: null,
+    observedAt: '2026-08-21T00:01:00.000Z',
+  });
+  const result = services.repository.recordObservation(services.config, {
+    item: { ...regularItem, onSale: true, price: saleItem.price },
+    saleKey: 'TRY:1000:750:25',
+    observedAt,
+  });
+  if (!result.notificationCandidate) {
+    throw new Error('Expected an additional notification candidate');
+  }
+  return result.notificationCandidate;
+}
+
 describe('NotificationService', () => {
   it('sends a candidate and marks it sent', async () => {
-    const sender = { send: vi.fn().mockResolvedValue(undefined) };
+    const sender = createSender();
     const services = createService('tr', sender);
 
     const result = await services.service.deliverPending('discord-user');
 
     expect(result).toEqual({ candidateCount: 1, sentCount: 1, failedCount: 0 });
-    expect(sender.send).toHaveBeenCalledWith(expect.objectContaining({ appId: 10 }), 'tr');
+    expect(sender.send).toHaveBeenCalledWith({
+      notifications: [expect.objectContaining({ appId: 10 })],
+      batchId: expect.any(String),
+      language: 'tr',
+      attemptCount: 0,
+    }, 'tr');
     expect(services.repository.findNotificationStatus(services.candidate)).toBe('sent');
     services.database.close();
   });
 
   it('does not send the same sale key twice', async () => {
-    const sender = { send: vi.fn().mockResolvedValue(undefined) };
+    const sender = createSender();
     const services = createService('en', sender);
 
     await services.service.deliverPending('discord-user');
@@ -89,14 +136,138 @@ describe('NotificationService', () => {
     services.database.close();
   });
 
+  it('sends multiple games in one durable batch and atomically marks every item sent', async () => {
+    const sender = createSender();
+    const services = createService('en', sender);
+    const secondCandidate = addCandidate(services, 20);
+
+    const result = await services.service.deliverPending('discord-user');
+
+    expect(result).toEqual({ candidateCount: 2, sentCount: 2, failedCount: 0 });
+    expect(sender.send).toHaveBeenCalledOnce();
+    expect(sender.send.mock.calls[0]?.[0].notifications.map(
+      (notification: NotificationCandidate) => notification.appId,
+    )).toEqual([10, 20]);
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('sent');
+    expect(services.repository.findNotificationStatus(secondCandidate)).toBe('sent');
+    expect(services.database.prepare(
+      'SELECT status, member_count FROM notification_batch',
+    ).all()).toEqual([{ status: 'sent', member_count: 2 }]);
+    expect(services.database.prepare(
+      'SELECT status, attempt_count FROM notification_log ORDER BY app_id',
+    ).all()).toEqual([
+      { status: 'sent', attempt_count: 0 },
+      { status: 'sent', attempt_count: 0 },
+    ]);
+    services.database.close();
+  });
+
+  it('rolls back the entire claim when one batch member cannot be persisted', () => {
+    const sender = createSender();
+    const services = createService('en', sender);
+    const secondCandidate = addCandidate(services, 20);
+    services.database.exec(`
+      CREATE TRIGGER fail_second_batch_item
+      BEFORE INSERT ON notification_batch_item
+      WHEN NEW.position = 1
+      BEGIN
+        SELECT RAISE(ABORT, 'injected batch item failure');
+      END;
+    `);
+
+    expect(() => services.repository.createAndClaimNotificationBatch(
+      services.config,
+      'en',
+      [services.candidate, secondCandidate],
+      '2026-08-21T00:05:00.000Z',
+    )).toThrow('injected batch item failure');
+    expect(services.database.prepare('SELECT COUNT(*) AS count FROM notification_batch').get())
+      .toEqual({ count: 0 });
+    expect(services.database.prepare(
+      'SELECT COUNT(*) AS count FROM notification_batch_item',
+    ).get()).toEqual({ count: 0 });
+    expect(services.database.prepare(
+      'SELECT status FROM notification_log ORDER BY app_id',
+    ).all()).toEqual([{ status: 'candidate' }, { status: 'candidate' }]);
+    services.database.close();
+  });
+
+  it('rolls back all sent updates when the batch parent cannot be updated', () => {
+    const sender = createSender();
+    const services = createService('en', sender);
+    const secondCandidate = addCandidate(services, 20);
+    const batch = services.repository.createAndClaimNotificationBatch(
+      services.config,
+      'en',
+      [services.candidate, secondCandidate],
+      '2026-08-21T00:05:00.000Z',
+    );
+    if (!batch) {
+      throw new Error('Expected a claimed notification batch');
+    }
+    services.database.exec(`
+      CREATE TRIGGER fail_batch_sent_update
+      BEFORE UPDATE OF status ON notification_batch
+      WHEN NEW.status = 'sent'
+      BEGIN
+        SELECT RAISE(ABORT, 'injected sent outcome failure');
+      END;
+    `);
+
+    expect(() => services.repository.markNotificationBatchSent(batch))
+      .toThrow('injected sent outcome failure');
+    expect(services.database.prepare(
+      'SELECT status FROM notification_log ORDER BY app_id',
+    ).all()).toEqual([{ status: 'sending' }, { status: 'sending' }]);
+    expect(services.database.prepare('SELECT status FROM notification_batch').get())
+      .toEqual({ status: 'sending' });
+    services.database.exec('DROP TRIGGER fail_batch_sent_update');
+
+    expect(services.repository.recoverStaleSending(
+      services.config,
+      '2026-08-21T00:10:00.000Z',
+    )).toBe(2);
+    expect(services.database.prepare(
+      'SELECT status FROM notification_log ORDER BY app_id',
+    ).all()).toEqual([{ status: 'failed' }, { status: 'failed' }]);
+    expect(services.database.prepare('SELECT status FROM notification_batch').get())
+      .toEqual({ status: 'failed' });
+    services.database.close();
+  });
+
+  it('creates deterministic 10+1 durable batches for eleven games', async () => {
+    const sender = createSender();
+    const services = createService('en', sender);
+    for (let appId = 11; appId <= 20; appId += 1) {
+      addCandidate(services, appId);
+    }
+
+    const result = await services.service.deliverPending('discord-user');
+
+    expect(result).toEqual({ candidateCount: 11, sentCount: 11, failedCount: 0 });
+    expect(sender.send.mock.calls.map((call) => call[0].notifications.length)).toEqual([10, 1]);
+    expect(sender.send.mock.calls.flatMap((call) => call[0].notifications).map(
+      (notification: NotificationCandidate) => notification.appId,
+    )).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    expect(services.database.prepare(
+      `SELECT status, member_count FROM notification_batch
+       ORDER BY first_created_at, first_app_id, first_sale_episode_id`,
+    ).all()).toEqual([
+      { status: 'sent', member_count: 10 },
+      { status: 'sent', member_count: 1 },
+    ]);
+    services.database.close();
+  });
+
   it('marks failed DMs failed and retries them later', async () => {
-    const sender = {
-      send: vi
+    const sender = createSender(
+      vi
         .fn()
         .mockRejectedValueOnce(new Error('DM disabled'))
         .mockResolvedValueOnce(undefined),
-    };
+    );
     const services = createService('en', sender);
+    const secondCandidate = addCandidate(services, 20);
     let now = new Date('2026-08-21T00:10:00.000Z');
     const service = new NotificationService(
       services.userConfigRepository,
@@ -113,11 +284,16 @@ describe('NotificationService', () => {
     now = new Date('2026-08-21T00:11:00.000Z');
     const secondResult = await service.deliverPending('discord-user');
 
-    expect(firstResult).toMatchObject({ sentCount: 0, failedCount: 1 });
+    expect(firstResult).toMatchObject({ candidateCount: 2, sentCount: 0, failedCount: 2 });
     expect(earlyResult).toEqual({ candidateCount: 0, sentCount: 0, failedCount: 0 });
-    expect(secondResult).toMatchObject({ sentCount: 1, failedCount: 0 });
+    expect(secondResult).toMatchObject({ candidateCount: 2, sentCount: 2, failedCount: 0 });
     expect(sender.send).toHaveBeenCalledTimes(2);
+    expect(sender.send.mock.calls[1]?.[0].batchId).toBe(sender.send.mock.calls[0]?.[0].batchId);
     expect(services.repository.findNotificationStatus(services.candidate)).toBe('sent');
+    expect(services.repository.findNotificationStatus(secondCandidate)).toBe('sent');
+    expect(services.database.prepare(
+      'SELECT attempt_count FROM notification_log ORDER BY app_id',
+    ).all()).toEqual([{ attempt_count: 1 }, { attempt_count: 1 }]);
     services.database.close();
   });
 
@@ -126,7 +302,7 @@ describe('NotificationService', () => {
       code: 50_007,
       status: 403,
     });
-    const sender = { send: vi.fn().mockRejectedValue(permanentError) };
+    const sender = createSender(vi.fn().mockRejectedValue(permanentError));
     const services = createService('en', sender);
 
     await services.service.deliverPending('discord-user');
@@ -139,7 +315,7 @@ describe('NotificationService', () => {
   });
 
   it('stops transient DM retries after the maximum attempt count', async () => {
-    const sender = { send: vi.fn().mockRejectedValue(new Error('temporary network failure')) };
+    const sender = createSender(vi.fn().mockRejectedValue(new Error('temporary network failure')));
     const services = createService('en', sender);
     let now = new Date('2026-08-21T00:10:00.000Z');
     const service = new NotificationService(
@@ -166,13 +342,13 @@ describe('NotificationService', () => {
 
   it('claims a candidate so concurrent delivery cannot send two DMs', async () => {
     let resolveSend: (() => void) | undefined;
-    const sender = {
-      send: vi.fn().mockImplementation(
+    const sender = createSender(
+      vi.fn().mockImplementation(
         () => new Promise<void>((resolve) => {
           resolveSend = resolve;
         }),
       ),
-    };
+    );
     const services = createService('tr', sender);
 
     const firstDelivery = services.service.deliverPending('discord-user');
@@ -192,7 +368,7 @@ describe('NotificationService', () => {
 
   it('does not claim candidates after application shutdown starts', async () => {
     const lifecycle = new AbortController();
-    const sender = { send: vi.fn().mockResolvedValue(undefined) };
+    const sender = createSender();
     const services = createService('en', sender);
     const service = new NotificationService(
       services.userConfigRepository,
@@ -215,17 +391,23 @@ describe('NotificationService', () => {
   it('leaves an uncertain in-flight delivery sending when shutdown cancels it', async () => {
     const lifecycle = new AbortController();
     let rejectSend: ((error: Error) => void) | undefined;
-    const sender = {
-      send: vi.fn(() => new Promise<void>((_resolve, reject) => {
-        rejectSend = reject;
-      })),
-    };
+    const sender = createSender(
+      vi.fn()
+        .mockImplementationOnce(() => new Promise<void>((_resolve, reject) => {
+          rejectSend = reject;
+        }))
+        .mockResolvedValueOnce(undefined),
+    );
     const services = createService('en', sender);
+    const secondCandidate = addCandidate(services, 20);
     const service = new NotificationService(
       services.userConfigRepository,
       services.repository,
       sender,
-      { lifecycleSignal: lifecycle.signal },
+      {
+        lifecycleSignal: lifecycle.signal,
+        now: () => new Date('2026-08-21T00:05:00.000Z'),
+      },
     );
     const delivery = service.deliverPending('discord-user');
     await vi.waitFor(() => expect(sender.send).toHaveBeenCalledOnce());
@@ -234,16 +416,114 @@ describe('NotificationService', () => {
 
     await expect(delivery).resolves.toMatchObject({ sentCount: 0, failedCount: 0 });
     expect(services.repository.findNotificationStatus(services.candidate)).toBe('sending');
+    expect(services.repository.findNotificationStatus(secondCandidate)).toBe('sending');
+    expect(services.database.prepare('SELECT status FROM notification_batch').get())
+      .toEqual({ status: 'sending' });
+
+    const retryService = new NotificationService(
+      services.userConfigRepository,
+      services.repository,
+      sender,
+      {
+        sendingTimeoutMs: 10 * 60 * 1000,
+        now: () => new Date('2026-08-21T00:20:00.000Z'),
+      },
+    );
+    await expect(retryService.deliverPending('discord-user')).resolves.toEqual({
+      candidateCount: 2,
+      sentCount: 2,
+      failedCount: 0,
+    });
+    expect(sender.send.mock.calls[1]?.[0].batchId).toBe(sender.send.mock.calls[0]?.[0].batchId);
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('sent');
+    expect(services.repository.findNotificationStatus(secondCandidate)).toBe('sent');
+    services.database.close();
+  });
+
+  it('does not add newly discovered sales to an existing retry batch', async () => {
+    const sender = createSender(
+      vi.fn().mockRejectedValueOnce(new Error('temporary failure')).mockResolvedValue(undefined),
+    );
+    const services = createService('en', sender);
+    addCandidate(services, 20);
+    let now = new Date('2026-08-21T00:10:00.000Z');
+    const service = new NotificationService(
+      services.userConfigRepository,
+      services.repository,
+      sender,
+      { now: () => now, retryBaseDelayMs: 60_000 },
+    );
+
+    await service.deliverPending('discord-user');
+    const originalBatchId = sender.send.mock.calls[0]?.[0].batchId;
+    addCandidate(services, 30, '2026-08-21T00:10:30.000Z');
+    now = new Date('2026-08-21T00:11:00.000Z');
+
+    const result = await service.deliverPending('discord-user');
+
+    expect(result).toEqual({ candidateCount: 3, sentCount: 3, failedCount: 0 });
+    expect(sender.send.mock.calls[1]?.[0]).toMatchObject({
+      batchId: originalBatchId,
+      notifications: [expect.objectContaining({ appId: 10 }), expect.objectContaining({ appId: 20 })],
+    });
+    expect(sender.send.mock.calls[2]?.[0]).toMatchObject({
+      batchId: expect.not.stringMatching(originalBatchId),
+      notifications: [expect.objectContaining({ appId: 30 })],
+    });
+    services.database.close();
+  });
+
+  it('retires an invalid retry batch and preserves active members for a new batch', async () => {
+    const sender = createSender(
+      vi.fn().mockRejectedValueOnce(new Error('temporary failure')).mockResolvedValue(undefined),
+    );
+    const services = createService('en', sender);
+    const secondCandidate = addCandidate(services, 20);
+    let now = new Date('2026-08-21T00:10:00.000Z');
+    const service = new NotificationService(
+      services.userConfigRepository,
+      services.repository,
+      sender,
+      { now: () => now, retryBaseDelayMs: 60_000 },
+    );
+    await service.deliverPending('discord-user');
+    const originalBatchId = sender.send.mock.calls[0]?.[0].batchId;
+    services.repository.recordObservation(services.config, {
+      item: {
+        ...saleItem,
+        onSale: false,
+        price: { ...saleItem.price, finalMinor: 1_000, discountPercent: 0 },
+      },
+      saleKey: null,
+      observedAt: '2026-08-21T00:10:30.000Z',
+    });
+    now = new Date('2026-08-21T00:11:00.000Z');
+
+    const result = await service.deliverPending('discord-user');
+
+    expect(result).toEqual({ candidateCount: 1, sentCount: 1, failedCount: 0 });
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('expired');
+    expect(services.repository.findNotificationStatus(secondCandidate)).toBe('sent');
+    expect(sender.send.mock.calls[1]?.[0].batchId).not.toBe(originalBatchId);
+    expect(sender.send.mock.calls[1]?.[0].notifications).toEqual([
+      expect.objectContaining({ appId: 20 }),
+    ]);
+    expect(services.database.prepare(
+      'SELECT status FROM notification_batch ORDER BY created_at, batch_id',
+    ).all()).toEqual([{ status: 'expired' }, { status: 'sent' }]);
     services.database.close();
   });
 
   it('recovers and retries a stale sending candidate after a process interruption', async () => {
-    const sender = { send: vi.fn().mockResolvedValue(undefined) };
+    const sender = createSender();
     const services = createService('en', sender);
-    services.repository.claimNotificationCandidate(
-      services.candidate,
+    const claimedBatch = services.repository.createAndClaimNotificationBatch(
+      services.config,
+      'en',
+      [services.candidate],
       '2026-08-21T00:05:00.000Z',
     );
+    expect(claimedBatch).not.toBeNull();
     const service = new NotificationService(
       new UserConfigRepository(services.database),
       services.repository,
@@ -264,12 +544,15 @@ describe('NotificationService', () => {
   });
 
   it('does not reclaim a fresh sending candidate', async () => {
-    const sender = { send: vi.fn().mockResolvedValue(undefined) };
+    const sender = createSender();
     const services = createService('en', sender);
-    services.repository.claimNotificationCandidate(
-      services.candidate,
+    const claimedBatch = services.repository.createAndClaimNotificationBatch(
+      services.config,
+      'en',
+      [services.candidate],
       '2026-08-21T00:15:00.000Z',
     );
+    expect(claimedBatch).not.toBeNull();
     const service = new NotificationService(
       new UserConfigRepository(services.database),
       services.repository,
@@ -289,7 +572,7 @@ describe('NotificationService', () => {
   });
 
   it('expires a pending notification when its sale episode has ended', async () => {
-    const sender = { send: vi.fn().mockResolvedValue(undefined) };
+    const sender = createSender();
     const services = createService('tr', sender);
     services.repository.recordObservation(services.config, {
       item: {
@@ -310,7 +593,7 @@ describe('NotificationService', () => {
   });
 
   it('does not retry a failed notification after its sale episode ends', async () => {
-    const sender = { send: vi.fn().mockRejectedValue(new Error('DM blocked')) };
+    const sender = createSender(vi.fn().mockRejectedValue(new Error('DM blocked')));
     const services = createService('tr', sender);
     await services.service.deliverPending('discord-user');
     services.repository.recordObservation(services.config, {
@@ -333,13 +616,13 @@ describe('NotificationService', () => {
 
   it('does not switch Steam accounts while an old-account DM is being delivered', async () => {
     let resolveSend: (() => void) | undefined;
-    const sender = {
-      send: vi.fn().mockImplementation(
+    const sender = createSender(
+      vi.fn().mockImplementation(
         () => new Promise<void>((resolve) => {
           resolveSend = resolve;
         }),
       ),
-    };
+    );
     const services = createService('en', sender);
     const coordinator = new UserOperationCoordinator();
     const notificationService = new NotificationService(
@@ -350,6 +633,7 @@ describe('NotificationService', () => {
     );
     const configurationService = new UserConfigurationService(
       services.userConfigRepository,
+      { resolve: vi.fn(async (value: string) => value) },
       { validateWishlistAccess: vi.fn().mockResolvedValue(undefined) },
       coordinator,
     );
@@ -377,9 +661,80 @@ describe('NotificationService', () => {
     services.database.close();
   });
 
-  it('expires retryable notifications from an earlier account generation', () => {
-    const sender = { send: vi.fn().mockResolvedValue(undefined) };
+  it('preserves pending notifications while disabled and sends them after re-enable', async () => {
+    const sender = createSender();
     const services = createService('en', sender);
+    services.userConfigRepository.setEnabled(
+      'discord-user',
+      false,
+      '2026-08-21T01:00:00.000Z',
+    );
+
+    await expect(services.service.deliverPending('discord-user')).resolves.toEqual({
+      candidateCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+    });
+    expect(sender.send).not.toHaveBeenCalled();
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('candidate');
+    expect(services.database.prepare(
+      'SELECT COUNT(*) AS count FROM notification_batch',
+    ).get()).toEqual({ count: 0 });
+
+    services.userConfigRepository.setEnabled(
+      'discord-user',
+      true,
+      '2026-08-21T02:00:00.000Z',
+    );
+    await expect(services.service.deliverPending('discord-user')).resolves.toMatchObject({
+      candidateCount: 1,
+      sentCount: 1,
+    });
+    expect(sender.send).toHaveBeenCalledOnce();
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('sent');
+    services.database.close();
+  });
+
+  it('serializes disabling with an already active DM delivery', async () => {
+    let resolveSend: (() => void) | undefined;
+    const sender = createSender(vi.fn().mockImplementation(
+      () => new Promise<void>((resolve) => { resolveSend = resolve; }),
+    ));
+    const services = createService('en', sender);
+    const coordinator = new UserOperationCoordinator();
+    const notificationService = new NotificationService(
+      services.userConfigRepository,
+      services.repository,
+      sender,
+      { coordinator },
+    );
+    const configurationService = new UserConfigurationService(
+      services.userConfigRepository,
+      { resolve: vi.fn(async (value: string) => value) },
+      { validateWishlistAccess: vi.fn().mockResolvedValue(undefined) },
+      coordinator,
+    );
+    const delivery = notificationService.deliverPending('discord-user');
+    await vi.waitFor(() => expect(sender.send).toHaveBeenCalledOnce());
+    let disabled = false;
+    const disabling = configurationService.setEnabled('discord-user', false).then((config) => {
+      disabled = true;
+      return config;
+    });
+    await Promise.resolve();
+
+    expect(disabled).toBe(false);
+    expect(services.userConfigRepository.findByDiscordUserId('discord-user')?.enabled).toBe(true);
+    resolveSend?.();
+    await delivery;
+    await expect(disabling).resolves.toMatchObject({ enabled: false });
+    services.database.close();
+  });
+
+  it('expires retryable batches and notifications from an earlier account generation', async () => {
+    const sender = createSender(vi.fn().mockRejectedValue(new Error('temporary failure')));
+    const services = createService('en', sender);
+    await services.service.deliverPending('discord-user');
 
     services.userConfigRepository.upsert(
       'discord-user',
@@ -389,6 +744,8 @@ describe('NotificationService', () => {
     );
 
     expect(services.repository.findNotificationStatus(services.candidate)).toBe('expired');
+    expect(services.database.prepare('SELECT status FROM notification_batch').get())
+      .toEqual({ status: 'expired' });
     services.database.close();
   });
 });

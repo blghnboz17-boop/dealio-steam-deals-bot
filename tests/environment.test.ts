@@ -19,12 +19,35 @@ describe('loadEnvironment', () => {
     });
   });
 
-  it('stops when a required value is missing', () => {
+  it('loads without a guild ID because commands are global', () => {
     const environment = { ...validEnvironment };
     delete environment.DISCORD_GUILD_ID;
 
+    expect(loadEnvironment(environment)).toEqual({
+      discordToken: 'test-token',
+      discordClientId: '123456789012345678',
+      databasePath: './data/wishlist.db',
+      pollIntervalHours: 6,
+      notificationRetryIntervalSeconds: 60,
+    });
+  });
+
+  it('loads the optional Steam Web API key without requiring it', () => {
+    expect(loadEnvironment({
+      ...validEnvironment,
+      STEAM_WEB_API_KEY: '  optional-steam-key  ',
+    })).toMatchObject({ steamWebApiKey: 'optional-steam-key' });
+
+    expect(loadEnvironment({ ...validEnvironment, STEAM_WEB_API_KEY: '   ' }))
+      .not.toHaveProperty('steamWebApiKey');
+  });
+
+  it('stops when a required value is missing', () => {
+    const environment = { ...validEnvironment };
+    delete environment.DISCORD_TOKEN;
+
     expect(() => loadEnvironment(environment)).toThrow(
-      'Missing required environment variable: DISCORD_GUILD_ID',
+      'Missing required environment variable: DISCORD_TOKEN',
     );
   });
 

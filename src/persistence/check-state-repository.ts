@@ -8,6 +8,20 @@ interface CheckStateRow {
   last_status: SQLOutputValue;
   last_error_code: SQLOutputValue;
   next_scheduled_at: SQLOutputValue;
+  last_success_completed_at: SQLOutputValue;
+  last_success_checked_count: SQLOutputValue;
+  last_success_on_sale_count: SQLOutputValue;
+  last_success_free_count: SQLOutputValue;
+  last_success_unknown_price_count: SQLOutputValue;
+  last_success_failed_item_count: SQLOutputValue;
+}
+
+export interface SuccessfulCheckMetrics {
+  readonly checkedCount: number;
+  readonly onSaleCount: number;
+  readonly freeCount: number;
+  readonly unknownPriceCount: number;
+  readonly failedItemCount: number;
 }
 
 function nullableText(value: SQLOutputValue, column: string): string | null {
@@ -36,6 +50,16 @@ function nullableStatus(value: SQLOutputValue): CheckStatus | null {
   return status as CheckStatus;
 }
 
+function nullableCount(value: SQLOutputValue, column: string): number | null {
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`Invalid ${column} value in check_state`);
+  }
+  return value;
+}
+
 function toCheckState(row: CheckStateRow): CheckState {
   if (typeof row.discord_user_id !== 'string') {
     throw new Error('Invalid discord_user_id value in check_state');
@@ -48,6 +72,30 @@ function toCheckState(row: CheckStateRow): CheckState {
     lastStatus: nullableStatus(row.last_status),
     lastErrorCode: nullableText(row.last_error_code, 'last_error_code'),
     nextScheduledAt: nullableText(row.next_scheduled_at, 'next_scheduled_at'),
+    lastSuccessCompletedAt: nullableText(
+      row.last_success_completed_at,
+      'last_success_completed_at',
+    ),
+    lastSuccessCheckedCount: nullableCount(
+      row.last_success_checked_count,
+      'last_success_checked_count',
+    ),
+    lastSuccessOnSaleCount: nullableCount(
+      row.last_success_on_sale_count,
+      'last_success_on_sale_count',
+    ),
+    lastSuccessFreeCount: nullableCount(
+      row.last_success_free_count,
+      'last_success_free_count',
+    ),
+    lastSuccessUnknownPriceCount: nullableCount(
+      row.last_success_unknown_price_count,
+      'last_success_unknown_price_count',
+    ),
+    lastSuccessFailedItemCount: nullableCount(
+      row.last_success_failed_item_count,
+      'last_success_failed_item_count',
+    ),
   };
 }
 
@@ -58,7 +106,10 @@ export class CheckStateRepository {
     const row = this.database
       .prepare(
         `SELECT discord_user_id, last_started_at, last_completed_at, last_status,
-                last_error_code, next_scheduled_at
+                last_error_code, next_scheduled_at, last_success_completed_at,
+                last_success_checked_count, last_success_on_sale_count,
+                last_success_free_count, last_success_unknown_price_count,
+                last_success_failed_item_count
          FROM check_state
          WHERE discord_user_id = ?`,
       )
@@ -96,14 +147,21 @@ export class CheckStateRepository {
     startedAt: string,
     completedAt: string,
     configVersion: number,
+    metrics: SuccessfulCheckMetrics,
   ): void {
     this.database
       .prepare(
         `UPDATE check_state
          SET last_started_at = ?,
-             last_completed_at = ?,
-             last_status = 'success',
-             last_error_code = NULL
+              last_completed_at = ?,
+              last_status = 'success',
+              last_error_code = NULL,
+              last_success_completed_at = ?,
+              last_success_checked_count = ?,
+              last_success_on_sale_count = ?,
+              last_success_free_count = ?,
+              last_success_unknown_price_count = ?,
+              last_success_failed_item_count = ?
           WHERE discord_user_id = ?
             AND EXISTS (
               SELECT 1 FROM user_config
@@ -111,7 +169,18 @@ export class CheckStateRepository {
                 AND user_config.config_version = ?
             )`,
       )
-      .run(startedAt, completedAt, discordUserId, configVersion);
+      .run(
+        startedAt,
+        completedAt,
+        completedAt,
+        metrics.checkedCount,
+        metrics.onSaleCount,
+        metrics.freeCount,
+        metrics.unknownPriceCount,
+        metrics.failedItemCount,
+        discordUserId,
+        configVersion,
+      );
   }
 
   public markFailed(

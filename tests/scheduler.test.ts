@@ -9,6 +9,10 @@ import {
   WishlistScheduler,
 } from '../src/application/scheduler.js';
 import type { UserConfig } from '../src/domain/user-config.js';
+import { createDatabase } from '../src/persistence/database.js';
+import { CheckStateRepository } from '../src/persistence/check-state-repository.js';
+import { PollScheduleRepository } from '../src/persistence/poll-schedule-repository.js';
+import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 
 function user(discordUserId: string): UserConfig {
   return {
@@ -37,12 +41,12 @@ function createClock() {
   let handle: object | null = null;
 
   const clock: SchedulerClock = {
-    setInterval: vi.fn((nextCallback) => {
+    setTimeout: vi.fn((nextCallback) => {
       callback = nextCallback;
       handle = {};
-      return handle as ReturnType<typeof setInterval>;
+      return handle as ReturnType<typeof setTimeout>;
     }),
-    clearInterval: vi.fn((receivedHandle) => {
+    clearTimeout: vi.fn((receivedHandle) => {
       if (receivedHandle === handle) {
         callback = null;
       }
@@ -52,6 +56,16 @@ function createClock() {
   return {
     clock,
     trigger: () => callback?.(),
+  };
+}
+
+function createScheduleRepository(initialValue: string | null = null) {
+  let value = initialValue;
+  return {
+    findNextScheduledAt: vi.fn(() => value),
+    setNextScheduledAt: vi.fn((nextValue: string | null) => {
+      value = nextValue;
+    }),
   };
 }
 
@@ -75,6 +89,8 @@ function createScheduler(
   notificationService = createNotificationService(),
   clock = createClock(),
   maxUserConcurrency = 3,
+  scheduleRepository = createScheduleRepository(),
+  now = () => new Date('2026-08-22T00:00:00.000Z'),
 ) {
   const logger = createLogger();
   const scheduler = new WishlistScheduler({
@@ -82,12 +98,14 @@ function createScheduler(
     userConfigRepository: { findEnabled: () => users },
     checkService,
     notificationService,
+    scheduleRepository,
     clock: clock.clock,
+    now,
     logger,
     maxUserConcurrency,
   });
 
-  return { scheduler, clock, logger, notificationService };
+  return { scheduler, clock, logger, notificationService, scheduleRepository };
 }
 
 describe('WishlistScheduler', () => {
@@ -101,9 +119,34 @@ describe('WishlistScheduler', () => {
     const summary = await scheduler.runOnce();
 
     expect(checkService.check).toHaveBeenCalledTimes(2);
-    expect(checkService.check).toHaveBeenCalledWith('user-a');
-    expect(checkService.check).toHaveBeenCalledWith('user-b');
+    expect(checkService.check).toHaveBeenCalledWith('user-a', 'automatic');
+    expect(checkService.check).toHaveBeenCalledWith('user-b', 'automatic');
     expect(summary).toEqual({ userCount: 2, completedCount: 2, errorCount: 0 });
+  });
+
+  it('does not select disabled users for automatic wishlist checks', async () => {
+    const database = createDatabase(':memory:');
+    const userRepository = new UserConfigRepository(database);
+    userRepository.upsert('enabled-user', '76561198000000000', 'en', '2026-08-21T00:00:00Z');
+    userRepository.upsert('disabled-user', '76561198000000001', 'en', '2026-08-21T00:00:00Z');
+    userRepository.setEnabled('disabled-user', false, '2026-08-21T01:00:00Z');
+    const checkService = { check: vi.fn().mockResolvedValue(successResult()) };
+    const scheduler = new WishlistScheduler({
+      intervalHours: 6,
+      userConfigRepository: userRepository,
+      checkService,
+      notificationService: createNotificationService(),
+      scheduleRepository: new PollScheduleRepository(database),
+      logger: createLogger(),
+    });
+
+    try {
+      await expect(scheduler.runOnce()).resolves.toMatchObject({ userCount: 1 });
+      expect(checkService.check).toHaveBeenCalledOnce();
+      expect(checkService.check).toHaveBeenCalledWith('enabled-user', 'automatic');
+    } finally {
+      database.close();
+    }
   });
 
   it('continues with other users when one check fails', async () => {
@@ -129,19 +172,27 @@ describe('WishlistScheduler', () => {
 
   it('uses the configured interval and clears it on stop', async () => {
     const checkService = { check: vi.fn().mockResolvedValue(successResult()) };
-    const { scheduler, clock } = createScheduler([user('user-a')], checkService);
+    const scheduleRepository = createScheduleRepository('2026-08-22T06:00:00.000Z');
+    const { scheduler, clock } = createScheduler(
+      [user('user-a')],
+      checkService,
+      createNotificationService(),
+      createClock(),
+      3,
+      scheduleRepository,
+    );
 
     scheduler.start();
     scheduler.start();
     await scheduler.stop();
 
     expect(scheduler.intervalMilliseconds).toBe(6 * 60 * 60 * 1000);
-    expect(clock.clock.setInterval).toHaveBeenCalledTimes(1);
-    expect(clock.clock.setInterval).toHaveBeenCalledWith(
+    expect(clock.clock.setTimeout).toHaveBeenCalledTimes(1);
+    expect(clock.clock.setTimeout).toHaveBeenCalledWith(
       expect.any(Function),
       6 * 60 * 60 * 1000,
     );
-    expect(clock.clock.clearInterval).toHaveBeenCalledTimes(1);
+    expect(clock.clock.clearTimeout).toHaveBeenCalledTimes(1);
   });
 
   it('does not start a parallel scheduler run for the same users', async () => {
@@ -170,7 +221,9 @@ describe('WishlistScheduler', () => {
 
     scheduler.start();
     await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
     clock.trigger();
+    await new Promise<void>((resolve) => setImmediate(resolve));
     await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(checkService.check).toHaveBeenCalledTimes(2);
@@ -241,7 +294,184 @@ describe('WishlistScheduler', () => {
       userConfigRepository: { findEnabled: () => [] },
       checkService,
       notificationService: createNotificationService(),
+      scheduleRepository: createScheduleRepository(),
     })).toThrow('Scheduler interval must be between 0.25 and 168 hours');
+  });
+
+  it('resumes a persisted future run without an immediate check', async () => {
+    const checkService = { check: vi.fn().mockResolvedValue(successResult()) };
+    const scheduleRepository = createScheduleRepository('2026-08-22T03:00:00.000Z');
+    const { scheduler, clock } = createScheduler(
+      [user('user-a')],
+      checkService,
+      createNotificationService(),
+      createClock(),
+      3,
+      scheduleRepository,
+    );
+
+    scheduler.start();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(checkService.check).not.toHaveBeenCalled();
+    expect(clock.clock.setTimeout).toHaveBeenCalledWith(expect.any(Function), 3 * 60 * 60 * 1000);
+    expect(scheduleRepository.setNextScheduledAt)
+      .toHaveBeenCalledWith('2026-08-22T03:00:00.000Z');
+    await scheduler.stop();
+  });
+
+  it('persists completion plus interval after an automatic run', async () => {
+    let now = new Date('2026-08-22T00:00:00.000Z');
+    const checkService = {
+      check: vi.fn().mockImplementation(async () => {
+        now = new Date('2026-08-22T00:05:00.000Z');
+        return successResult();
+      }),
+    };
+    const scheduleRepository = createScheduleRepository();
+    const { scheduler } = createScheduler(
+      [user('user-a')],
+      checkService,
+      createNotificationService(),
+      createClock(),
+      3,
+      scheduleRepository,
+      () => now,
+    );
+
+    scheduler.start();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(scheduleRepository.setNextScheduledAt).toHaveBeenNthCalledWith(1, null);
+    expect(scheduleRepository.setNextScheduledAt).toHaveBeenNthCalledWith(
+      2,
+      '2026-08-22T06:05:00.000Z',
+    );
+    await scheduler.stop();
+  });
+
+  it('persists next_scheduled_at for users and resumes it after restart', async () => {
+    const database = createDatabase(':memory:');
+    const userRepository = new UserConfigRepository(database);
+    const checkStateRepository = new CheckStateRepository(database);
+    const scheduleRepository = new PollScheduleRepository(database);
+    userRepository.upsert(
+      'user-a',
+      '76561198000000000',
+      'en',
+      '2026-08-22T00:00:00.000Z',
+    );
+    const firstCheck = { check: vi.fn().mockResolvedValue(successResult()) };
+    const firstClock = createClock();
+    const firstScheduler = new WishlistScheduler({
+      intervalHours: 6,
+      userConfigRepository: userRepository,
+      checkService: firstCheck,
+      notificationService: createNotificationService(),
+      scheduleRepository,
+      clock: firstClock.clock,
+      logger: createLogger(),
+      now: () => new Date('2026-08-22T00:00:00.000Z'),
+    });
+
+    firstScheduler.start();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(checkStateRepository.findByDiscordUserId('user-a')?.nextScheduledAt)
+      .toBe('2026-08-22T06:00:00.000Z');
+    await firstScheduler.stop();
+
+    userRepository.upsert(
+      'user-b',
+      '76561198000000001',
+      'tr',
+      '2026-08-22T00:30:00.000Z',
+    );
+    expect(checkStateRepository.findByDiscordUserId('user-b')?.nextScheduledAt)
+      .toBe('2026-08-22T06:00:00.000Z');
+
+    const secondCheck = { check: vi.fn().mockResolvedValue(successResult()) };
+    const secondClock = createClock();
+    const secondScheduler = new WishlistScheduler({
+      intervalHours: 6,
+      userConfigRepository: userRepository,
+      checkService: secondCheck,
+      notificationService: createNotificationService(),
+      scheduleRepository,
+      clock: secondClock.clock,
+      logger: createLogger(),
+      now: () => new Date('2026-08-22T01:00:00.000Z'),
+    });
+    secondScheduler.start();
+
+    expect(secondCheck.check).not.toHaveBeenCalled();
+    expect(secondClock.clock.setTimeout)
+      .toHaveBeenCalledWith(expect.any(Function), 5 * 60 * 60 * 1000);
+    expect(checkStateRepository.findByDiscordUserId('user-a')?.nextScheduledAt)
+      .toBe('2026-08-22T06:00:00.000Z');
+    await secondScheduler.stop();
+    database.close();
+  });
+
+  it('retries a transient schedule persistence failure instead of stopping polling', async () => {
+    const checkService = { check: vi.fn().mockResolvedValue(successResult()) };
+    const scheduleRepository = createScheduleRepository('2026-08-22T03:00:00.000Z');
+    scheduleRepository.setNextScheduledAt
+      .mockImplementationOnce(() => { throw new Error('temporary database failure'); });
+    const clock = createClock();
+    const { scheduler } = createScheduler(
+      [user('user-a')],
+      checkService,
+      createNotificationService(),
+      clock,
+      3,
+      scheduleRepository,
+    );
+
+    scheduler.start();
+    expect(clock.clock.setTimeout).toHaveBeenCalledWith(expect.any(Function), 60_000);
+    clock.trigger();
+
+    expect(scheduleRepository.setNextScheduledAt).toHaveBeenCalledTimes(2);
+    expect(clock.clock.setTimeout).toHaveBeenLastCalledWith(
+      expect.any(Function),
+      3 * 60 * 60 * 1000,
+    );
+    expect(checkService.check).not.toHaveBeenCalled();
+    await scheduler.stop();
+  });
+
+  it('retries when clearing a due schedule temporarily fails', async () => {
+    const checkService = { check: vi.fn().mockResolvedValue(successResult()) };
+    const scheduleRepository = createScheduleRepository();
+    scheduleRepository.setNextScheduledAt
+      .mockImplementationOnce(() => { throw new Error('temporary database failure'); });
+    const clock = createClock();
+    const { scheduler } = createScheduler(
+      [user('user-a')],
+      checkService,
+      createNotificationService(),
+      clock,
+      3,
+      scheduleRepository,
+    );
+
+    scheduler.start();
+    expect(clock.clock.setTimeout).toHaveBeenCalledWith(expect.any(Function), 60_000);
+    expect(checkService.check).not.toHaveBeenCalled();
+
+    clock.trigger();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(scheduleRepository.setNextScheduledAt).toHaveBeenNthCalledWith(2, null);
+    expect(checkService.check).toHaveBeenCalledOnce();
+    expect(clock.clock.setTimeout).toHaveBeenLastCalledWith(
+      expect.any(Function),
+      6 * 60 * 60 * 1000,
+    );
+    await scheduler.stop();
   });
 });
 

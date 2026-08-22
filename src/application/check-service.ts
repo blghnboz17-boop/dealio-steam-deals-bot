@@ -13,6 +13,7 @@ import { UserOperationCoordinator } from './user-operation-coordinator.js';
 export type CheckResult =
   | { readonly status: 'not-configured' }
   | { readonly status: 'already-running' }
+  | { readonly status: 'disabled' }
   | { readonly status: 'cooldown'; readonly retryAfterSeconds: number }
   | {
       readonly status: 'success';
@@ -55,7 +56,10 @@ export class CheckService {
     }
   }
 
-  public async check(discordUserId: string): Promise<CheckResult> {
+  public async check(
+    discordUserId: string,
+    source: 'manual' | 'automatic' = 'manual',
+  ): Promise<CheckResult> {
     if (this.runningUsers.has(discordUserId)) {
       return { status: 'already-running' };
     }
@@ -63,14 +67,17 @@ export class CheckService {
     this.runningUsers.add(discordUserId);
     try {
       return await this.coordinator.runExclusive(discordUserId, () =>
-        this.checkExclusive(discordUserId),
+        this.checkExclusive(discordUserId, source),
       );
     } finally {
       this.runningUsers.delete(discordUserId);
     }
   }
 
-  private async checkExclusive(discordUserId: string): Promise<CheckResult> {
+  private async checkExclusive(
+    discordUserId: string,
+    source: 'manual' | 'automatic',
+  ): Promise<CheckResult> {
     let config;
     try {
       config = this.userConfigRepository.findByDiscordUserId(discordUserId);
@@ -80,6 +87,9 @@ export class CheckService {
 
     if (!config) {
       return { status: 'not-configured' };
+    }
+    if (source === 'automatic' && !config.enabled) {
+      return { status: 'disabled' };
     }
 
     const now = this.now();
@@ -183,6 +193,13 @@ export class CheckService {
         startedAt,
         completedAt,
         config.configVersion,
+        {
+          checkedCount: steamResult.items.length,
+          onSaleCount: steamResult.items.filter((item) => item.onSale === true).length,
+          freeCount: steamResult.items.filter((item) => item.price?.isFree === true).length,
+          unknownPriceCount,
+          failedItemCount: steamResult.errors.length,
+        },
       );
 
       return {

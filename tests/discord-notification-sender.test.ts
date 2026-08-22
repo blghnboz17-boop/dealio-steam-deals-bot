@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   DiscordNotificationSender,
   DiscordNotificationTimeoutError,
+  partitionNotificationBatches,
 } from '../src/discord/notification-sender.js';
 import type { NotificationCandidate } from '../src/domain/wishlist-state.js';
 import { NotificationDeliveryCancelledError } from '../src/application/notification-service.js';
@@ -21,9 +22,10 @@ const candidate: NotificationCandidate = {
   attemptCount: 0,
   createdAt: '2026-08-21T00:00:00.000Z',
 };
+const batch = { notifications: [candidate] as const };
 
 describe('DiscordNotificationSender', () => {
-  it('creates a DM channel and sends a mention-safe message with one signal', async () => {
+  it('creates a DM channel and sends a mention-safe embed with one signal', async () => {
     const post = vi
       .fn()
       .mockResolvedValueOnce({ id: '123456789012345678' })
@@ -31,7 +33,7 @@ describe('DiscordNotificationSender', () => {
     const client = { rest: { post } } as never;
     const sender = new DiscordNotificationSender(client);
 
-    await sender.send(candidate, 'en');
+    await sender.send(batch, 'en');
 
     expect(post).toHaveBeenCalledTimes(2);
     expect(post.mock.calls[0]?.[1]).toMatchObject({
@@ -40,10 +42,32 @@ describe('DiscordNotificationSender', () => {
     });
     expect(post.mock.calls[1]?.[1]).toMatchObject({
       body: {
-        content: expect.stringContaining('Test Game'),
+        embeds: [expect.objectContaining({ title: 'Test Game' })],
         allowed_mentions: { parse: [] },
       },
       signal: post.mock.calls[0]?.[1]?.signal,
+    });
+  });
+
+  it('sends the localized test design to only the requested recipient', async () => {
+    const post = vi
+      .fn()
+      .mockResolvedValueOnce({ id: '123456789012345678' })
+      .mockResolvedValueOnce({ id: 'message' });
+    const sender = new DiscordNotificationSender({ rest: { post } } as never);
+
+    await sender.send(batch, 'tr', { test: true });
+
+    expect(post.mock.calls[0]?.[1]).toMatchObject({
+      body: { recipient_id: candidate.discordUserId },
+    });
+    expect(post.mock.calls[1]?.[1]).toMatchObject({
+      body: {
+        embeds: [expect.objectContaining({
+          author: { name: 'Dealio test bildirimi' },
+          title: 'Test Game',
+        })],
+      },
     });
   });
 
@@ -51,7 +75,7 @@ describe('DiscordNotificationSender', () => {
     const post = vi.fn().mockRejectedValue(new Error('DM blocked'));
     const sender = new DiscordNotificationSender({ rest: { post } } as never);
 
-    await expect(sender.send(candidate, 'tr')).rejects.toThrow('DM blocked');
+    await expect(sender.send(batch, 'tr')).rejects.toThrow('DM blocked');
   });
 
   it('aborts a stalled delivery at the total deadline', async () => {
@@ -63,7 +87,7 @@ describe('DiscordNotificationSender', () => {
     );
 
     try {
-      const sending = sender.send(candidate, 'en');
+      const sending = sender.send(batch, 'en');
       const rejection = expect(sending).rejects.toBeInstanceOf(
         DiscordNotificationTimeoutError,
       );
@@ -82,7 +106,7 @@ describe('DiscordNotificationSender', () => {
       { rest: { post } } as never,
       { lifecycleSignal: lifecycle.signal },
     );
-    const sending = sender.send(candidate, 'en');
+    const sending = sender.send(batch, 'en');
     const rejection = expect(sending).rejects.toBeInstanceOf(
       NotificationDeliveryCancelledError,
     );
@@ -96,5 +120,80 @@ describe('DiscordNotificationSender', () => {
       { rest: { post: vi.fn() } } as never,
       { timeoutMs: 0 },
     )).toThrow('positive safe integer');
+  });
+
+  it('sends multiple games as embeds with their own Steam header images in one DM', async () => {
+    const post = vi
+      .fn()
+      .mockResolvedValueOnce({ id: '123456789012345678' })
+      .mockResolvedValueOnce({ id: 'message' });
+    const sender = new DiscordNotificationSender({ rest: { post } } as never);
+    const second = {
+      ...candidate,
+      appId: 20,
+      gameName: 'Second Game',
+      saleEpisodeId: 'episode-2',
+    };
+
+    await sender.send({ notifications: [candidate, second] }, 'en');
+
+    const body = post.mock.calls[1]?.[1]?.body;
+    expect(body.embeds).toHaveLength(2);
+    expect(body.embeds[0]).toMatchObject({
+      title: 'Test Game',
+      image: { url: expect.stringContaining('/steam/apps/10/header.jpg') },
+    });
+    expect(body.embeds[1]).toMatchObject({
+      title: 'Second Game',
+      image: { url: expect.stringContaining('/steam/apps/20/header.jpg') },
+    });
+  });
+
+  it('plans at most 10 embeds with deterministic notification ordering', () => {
+    const sender = new DiscordNotificationSender({ rest: { post: vi.fn() } } as never);
+    const notifications = Array.from({ length: 11 }, (_, index) => ({
+      ...candidate,
+      appId: 20 - index,
+      gameName: `Game ${index}`,
+      saleEpisodeId: `episode-${String(index).padStart(2, '0')}`,
+    }));
+
+    const batches = sender.plan(notifications, 'en');
+
+    expect(batches.map((planned) => planned.notifications.length)).toEqual([10, 1]);
+    expect(batches.flatMap((planned) => planned.notifications).map((item) => item.appId))
+      .toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    expect(notifications[0]?.appId).toBe(20);
+  });
+
+  it('uses sale episode ID as the final deterministic ordering key', () => {
+    const sender = new DiscordNotificationSender({ rest: { post: vi.fn() } } as never);
+    const notifications = ['episode-c', 'episode-a', 'episode-b'].map((saleEpisodeId) => ({
+      ...candidate,
+      saleEpisodeId,
+    }));
+
+    const planned = sender.plan(notifications, 'en');
+
+    expect(planned.flatMap((item) => item.notifications).map((item) => item.saleEpisodeId))
+      .toEqual(['episode-a', 'episode-b', 'episode-c']);
+  });
+
+  it('splits batches deterministically at the 6000 embed-character limit', () => {
+    const exactlyAtLimit = partitionNotificationBatches(
+      [1, 2],
+      () => ({ description: 'x'.repeat(3_000) }),
+    );
+    const overLimit = partitionNotificationBatches(
+      [1, 2],
+      (value) => ({ description: 'x'.repeat(value === 1 ? 3_000 : 3_001) }),
+    );
+
+    expect(exactlyAtLimit.map((planned) => planned.notifications)).toEqual([[1, 2]]);
+    expect(overLimit.map((planned) => planned.notifications)).toEqual([[1], [2]]);
+    expect(() => partitionNotificationBatches(
+      [1],
+      () => ({ description: 'x'.repeat(6_001) }),
+    )).toThrow('exceeds Discord limits');
   });
 });

@@ -23,6 +23,10 @@ npm test
 
 Never commit `.env` or the database file.
 
+`DISCORD_TOKEN` and `DISCORD_CLIENT_ID` are required. `STEAM_WEB_API_KEY` is optional at startup and is needed only to resolve vanity names and `/id/` profile links. Obtain a key from Steam's official [Web API key page](https://steamcommunity.com/dev/apikey), put it only in `.env`, and never commit or log it. Existing SteamID64 and `/profiles/{SteamID64}` setup inputs work without this key.
+
+Slash commands are registered globally and become available in every server where the application was installed with the `applications.commands` scope. Discord's global command propagation can take time, so commands may not appear in every server immediately after startup. Schema changes such as the `/setup` option rename from `steamid64` to `steam-profile` can also take time to appear after deployment. `DISCORD_GUILD_ID` is optional and is used only to remove legacy guild-specific commands from that server during migration; it can be removed after cleanup succeeds.
+
 ## Windows Local Bot Controls
 
 Run these commands from Windows Explorer, Command Prompt, or PowerShell in the project directory:
@@ -45,22 +49,30 @@ Notification delivery is at-least-once. A dedicated scheduler checks the durable
 
 ## Commands
 
-- `/setup` configure a Steam wishlist
-- `/status` show the last check and configured account
+- `/setup` configure a Steam wishlist from a SteamID64, profile link, or vanity name
+- `/status` show a localized dashboard, toggle notifications, and set the global minimum discount
 - `/check` trigger a manual check
+- `/wishlist` show a paginated live wishlist and set game-specific minimum discounts
+- `/test-notification` send an example sale embed by DM
 - `/delete-data confirm:true` permanently delete the caller's stored data
 
 Manual checks have a per-user cooldown. Scheduled users and Steam requests are processed through bounded concurrency queues, and Steam rate-limit responses honor `Retry-After` with bounded retries.
 
+`/setup steam-profile:` accepts a 17-digit SteamID64, a `steamcommunity.com/profiles/{SteamID64}` link, a `steamcommunity.com/id/{vanity}` link, or a bare vanity name containing 2-32 letters, digits, underscores, or hyphens. Both HTTP and HTTPS Steam links are parsed, but user-provided URLs are never fetched; HTTP input is treated as a Steam identifier and all outbound requests use fixed HTTPS Steam endpoints. Credentials, custom ports, non-Steam hosts, traversal paths, malformed profile paths, and unsafe vanity characters are rejected. Query strings and fragments on otherwise valid Steam profile links are discarded.
+
+The `/status` dashboard includes a notification toggle. Disabling notifications pauses automatic Steam checks and notification retries without deleting wishlist state, pending notifications, batches, or delivery history. Manual `/check` remains available while disabled and can update the persisted wishlist/check state, but it never sends sale DMs. Re-enabling resumes automatic checks and allows still-active queued notifications to be delivered by a later retry cycle. A Discord delivery already in progress may finish before the coordinated disable operation completes.
+
+The global minimum discount defaults to `0`, which accepts any real discount. Use the `/status` button to set a whole percentage from `0` to `100`. Each game shown by `/wishlist` has its own threshold button; a game-specific value overrides the global value, and submitting that modal empty removes the override. A known not-on-sale game starts an eligible sale episode when it goes on sale. If that episode starts below its effective threshold, it can create one notification candidate later when the discount reaches the threshold. The initial wishlist observation remains a notification-free baseline.
+
 `POLL_INTERVAL_HOURS` configures Steam polling. `NOTIFICATION_RETRY_INTERVAL_SECONDS` configures the independent notification queue scan from 1 to 3600 seconds.
 
-Steam reports wishlist access separately from the JSON body. The bot accepts an empty wishlist only when Steam explicitly marks the request successful. A private or otherwise inaccessible wishlist is reported to the user and does not clear existing sale state. `/setup` verifies access before replacing an existing configuration.
+Steam reports wishlist access separately from the JSON body. The bot accepts an empty wishlist only when Steam explicitly marks the request successful. A private or otherwise inaccessible wishlist is reported to the user and does not clear existing sale state. `/setup` first resolves the input to a canonical SteamID64, then verifies wishlist access before replacing an existing configuration. A failed vanity lookup, unavailable Steam API, missing optional key, or failed wishlist validation leaves the existing configuration unchanged.
 
 ## Stored Data And Deletion
 
-The bot stores the Discord user ID, configured public SteamID64, historical Steam IDs associated with earlier account generations, language, enabled state, and configuration timestamps. It also stores check timestamps/status, observed wishlist app IDs, game names, price/sale episode state, plus notification delivery status, attempt timestamps/counts, retry time, and the last delivery error.
+The bot stores the Discord user ID, canonical public SteamID64, historical Steam IDs associated with earlier account generations, language, enabled state, global and game-specific minimum discount settings, and configuration timestamps. It does not store the submitted vanity name, raw profile link, URL query/fragment, or Steam Web API key. It also stores check timestamps/status, observed wishlist app IDs, game names, price/sale episode state, plus notification delivery status, attempt timestamps/counts, retry time, and the last delivery error.
 
-The bot does not request or store Steam passwords, cookies, private-profile credentials, Discord messages, or Discord tokens in SQLite. The Discord bot token remains in `.env`.
+The bot does not request or store Steam passwords, cookies, login information, private-profile credentials, Discord messages, or Discord tokens in SQLite. Discord and Steam API credentials remain in `.env`.
 
 Stored user data is retained until the user runs `/delete-data confirm:true` or the operator deletes it. There is no automatic time-based retention policy. The delete command removes the user's configuration and cascades to check state, wishlist state, sale episodes, and notification history. SQLite `secure_delete` is enabled, and deletion is coordinated with active checks and notification delivery so those operations cannot recreate data after deletion completes. Copies already present in external filesystem backups are outside the bot's control and must be removed according to the operator's backup policy.
 

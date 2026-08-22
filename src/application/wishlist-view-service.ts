@@ -1,0 +1,92 @@
+import {
+  SteamWishlistError,
+  type SteamWishlistErrorCode,
+  type WishlistItem,
+  type WishlistItemError,
+} from '../domain/steam.js';
+import type { Language, UserConfig } from '../domain/user-config.js';
+import type { DiscountThresholdRepository } from '../persistence/discount-threshold-repository.js';
+
+export interface WishlistConfigReader {
+  findByDiscordUserId(discordUserId: string): UserConfig | null;
+}
+
+export interface LiveWishlistReader {
+  getWishlistWithErrors(steamId64: string): Promise<{
+    readonly items: WishlistItem[];
+    readonly errors: WishlistItemError[];
+  }>;
+}
+
+export type WishlistViewResult =
+  | { readonly status: 'not-configured'; readonly language: Language }
+  | {
+      readonly status: 'unavailable';
+      readonly language: Language;
+      readonly errorCode: SteamWishlistErrorCode;
+    }
+  | {
+      readonly status: 'success';
+      readonly language: Language;
+      readonly items: readonly WishlistItem[];
+      readonly errors: readonly WishlistItemError[];
+      readonly capturedAt: string;
+      readonly configVersion: number;
+      readonly configurationId: string;
+      readonly globalMinimumDiscountPercent: number;
+      readonly gameMinimumDiscountOverrides: ReadonlyMap<number, number>;
+    };
+
+export class WishlistViewService {
+  public constructor(
+    private readonly configReader: WishlistConfigReader,
+    private readonly wishlistReader: LiveWishlistReader,
+    private readonly now: () => Date = () => new Date(),
+    private readonly thresholdReader?: Pick<DiscountThresholdRepository, 'findGameOverrides'>,
+  ) {}
+
+  public async load(
+    discordUserId: string,
+    fallbackLanguage: Language,
+  ): Promise<WishlistViewResult> {
+    const config = this.configReader.findByDiscordUserId(discordUserId);
+    if (!config) {
+      return { status: 'not-configured', language: fallbackLanguage };
+    }
+
+    try {
+      const result = await this.wishlistReader.getWishlistWithErrors(config.steamId64);
+      if (result.items.length === 0 && result.errors.length > 0) {
+        return {
+          status: 'unavailable',
+          language: config.language,
+          errorCode: result.errors[0]?.code ?? 'STEAM_UPSTREAM_ERROR',
+        };
+      }
+      return {
+        status: 'success',
+        language: config.language,
+        items: result.items,
+        errors: result.errors,
+        capturedAt: this.now().toISOString(),
+        configVersion: config.configVersion,
+        configurationId: config.configurationId,
+        globalMinimumDiscountPercent: config.minimumDiscountPercent,
+        gameMinimumDiscountOverrides: this.thresholdReader?.findGameOverrides(
+          config,
+          result.items.map((item) => item.appId),
+        ) ?? new Map(),
+      };
+    } catch (error: unknown) {
+      if (error instanceof SteamWishlistError) {
+        return {
+          status: 'unavailable',
+          language: config.language,
+          errorCode: error.code,
+        };
+      }
+
+      throw error;
+    }
+  }
+}

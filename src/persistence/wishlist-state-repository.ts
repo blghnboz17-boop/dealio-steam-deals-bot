@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
-import type { UserConfig } from '../domain/user-config.js';
+import type { Language, UserConfig } from '../domain/user-config.js';
 import type {
+  DurableNotificationBatch,
   NotificationCandidate,
   WishlistItemState,
   WishlistObservation,
@@ -41,6 +42,15 @@ interface NotificationLogRow {
   created_at: SQLOutputValue;
 }
 
+interface NotificationBatchRow {
+  batch_id: SQLOutputValue;
+  language: SQLOutputValue;
+  attempt_count: SQLOutputValue;
+  member_count: SQLOutputValue;
+}
+
+class BatchClaimConflictError extends Error {}
+
 function textValue(value: SQLOutputValue, column: string): string {
   if (typeof value !== 'string') {
     throw new Error(`Invalid ${column} value in wishlist state`);
@@ -59,6 +69,15 @@ function integerValue(value: SQLOutputValue, column: string): number {
   }
 
   return value;
+}
+
+function languageValue(value: SQLOutputValue): Language {
+  const language = textValue(value, 'language');
+  if (language !== 'tr' && language !== 'en') {
+    throw new Error('Invalid language value in notification batch');
+  }
+
+  return language;
 }
 
 function nullableInteger(value: SQLOutputValue, column: string): number | null {
@@ -211,44 +230,209 @@ export class WishlistStateRepository {
   }
 
   public recoverStaleSending(scope: WishlistScope, staleBefore: string): number {
-    const result = this.database
-      .prepare(
-        `UPDATE notification_log
-         SET status = 'failed',
-             next_attempt_at = COALESCE(last_attempt_at, ?),
-             last_error = 'Delivery outcome unknown after process interruption; retrying at least once'
-         WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
-           AND status = 'sending'
-           AND (last_attempt_at IS NULL OR last_attempt_at <= ?)`,
-      )
-      .run(staleBefore, scope.discordUserId, scope.steamId64, scope.configVersion, staleBefore);
+    this.database.exec('BEGIN IMMEDIATE');
 
-    return Number(result.changes);
+    try {
+      const batches = this.database
+        .prepare(
+          `SELECT batch_id, member_count
+           FROM notification_batch
+           WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
+             AND status = 'sending'
+             AND (last_attempt_at IS NULL OR last_attempt_at <= ?)`,
+        )
+        .all(
+          scope.discordUserId,
+          scope.steamId64,
+          scope.configVersion,
+          staleBefore,
+        ) as Array<{ batch_id: SQLOutputValue; member_count: SQLOutputValue }>;
+      let recoveredCount = 0;
+
+      for (const row of batches) {
+        const batchId = textValue(row.batch_id, 'batch_id');
+        const memberCount = integerValue(row.member_count, 'member_count');
+        const items = this.database
+          .prepare(
+            `UPDATE notification_log AS notification
+             SET status = 'failed',
+                 next_attempt_at = COALESCE(last_attempt_at, ?),
+                 last_error = 'Delivery outcome unknown after process interruption; retrying at least once'
+             WHERE status = 'sending'
+               AND EXISTS (
+                 SELECT 1 FROM notification_batch_item AS item
+                 WHERE item.batch_id = ?
+                   AND item.discord_user_id = notification.discord_user_id
+                   AND item.config_version = notification.config_version
+                   AND item.app_id = notification.app_id
+                   AND item.sale_episode_id = notification.sale_episode_id
+               )`,
+          )
+          .run(staleBefore, batchId);
+        if (Number(items.changes) !== memberCount) {
+          throw new Error('Could not recover every notification in a stale batch');
+        }
+
+        const parent = this.database
+          .prepare(
+            `UPDATE notification_batch
+             SET status = 'failed',
+                 next_attempt_at = COALESCE(last_attempt_at, ?),
+                 last_error = 'Delivery outcome unknown after process interruption; retrying at least once'
+             WHERE batch_id = ? AND status = 'sending'`,
+          )
+          .run(staleBefore, batchId);
+        if (Number(parent.changes) !== 1) {
+          throw new Error('Could not recover a stale notification batch');
+        }
+        recoveredCount += memberCount;
+      }
+
+      const legacy = this.database
+        .prepare(
+          `UPDATE notification_log AS notification
+           SET status = 'failed',
+               next_attempt_at = COALESCE(last_attempt_at, ?),
+               last_error = 'Delivery outcome unknown after process interruption; retrying at least once'
+           WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
+             AND status = 'sending'
+             AND (last_attempt_at IS NULL OR last_attempt_at <= ?)
+             AND NOT EXISTS (
+               SELECT 1 FROM notification_batch_item AS item
+               JOIN notification_batch AS batch ON batch.batch_id = item.batch_id
+               WHERE item.discord_user_id = notification.discord_user_id
+                 AND item.config_version = notification.config_version
+                 AND item.app_id = notification.app_id
+                 AND item.sale_episode_id = notification.sale_episode_id
+                 AND batch.status IN ('sending', 'failed')
+             )`,
+        )
+        .run(staleBefore, scope.discordUserId, scope.steamId64, scope.configVersion, staleBefore);
+      recoveredCount += Number(legacy.changes);
+
+      this.database.exec('COMMIT');
+      return recoveredCount;
+    } catch (error: unknown) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   public expireInactiveNotifications(scope: WishlistScope): number {
-    const result = this.database
-      .prepare(
-        `UPDATE notification_log AS notification
-         SET status = 'expired', last_error = 'Sale episode is no longer active'
-         WHERE notification.discord_user_id = ?
-           AND notification.steam_id64 = ?
-           AND notification.config_version = ?
-           AND notification.status IN ('candidate', 'failed')
-           AND NOT EXISTS (
-             SELECT 1
-             FROM wishlist_item_state AS state
-             WHERE state.discord_user_id = notification.discord_user_id
-               AND state.steam_id64 = notification.steam_id64
-               AND state.config_version = notification.config_version
-               AND state.app_id = notification.app_id
-               AND state.on_sale = 1
-               AND state.sale_episode_id = notification.sale_episode_id
-           )`,
-      )
-      .run(scope.discordUserId, scope.steamId64, scope.configVersion);
+    this.database.exec('BEGIN IMMEDIATE');
 
-    return Number(result.changes);
+    try {
+      const invalidBatches = this.database
+        .prepare(
+          `SELECT batch.batch_id
+           FROM notification_batch AS batch
+           WHERE batch.discord_user_id = ?
+             AND batch.steam_id64 = ?
+             AND batch.config_version = ?
+             AND batch.status = 'failed'
+             AND EXISTS (
+               SELECT 1
+               FROM notification_batch_item AS item
+               JOIN notification_log AS notification
+                 ON notification.discord_user_id = item.discord_user_id
+                AND notification.config_version = item.config_version
+                AND notification.app_id = item.app_id
+                AND notification.sale_episode_id = item.sale_episode_id
+               WHERE item.batch_id = batch.batch_id
+                 AND NOT EXISTS (
+                   SELECT 1 FROM wishlist_item_state AS state
+                   WHERE state.discord_user_id = notification.discord_user_id
+                     AND state.steam_id64 = notification.steam_id64
+                     AND state.config_version = notification.config_version
+                     AND state.app_id = notification.app_id
+                     AND state.on_sale = 1
+                     AND state.sale_episode_id = notification.sale_episode_id
+                 )
+             )`,
+        )
+        .all(
+          scope.discordUserId,
+          scope.steamId64,
+          scope.configVersion,
+        ) as Array<{ batch_id: SQLOutputValue }>;
+      let expiredCount = 0;
+
+      for (const row of invalidBatches) {
+        const batchId = textValue(row.batch_id, 'batch_id');
+        const items = this.database
+          .prepare(
+            `UPDATE notification_log AS notification
+             SET status = 'expired',
+                 next_attempt_at = NULL,
+                 last_error = 'Sale episode is no longer active'
+             WHERE status = 'failed'
+               AND EXISTS (
+                 SELECT 1 FROM notification_batch_item AS item
+                 WHERE item.batch_id = ?
+                   AND item.discord_user_id = notification.discord_user_id
+                   AND item.config_version = notification.config_version
+                   AND item.app_id = notification.app_id
+                   AND item.sale_episode_id = notification.sale_episode_id
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM wishlist_item_state AS state
+                 WHERE state.discord_user_id = notification.discord_user_id
+                   AND state.steam_id64 = notification.steam_id64
+                   AND state.config_version = notification.config_version
+                   AND state.app_id = notification.app_id
+                   AND state.on_sale = 1
+                   AND state.sale_episode_id = notification.sale_episode_id
+               )`,
+          )
+          .run(batchId);
+        expiredCount += Number(items.changes);
+        this.database
+          .prepare(
+            `UPDATE notification_batch
+             SET status = 'expired', next_attempt_at = NULL,
+                 last_error = 'Batch retired because a sale episode is no longer active'
+             WHERE batch_id = ? AND status = 'failed'`,
+          )
+          .run(batchId);
+      }
+
+      const unbatched = this.database
+        .prepare(
+          `UPDATE notification_log AS notification
+           SET status = 'expired', next_attempt_at = NULL,
+               last_error = 'Sale episode is no longer active'
+           WHERE notification.discord_user_id = ?
+             AND notification.steam_id64 = ?
+             AND notification.config_version = ?
+             AND notification.status IN ('candidate', 'failed')
+             AND NOT EXISTS (
+               SELECT 1 FROM notification_batch_item AS item
+               JOIN notification_batch AS batch ON batch.batch_id = item.batch_id
+               WHERE item.discord_user_id = notification.discord_user_id
+                 AND item.config_version = notification.config_version
+                 AND item.app_id = notification.app_id
+                 AND item.sale_episode_id = notification.sale_episode_id
+                 AND batch.status IN ('sending', 'failed')
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM wishlist_item_state AS state
+               WHERE state.discord_user_id = notification.discord_user_id
+                 AND state.steam_id64 = notification.steam_id64
+                 AND state.config_version = notification.config_version
+                 AND state.app_id = notification.app_id
+                 AND state.on_sale = 1
+                 AND state.sale_episode_id = notification.sale_episode_id
+             )`,
+        )
+        .run(scope.discordUserId, scope.steamId64, scope.configVersion);
+      expiredCount += Number(unbatched.changes);
+
+      this.database.exec('COMMIT');
+      return expiredCount;
+    } catch (error: unknown) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   public findRetryableNotificationCandidates(
@@ -268,12 +452,23 @@ export class WishlistStateRepository {
          WHERE notification.discord_user_id = ?
            AND notification.steam_id64 = ?
            AND notification.config_version = ?
-           AND (
-             notification.status = 'candidate'
-             OR (notification.status = 'failed' AND notification.next_attempt_at <= ?)
-           )
-           AND state.on_sale = 1
-         ORDER BY notification.created_at ASC`,
+            AND (
+              notification.status = 'candidate'
+              OR (notification.status = 'failed' AND notification.next_attempt_at <= ?)
+            )
+            AND state.on_sale = 1
+            AND NOT EXISTS (
+              SELECT 1 FROM notification_batch_item AS item
+              JOIN notification_batch AS batch ON batch.batch_id = item.batch_id
+              WHERE item.discord_user_id = notification.discord_user_id
+                AND item.config_version = notification.config_version
+                AND item.app_id = notification.app_id
+                AND item.sale_episode_id = notification.sale_episode_id
+                AND batch.status IN ('sending', 'failed')
+            )
+          ORDER BY notification.created_at ASC,
+                   notification.app_id ASC,
+                   notification.sale_episode_id COLLATE BINARY ASC`,
       )
       .all(
         scope.discordUserId,
@@ -285,73 +480,222 @@ export class WishlistStateRepository {
     return rows.map(toNotificationCandidate);
   }
 
-  public claimNotificationCandidate(candidate: NotificationCandidate, attemptedAt: string): boolean {
-    const result = this.database
+  public findRetryableNotificationBatches(
+    scope: WishlistScope,
+    now: string,
+  ): DurableNotificationBatch[] {
+    const rows = this.database
       .prepare(
-        `UPDATE notification_log AS notification
-         SET status = 'sending',
-             last_attempt_at = ?,
-             next_attempt_at = NULL,
-             last_error = NULL
-         WHERE notification.discord_user_id = ?
-           AND notification.steam_id64 = ?
-           AND notification.config_version = ?
-           AND notification.app_id = ?
-           AND notification.sale_episode_id = ?
-           AND notification.status IN ('candidate', 'failed')
-           AND EXISTS (
-             SELECT 1
-             FROM wishlist_item_state AS state
-             WHERE state.discord_user_id = notification.discord_user_id
-               AND state.steam_id64 = notification.steam_id64
-               AND state.config_version = notification.config_version
-               AND state.app_id = notification.app_id
-               AND state.on_sale = 1
-               AND state.sale_episode_id = notification.sale_episode_id
-           )`,
+        `SELECT batch_id, language, attempt_count, member_count
+         FROM notification_batch
+         WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
+           AND status = 'failed' AND next_attempt_at <= ?
+         ORDER BY first_created_at ASC, first_app_id ASC,
+                  first_sale_episode_id COLLATE BINARY ASC`,
       )
-      .run(
-        attemptedAt,
-        candidate.discordUserId,
-        candidate.steamId64,
-        candidate.configVersion,
-        candidate.appId,
-        candidate.saleEpisodeId,
-      );
+      .all(
+        scope.discordUserId,
+        scope.steamId64,
+        scope.configVersion,
+        now,
+      ) as unknown as NotificationBatchRow[];
 
-    return Number(result.changes) === 1;
+    return rows.map((row) => this.toDurableBatch(row));
   }
 
-  public markNotificationSent(candidate: NotificationCandidate): void {
-    this.updateNotificationStatus(candidate, 'sent', null);
+  public createAndClaimNotificationBatch(
+    scope: WishlistScope,
+    language: Language,
+    notifications: readonly [NotificationCandidate, ...NotificationCandidate[]],
+    attemptedAt: string,
+  ): DurableNotificationBatch | null {
+    if (notifications.length > 10) {
+      throw new Error('A notification batch cannot contain more than 10 items');
+    }
+
+    const attemptCount = notifications[0].attemptCount;
+    if (notifications.some((notification) =>
+      notification.discordUserId !== scope.discordUserId
+      || notification.steamId64 !== scope.steamId64
+      || notification.configVersion !== scope.configVersion
+      || notification.attemptCount !== attemptCount
+    )) {
+      throw new Error('Notification batch members must share recipient, generation, and attempts');
+    }
+
+    const batchId = randomUUID();
+    this.database.exec('BEGIN IMMEDIATE');
+
+    try {
+      const first = notifications[0];
+      this.database
+        .prepare(
+          `INSERT INTO notification_batch
+             (batch_id, discord_user_id, steam_id64, config_version, language,
+              status, member_count, attempt_count, created_at,
+              first_created_at, first_app_id, first_sale_episode_id, last_attempt_at)
+           VALUES (?, ?, ?, ?, ?, 'sending', ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          batchId,
+          scope.discordUserId,
+          scope.steamId64,
+          scope.configVersion,
+          language,
+          notifications.length,
+          attemptCount,
+          attemptedAt,
+          first.createdAt,
+          first.appId,
+          first.saleEpisodeId,
+          attemptedAt,
+        );
+
+      for (const [position, notification] of notifications.entries()) {
+        const claimed = this.database
+          .prepare(
+            `UPDATE notification_log AS notification
+             SET status = 'sending', last_attempt_at = ?,
+                 next_attempt_at = NULL, last_error = NULL
+             WHERE notification.discord_user_id = ?
+               AND notification.steam_id64 = ?
+               AND notification.config_version = ?
+               AND notification.app_id = ?
+               AND notification.sale_episode_id = ?
+               AND (
+                 notification.status = 'candidate'
+                 OR (notification.status = 'failed' AND notification.next_attempt_at <= ?)
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM notification_batch_item AS item
+                 JOIN notification_batch AS batch ON batch.batch_id = item.batch_id
+                 WHERE item.discord_user_id = notification.discord_user_id
+                   AND item.config_version = notification.config_version
+                   AND item.app_id = notification.app_id
+                   AND item.sale_episode_id = notification.sale_episode_id
+                   AND batch.status IN ('sending', 'failed')
+               )
+               AND EXISTS (
+                 SELECT 1 FROM wishlist_item_state AS state
+                 WHERE state.discord_user_id = notification.discord_user_id
+                   AND state.steam_id64 = notification.steam_id64
+                   AND state.config_version = notification.config_version
+                   AND state.app_id = notification.app_id
+                   AND state.on_sale = 1
+                   AND state.sale_episode_id = notification.sale_episode_id
+               )`,
+          )
+          .run(
+            attemptedAt,
+            notification.discordUserId,
+            notification.steamId64,
+            notification.configVersion,
+            notification.appId,
+            notification.saleEpisodeId,
+            attemptedAt,
+          );
+        if (Number(claimed.changes) !== 1) {
+          throw new BatchClaimConflictError('Notification batch claim lost a member');
+        }
+
+        this.database
+          .prepare(
+            `INSERT INTO notification_batch_item
+               (batch_id, position, discord_user_id, config_version, app_id, sale_episode_id)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            batchId,
+            position,
+            notification.discordUserId,
+            notification.configVersion,
+            notification.appId,
+            notification.saleEpisodeId,
+          );
+      }
+
+      this.database.exec('COMMIT');
+      return { batchId, language, attemptCount, notifications };
+    } catch (error: unknown) {
+      this.database.exec('ROLLBACK');
+      if (error instanceof BatchClaimConflictError) {
+        return null;
+      }
+      throw error;
+    }
   }
 
-  public markNotificationFailed(
-    candidate: NotificationCandidate,
+  public claimNotificationBatch(batch: DurableNotificationBatch, attemptedAt: string): boolean {
+    this.database.exec('BEGIN IMMEDIATE');
+
+    try {
+      const parent = this.database
+        .prepare(
+          `UPDATE notification_batch
+           SET status = 'sending', last_attempt_at = ?, next_attempt_at = NULL, last_error = NULL
+           WHERE batch_id = ? AND status = 'failed' AND next_attempt_at <= ?`,
+        )
+        .run(attemptedAt, batch.batchId, attemptedAt);
+      if (Number(parent.changes) !== 1) {
+        throw new BatchClaimConflictError('Notification batch is no longer retryable');
+      }
+
+      const members = this.database
+        .prepare(
+          `UPDATE notification_log AS notification
+           SET status = 'sending', last_attempt_at = ?, next_attempt_at = NULL, last_error = NULL
+           WHERE status = 'failed'
+             AND EXISTS (
+               SELECT 1 FROM notification_batch_item AS item
+               WHERE item.batch_id = ?
+                 AND item.discord_user_id = notification.discord_user_id
+                 AND item.config_version = notification.config_version
+                 AND item.app_id = notification.app_id
+                 AND item.sale_episode_id = notification.sale_episode_id
+             )
+             AND EXISTS (
+               SELECT 1 FROM wishlist_item_state AS state
+               WHERE state.discord_user_id = notification.discord_user_id
+                 AND state.steam_id64 = notification.steam_id64
+                 AND state.config_version = notification.config_version
+                 AND state.app_id = notification.app_id
+                 AND state.on_sale = 1
+                 AND state.sale_episode_id = notification.sale_episode_id
+             )`,
+        )
+        .run(attemptedAt, batch.batchId);
+      if (Number(members.changes) !== batch.notifications.length) {
+        throw new BatchClaimConflictError('Notification batch members are no longer retryable');
+      }
+
+      this.database.exec('COMMIT');
+      return true;
+    } catch (error: unknown) {
+      this.database.exec('ROLLBACK');
+      if (error instanceof BatchClaimConflictError) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  public markNotificationBatchSent(batch: DurableNotificationBatch): void {
+    this.updateBatchOutcome(batch, 'sent', null, null, false);
+  }
+
+  public markNotificationBatchFailed(
+    batch: DurableNotificationBatch,
     errorMessage: string,
     nextAttemptAt: string | null,
     terminal: boolean,
   ): void {
-    this.database
-      .prepare(
-        `UPDATE notification_log
-         SET status = ?,
-             attempt_count = attempt_count + 1,
-             next_attempt_at = ?,
-             last_error = ?
-         WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
-           AND app_id = ? AND sale_episode_id = ? AND status = 'sending'`,
-      )
-      .run(
-        terminal ? 'terminal_failed' : 'failed',
-        nextAttemptAt,
-        errorMessage,
-        candidate.discordUserId,
-        candidate.steamId64,
-        candidate.configVersion,
-        candidate.appId,
-        candidate.saleEpisodeId,
-      );
+    this.updateBatchOutcome(
+      batch,
+      terminal ? 'terminal_failed' : 'failed',
+      nextAttemptAt,
+      errorMessage,
+      true,
+    );
   }
 
   public markNotificationTerminal(
@@ -374,6 +718,45 @@ export class WishlistStateRepository {
         candidate.appId,
         candidate.saleEpisodeId,
       );
+  }
+
+  public markNotificationBatchTerminal(
+    batch: DurableNotificationBatch,
+    errorMessage: string,
+  ): void {
+    this.database.exec('BEGIN IMMEDIATE');
+
+    try {
+      const members = this.database
+        .prepare(
+          `UPDATE notification_log AS notification
+           SET status = 'terminal_failed', next_attempt_at = NULL, last_error = ?
+           WHERE status = 'failed'
+             AND EXISTS (
+               SELECT 1 FROM notification_batch_item AS item
+               WHERE item.batch_id = ?
+                 AND item.discord_user_id = notification.discord_user_id
+                 AND item.config_version = notification.config_version
+                 AND item.app_id = notification.app_id
+                 AND item.sale_episode_id = notification.sale_episode_id
+             )`,
+        )
+        .run(errorMessage, batch.batchId);
+      const parent = this.database
+        .prepare(
+          `UPDATE notification_batch
+           SET status = 'terminal_failed', next_attempt_at = NULL, last_error = ?
+           WHERE batch_id = ? AND status = 'failed'`,
+        )
+        .run(errorMessage, batch.batchId);
+      if (Number(members.changes) !== batch.notifications.length || Number(parent.changes) !== 1) {
+        throw new Error('Could not mark every notification in a batch terminal');
+      }
+      this.database.exec('COMMIT');
+    } catch (error: unknown) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   public findNotificationStatus(
@@ -417,8 +800,15 @@ export class WishlistStateRepository {
         scope.configVersion,
       );
       const isFirstObservation = existing === null;
-      const shouldCreateCandidate = existing?.onSale === false && item.onSale === true;
       const continuingSale = existing?.onSale === true && item.onSale === true;
+      const existingEligibility = existing === null
+        ? false
+        : this.findNotificationEligibility(scope, item.appId);
+      const notificationEligible = isFirstObservation
+        ? false
+        : continuingSale
+          ? existingEligibility
+          : item.onSale === true;
       const saleEpisodeId = item.onSale
         ? continuingSale
           ? existing.saleEpisodeId ?? randomUUID()
@@ -434,9 +824,10 @@ export class WishlistStateRepository {
         .prepare(
           `INSERT INTO wishlist_item_state
              (discord_user_id, steam_id64, config_version, app_id, on_sale,
-              sale_episode_id, sale_started_at, sale_key, currency,
-              normal_price_minor, final_price_minor, discount_percent, last_seen_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               sale_episode_id, sale_started_at, sale_key, currency,
+               normal_price_minor, final_price_minor, discount_percent, last_seen_at,
+               notification_eligible)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(discord_user_id, config_version, app_id) DO UPDATE SET
              steam_id64 = excluded.steam_id64,
              on_sale = excluded.on_sale,
@@ -447,7 +838,8 @@ export class WishlistStateRepository {
              normal_price_minor = excluded.normal_price_minor,
              final_price_minor = excluded.final_price_minor,
              discount_percent = excluded.discount_percent,
-             last_seen_at = excluded.last_seen_at`,
+              last_seen_at = excluded.last_seen_at,
+              notification_eligible = excluded.notification_eligible`,
         )
         .run(
           scope.discordUserId,
@@ -463,22 +855,29 @@ export class WishlistStateRepository {
           price?.finalMinor ?? null,
           price?.discountPercent ?? null,
           observedAt,
+          notificationEligible ? 1 : 0,
         );
 
       if (
-        shouldCreateCandidate &&
+        notificationEligible &&
+        item.onSale === true &&
         saleEpisodeId !== null &&
         saleKey !== null &&
         price !== null &&
-        price.currency !== null
+        price.currency !== null &&
+        price.discountPercent > 0 &&
+        price.finalMinor < price.initialMinor &&
+        price.discountPercent >= this.findEffectiveMinimumDiscount(scope, item.appId)
       ) {
         const result = this.database
           .prepare(
-            `INSERT OR IGNORE INTO notification_log
-               (discord_user_id, steam_id64, config_version, app_id, sale_episode_id,
-                sale_key, game_name, currency, normal_price_minor,
-                final_price_minor, discount_percent, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO notification_log
+                (discord_user_id, steam_id64, config_version, app_id, sale_episode_id,
+                 sale_key, game_name, currency, normal_price_minor,
+                 final_price_minor, discount_percent, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(discord_user_id, config_version, app_id, sale_episode_id)
+              DO NOTHING`,
           )
           .run(
             scope.discordUserId,
@@ -522,26 +921,127 @@ export class WishlistStateRepository {
     }
   }
 
-  private updateNotificationStatus(
-    candidate: NotificationCandidate,
-    status: 'sent',
-    errorMessage: string | null,
-  ): void {
-    this.database
+  private findNotificationEligibility(scope: WishlistScope, appId: number): boolean {
+    const row = this.database.prepare(
+      `SELECT notification_eligible
+       FROM wishlist_item_state
+       WHERE discord_user_id = ? AND config_version = ? AND app_id = ?`,
+    ).get(scope.discordUserId, scope.configVersion, appId) as
+      | { notification_eligible: SQLOutputValue }
+      | undefined;
+    if (!row || (row.notification_eligible !== 0 && row.notification_eligible !== 1)) {
+      throw new Error('Invalid notification_eligible value in wishlist state');
+    }
+    return row.notification_eligible === 1;
+  }
+
+  private findEffectiveMinimumDiscount(scope: WishlistScope, appId: number): number {
+    const row = this.database.prepare(
+      `SELECT COALESCE(threshold.minimum_discount_percent, config.minimum_discount_percent)
+         AS minimum_discount_percent
+       FROM user_config AS config
+       LEFT JOIN game_discount_threshold AS threshold
+         ON threshold.discord_user_id = config.discord_user_id
+        AND threshold.config_version = config.config_version
+        AND threshold.app_id = ?
+       WHERE config.discord_user_id = ? AND config.config_version = ?`,
+    ).get(appId, scope.discordUserId, scope.configVersion) as
+      | { minimum_discount_percent: SQLOutputValue }
+      | undefined;
+    const value = row?.minimum_discount_percent;
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > 100) {
+      throw new Error('Invalid effective minimum discount threshold');
+    }
+    return value;
+  }
+
+  private toDurableBatch(row: NotificationBatchRow): DurableNotificationBatch {
+    const batchId = textValue(row.batch_id, 'batch_id');
+    const memberCount = integerValue(row.member_count, 'member_count');
+    const rows = this.database
       .prepare(
-        `UPDATE notification_log
-         SET status = ?, last_error = ?
-         WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
-           AND app_id = ? AND sale_episode_id = ? AND status = 'sending'`,
+        `SELECT ${notificationColumns}
+         FROM notification_batch_item AS item
+         JOIN notification_log AS notification
+           ON notification.discord_user_id = item.discord_user_id
+          AND notification.config_version = item.config_version
+          AND notification.app_id = item.app_id
+          AND notification.sale_episode_id = item.sale_episode_id
+         WHERE item.batch_id = ?
+         ORDER BY item.position ASC`,
       )
-      .run(
-        status,
-        errorMessage,
-        candidate.discordUserId,
-        candidate.steamId64,
-        candidate.configVersion,
-        candidate.appId,
-        candidate.saleEpisodeId,
-      );
+      .all(batchId) as unknown as NotificationLogRow[];
+    const notifications = rows.map(toNotificationCandidate);
+    if (notifications.length !== memberCount || notifications.length === 0) {
+      throw new Error('Notification batch membership is incomplete');
+    }
+
+    return {
+      batchId,
+      language: languageValue(row.language),
+      attemptCount: integerValue(row.attempt_count, 'attempt_count'),
+      notifications: notifications as [NotificationCandidate, ...NotificationCandidate[]],
+    };
+  }
+
+  private updateBatchOutcome(
+    batch: DurableNotificationBatch,
+    status: 'sent' | 'failed' | 'terminal_failed',
+    nextAttemptAt: string | null,
+    errorMessage: string | null,
+    incrementAttempts: boolean,
+  ): void {
+    this.database.exec('BEGIN IMMEDIATE');
+
+    try {
+      const members = this.database
+        .prepare(
+          `UPDATE notification_log AS notification
+           SET status = ?,
+               attempt_count = attempt_count + ?,
+               next_attempt_at = ?,
+               last_error = ?
+           WHERE status = 'sending'
+             AND EXISTS (
+               SELECT 1 FROM notification_batch_item AS item
+               WHERE item.batch_id = ?
+                 AND item.discord_user_id = notification.discord_user_id
+                 AND item.config_version = notification.config_version
+                 AND item.app_id = notification.app_id
+                 AND item.sale_episode_id = notification.sale_episode_id
+             )`,
+        )
+        .run(
+          status,
+          incrementAttempts ? 1 : 0,
+          nextAttemptAt,
+          errorMessage,
+          batch.batchId,
+        );
+      const parent = this.database
+        .prepare(
+          `UPDATE notification_batch
+           SET status = ?,
+               attempt_count = attempt_count + ?,
+               next_attempt_at = ?,
+               last_error = ?
+           WHERE batch_id = ? AND status = 'sending'`,
+        )
+        .run(
+          status,
+          incrementAttempts ? 1 : 0,
+          nextAttemptAt,
+          errorMessage,
+          batch.batchId,
+        );
+      if (Number(members.changes) !== batch.notifications.length || Number(parent.changes) !== 1) {
+        throw new Error('Could not update every notification in a batch');
+      }
+
+      this.database.exec('COMMIT');
+    } catch (error: unknown) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
   }
 }

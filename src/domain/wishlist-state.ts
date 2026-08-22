@@ -1,4 +1,5 @@
 import type { WishlistItem } from './steam.js';
+import type { Language } from './user-config.js';
 
 export interface WishlistItemState {
   readonly discordUserId: string;
@@ -30,6 +31,16 @@ export interface NotificationCandidate {
   readonly discountPercent: number;
   readonly attemptCount: number;
   readonly createdAt: string;
+}
+
+export interface NotificationBatch<T> {
+  readonly notifications: readonly [T, ...T[]];
+}
+
+export interface DurableNotificationBatch extends NotificationBatch<NotificationCandidate> {
+  readonly batchId: string;
+  readonly language: Language;
+  readonly attemptCount: number;
 }
 
 export interface WishlistObservation {

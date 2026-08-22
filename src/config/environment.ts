@@ -1,10 +1,11 @@
 export interface EnvironmentConfig {
   readonly discordToken: string;
   readonly discordClientId: string;
-  readonly discordGuildId: string;
+  readonly discordGuildId?: string;
   readonly databasePath: string;
   readonly pollIntervalHours: number;
   readonly notificationRetryIntervalSeconds: number;
+  readonly steamWebApiKey?: string;
 }
 
 const defaultDatabasePath = './data/wishlist.db';
@@ -57,13 +58,14 @@ export function loadEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
 ): EnvironmentConfig {
   const discordClientId = requiredValue(environment, 'DISCORD_CLIENT_ID');
-  const discordGuildId = requiredValue(environment, 'DISCORD_GUILD_ID');
+  const discordGuildId = environment.DISCORD_GUILD_ID?.trim() || undefined;
+  const steamWebApiKey = environment.STEAM_WEB_API_KEY?.trim() || undefined;
 
   if (!/^\d+$/.test(discordClientId)) {
     throw new Error('Environment variable DISCORD_CLIENT_ID must be numeric');
   }
 
-  if (!/^\d+$/.test(discordGuildId)) {
+  if (discordGuildId !== undefined && !/^\d+$/.test(discordGuildId)) {
     throw new Error('Environment variable DISCORD_GUILD_ID must be numeric');
   }
 
@@ -88,9 +90,10 @@ export function loadEnvironment(
   return {
     discordToken: requiredValue(environment, 'DISCORD_TOKEN'),
     discordClientId,
-    discordGuildId,
+    ...(discordGuildId ? { discordGuildId } : {}),
     databasePath,
     pollIntervalHours,
     notificationRetryIntervalSeconds,
+    ...(steamWebApiKey ? { steamWebApiKey } : {}),
   };
 }
