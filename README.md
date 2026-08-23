@@ -10,7 +10,7 @@ The first version includes Steam wishlist checks, Discord commands, and local Wi
 
 Requirements:
 
-- Node.js 22.13 or newer
+- Node.js 22.16 or newer
 - A Discord application and bot token
 - A public Steam profile with Game details set to Public
 
