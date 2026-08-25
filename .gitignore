@@ -21,5 +21,6 @@ dist/
 data/
 coverage/
 .runtime/
+.omo/
 *.log
 *.pid
