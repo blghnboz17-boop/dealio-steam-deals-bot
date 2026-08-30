@@ -5,6 +5,52 @@ interface MessageCatalog {
   readonly setupSummarySent: string;
   readonly setupSummaryUnavailable: string;
   readonly setupSummaryDmFailed: string;
+  readonly setupWizardTitle: string;
+  readonly setupWizardDescription: string;
+  readonly setupWizardStart: string;
+  readonly setupWizardHow: string;
+  readonly setupWizardHowDescription: string;
+  readonly setupWizardModalTitle: string;
+  readonly setupWizardProfileLabel: string;
+  readonly setupWizardProfilePlaceholder: string;
+  readonly setupWizardCountryLabel: string;
+  readonly setupWizardCountryPlaceholder: string;
+  readonly setupWizardConfirmTitle: string;
+  readonly setupWizardConfirmDescription: string;
+  readonly setupWizardProfileField: string;
+  readonly setupWizardRegionField: string;
+  readonly setupWizardRegionSuggested: string;
+  readonly setupWizardRegionSelected: string;
+  readonly setupWizardChangeRegion: string;
+  readonly setupWizardRegionModalTitle: string;
+  readonly setupWizardCountryPickerPlaceholder: string;
+  readonly setupWizardLanguageField: string;
+  readonly setupWizardFrequencyField: string;
+  readonly setupWizardConsentField: string;
+  readonly setupWizardConsentValue: string;
+  readonly setupWizardEnable: string;
+  readonly setupWizardCancel: string;
+  readonly setupWizardCancelled: string;
+  readonly setupWizardExpired: string;
+  readonly setupWizardPreparing: string;
+  readonly setupWizardDmBlocked: string;
+  readonly setupWizardDmTransient: string;
+  readonly setupWizardAlreadyCompletedTitle: string;
+  readonly setupWizardAlreadyCompletedDescription: string;
+  readonly setupWizardFrequency: (hours: number) => string;
+  readonly initialSummaryTitle: string;
+  readonly initialSummaryDescription: (saleCount: number) => string;
+  readonly initialSummaryNoSales: string;
+  readonly initialSummaryAccount: string;
+  readonly initialSummaryRegion: string;
+  readonly initialSummaryLanguage: string;
+  readonly initialSummarySchedule: string;
+  readonly initialSummaryThreshold: string;
+  readonly initialSummaryWishlist: string;
+  readonly initialSummaryFooter: string;
+  readonly statusDmDeliveryLabel: string;
+  readonly statusDmHealthy: string;
+  readonly statusDmBlocked: string;
   readonly invalidSetup: string;
   readonly invalidSteamProfile: string;
   readonly invalidStoreCountry: string;
@@ -78,6 +124,12 @@ interface MessageCatalog {
   readonly statusMinimumDiscountLabel: string;
   readonly statusGameOverridesLabel: string;
   readonly statusEditMinimumDiscount: string;
+  readonly statusChangeRegion: string;
+  readonly statusRegionModalTitle: string;
+  readonly statusRegionInputLabel: string;
+  readonly statusRegionInputPlaceholder: string;
+  readonly statusRegionSaved: (country: string) => string;
+  readonly statusRegionSaveFailed: string;
   readonly statusMinimumDiscountModalTitle: string;
   readonly statusMinimumDiscountInputLabel: string;
   readonly statusMinimumDiscountPlaceholder: string;
@@ -140,6 +192,54 @@ const catalog: Record<Language, MessageCatalog> = {
     setupSummarySent: 'Başlangıç wishlist özetin DM olarak gönderildi.',
     setupSummaryUnavailable: 'Kurulum tamamlandı ancak Steam fiyatları şu anda alınamadığı için başlangıç özeti gönderilemedi. Dealio daha sonra normal kontrollerine devam edecek.',
     setupSummaryDmFailed: 'Kurulum tamamlandı ancak başlangıç özeti DM olarak gönderilemedi. Discord DM gizlilik ayarlarını kontrol edebilirsin.',
+    setupWizardTitle: 'Dealio\'ya hoş geldin',
+    setupWizardDescription: 'Steam wishlistindeki gerçek indirimleri, seçtiğin mağaza bölgesinin fiyatlarıyla doğrudan DM kutuna getirir. Kurulum yaklaşık bir dakika sürer.',
+    setupWizardStart: 'Kurulumu Başlat',
+    setupWizardHow: 'Nasıl Çalışır?',
+    setupWizardHowDescription: 'Dealio yalnızca herkese açık Steam wishlistini okur. İlk tarama güvenli bir başlangıç kaydıdır; sonraki gerçek indirim başlangıçlarında DM gönderilir. Parola veya Steam oturumu istenmez.',
+    setupWizardModalTitle: 'Dealio kurulumu',
+    setupWizardProfileLabel: 'Steam profili',
+    setupWizardProfilePlaceholder: 'Profil bağlantısı, SteamID64 veya vanity adı',
+    setupWizardCountryLabel: 'Steam Store ülkesi',
+    setupWizardCountryPlaceholder: 'TR, Türkiye veya Turkey',
+    setupWizardConfirmTitle: 'Kurulumunu kontrol et',
+    setupWizardConfirmDescription: 'Aşağıdaki bilgilerle kişisel indirim DM\'lerini etkinleştirmeye hazırsın.',
+    setupWizardProfileField: 'Steam hesabı',
+    setupWizardRegionField: 'Mağaza bölgesi',
+    setupWizardRegionSuggested: 'Discord diline göre otomatik önerildi. Yanlışsa aşağıdan değiştirebilirsin.',
+    setupWizardRegionSelected: 'Senin seçtiğin mağaza bölgesi.',
+    setupWizardChangeRegion: 'Bölgeyi Değiştir',
+    setupWizardRegionModalTitle: 'Mağaza bölgesini değiştir',
+    setupWizardCountryPickerPlaceholder: 'Steam Store ülkeni listeden seç',
+    setupWizardLanguageField: 'Bildirim dili',
+    setupWizardFrequencyField: 'Kontrol sıklığı',
+    setupWizardConsentField: 'DM izni',
+    setupWizardConsentValue: 'Onayladığında Dealio sana proaktif indirim DM\'leri gönderebilir.',
+    setupWizardEnable: 'Doğru, Bildirimleri Aç',
+    setupWizardCancel: 'Vazgeç',
+    setupWizardCancelled: 'Kurulum iptal edildi. Hiçbir ayarın değiştirilmedi.',
+    setupWizardExpired: 'Bu kurulum oturumunun süresi doldu. Yeniden başlamak için /setup kullanabilirsin.',
+    setupWizardPreparing: 'Steam profilin ve wishlist erişimin doğrulanıyor…',
+    setupWizardDmBlocked: 'Kurulum kaydedildi ancak Discord DM\'lerini engelliyor. Bildirimler güvenli şekilde duraklatıldı; gizlilik ayarını düzelttikten sonra /status üzerinden yeniden etkinleştirebilirsin.',
+    setupWizardDmTransient: 'Kurulum kaydedildi ancak karşılama DM\'i geçici bir Discord sorunu nedeniyle gönderilemedi. Dealio daha sonra normal kontrollerine devam edecek.',
+    setupWizardAlreadyCompletedTitle: 'Dealio zaten kurulu',
+    setupWizardAlreadyCompletedDescription: 'Bu Discord hesabı için `/setup` daha önce tamamlanmış. Mevcut ayarlarını `/dealio`, `/status`, `/region` ve `/wishlist` ile yönetebilirsin. Baştan kurmak istiyorsan `/delete-data` içindeki güvenli onay ekranıyla kayıtlarını kalıcı olarak silmelisin.',
+    setupWizardFrequency: (hours) => `Her ${hours} saatte bir`,
+    initialSummaryTitle: 'Dealio hazır — indirim nöbetin başladı',
+    initialSummaryDescription: (saleCount) => saleCount > 0
+      ? `Wishlistinde şu anda indirimde olan ${saleCount} oyun aşağıda. Bunlar başlangıç kaydıdır; indirimden çıkıp yeniden indirime girmeden tekrar bildirilmez.`
+      : 'Wishlistinde şu anda indirimde oyun yok. Bir oyun gerçek bir indirime girdiğinde Dealio sana haber verecek.',
+    initialSummaryNoSales: 'İlk tarama tamamlandı. Şu anda indirimde oyun bulunmuyor.',
+    initialSummaryAccount: 'Steam hesabı',
+    initialSummaryRegion: 'Mağaza bölgesi',
+    initialSummaryLanguage: 'Dil',
+    initialSummarySchedule: 'Kontrol',
+    initialSummaryThreshold: 'Minimum indirim',
+    initialSummaryWishlist: 'Wishlist özeti',
+    initialSummaryFooter: 'Dealio · Kişisel Steam indirim asistanı',
+    statusDmDeliveryLabel: 'DM teslimatı',
+    statusDmHealthy: 'Hazır',
+    statusDmBlocked: 'Discord tarafından engellendi — DM ayarını düzelt, /test-notification çalıştır ve yeniden etkinleştir',
     invalidSetup: 'Dil Türkçe veya English olmalı.',
     invalidSteamProfile: 'Geçerli bir SteamID64, Steam profil bağlantısı veya vanity adı girmelisin.',
     invalidStoreCountry: 'Geçerli bir Steam mağaza ülkesi seçmelisin.',
@@ -215,6 +315,12 @@ const catalog: Record<Language, MessageCatalog> = {
     statusMinimumDiscountLabel: 'Global minimum indirim',
     statusGameOverridesLabel: 'Oyuna özel kural',
     statusEditMinimumDiscount: 'Minimum İndirimi Değiştir',
+    statusChangeRegion: 'Bölgeyi Değiştir',
+    statusRegionModalTitle: 'Steam Store bölgesi',
+    statusRegionInputLabel: 'Ülke kodu veya adı',
+    statusRegionInputPlaceholder: 'TR, Türkiye veya Turkey',
+    statusRegionSaved: (country) => `Steam Store bölgen ${country} olarak kaydedildi. Fiyat başlangıç kaydı güvenli biçimde yenilendi.`,
+    statusRegionSaveFailed: 'Mağaza bölgen kaydedilemedi. Geçerli bir ülke girip tekrar dene.',
     statusMinimumDiscountModalTitle: 'Global minimum indirim',
     statusMinimumDiscountInputLabel: 'Minimum indirim yüzdesi (0-100)',
     statusMinimumDiscountPlaceholder: 'Örnek: 30',
@@ -276,6 +382,54 @@ const catalog: Record<Language, MessageCatalog> = {
     setupSummarySent: 'Your initial wishlist summary was sent by DM.',
     setupSummaryUnavailable: 'Setup is complete, but Steam prices are currently unavailable, so the initial summary could not be sent. Dealio will continue with its normal checks.',
     setupSummaryDmFailed: 'Setup is complete, but the initial summary DM could not be sent. Check your Discord DM privacy settings.',
+    setupWizardTitle: 'Welcome to Dealio',
+    setupWizardDescription: 'Dealio sends real Steam wishlist sales to your DMs using prices from your selected Store region. Setup takes about a minute.',
+    setupWizardStart: 'Start Setup',
+    setupWizardHow: 'How It Works',
+    setupWizardHowDescription: 'Dealio reads only your public Steam wishlist. The first scan is a safe baseline; later real sale starts can create DMs. It never asks for a password or Steam session.',
+    setupWizardModalTitle: 'Dealio setup',
+    setupWizardProfileLabel: 'Steam profile',
+    setupWizardProfilePlaceholder: 'Profile link, SteamID64, or vanity name',
+    setupWizardCountryLabel: 'Steam Store country',
+    setupWizardCountryPlaceholder: 'US, United States, TR, or Turkey',
+    setupWizardConfirmTitle: 'Review your setup',
+    setupWizardConfirmDescription: 'You are ready to enable personal sale DMs with the details below.',
+    setupWizardProfileField: 'Steam account',
+    setupWizardRegionField: 'Store region',
+    setupWizardRegionSuggested: 'Suggested automatically from your Discord language. Change it below if it is wrong.',
+    setupWizardRegionSelected: 'Store region selected by you.',
+    setupWizardChangeRegion: 'Change Region',
+    setupWizardRegionModalTitle: 'Change Store region',
+    setupWizardCountryPickerPlaceholder: 'Select your Steam Store country',
+    setupWizardLanguageField: 'Notification language',
+    setupWizardFrequencyField: 'Check frequency',
+    setupWizardConsentField: 'DM consent',
+    setupWizardConsentValue: 'By confirming, you allow Dealio to send proactive sale DMs.',
+    setupWizardEnable: 'Correct, Enable Notifications',
+    setupWizardCancel: 'Cancel',
+    setupWizardCancelled: 'Setup cancelled. None of your settings were changed.',
+    setupWizardExpired: 'This setup session expired. Use /setup to start again.',
+    setupWizardPreparing: 'Verifying your Steam profile and wishlist access…',
+    setupWizardDmBlocked: 'Setup was saved, but Discord is blocking DMs. Notifications were safely paused; fix your privacy setting and re-enable them from /status.',
+    setupWizardDmTransient: 'Setup was saved, but the welcome DM could not be sent because of a temporary Discord problem. Dealio will continue its normal checks.',
+    setupWizardAlreadyCompletedTitle: 'Dealio is already configured',
+    setupWizardAlreadyCompletedDescription: '`/setup` has already been completed for this Discord account. Manage it with `/dealio`, `/status`, `/region`, and `/wishlist`. To start over, permanently delete your records through the safe confirmation flow in `/delete-data`.',
+    setupWizardFrequency: (hours) => `Every ${hours} hours`,
+    initialSummaryTitle: 'Dealio is ready — your sale watch has started',
+    initialSummaryDescription: (saleCount) => saleCount > 0
+      ? `${saleCount} games on your wishlist are currently discounted below. This is your starting snapshot; they will not alert again until they leave the sale and go on sale again.`
+      : 'There are no discounted games on your wishlist right now. Dealio will notify you when a real sale begins.',
+    initialSummaryNoSales: 'The first scan is complete. No games are currently discounted.',
+    initialSummaryAccount: 'Steam account',
+    initialSummaryRegion: 'Store region',
+    initialSummaryLanguage: 'Language',
+    initialSummarySchedule: 'Checks',
+    initialSummaryThreshold: 'Minimum discount',
+    initialSummaryWishlist: 'Wishlist summary',
+    initialSummaryFooter: 'Dealio · Personal Steam sale assistant',
+    statusDmDeliveryLabel: 'DM delivery',
+    statusDmHealthy: 'Ready',
+    statusDmBlocked: 'Blocked by Discord — fix DMs, run /test-notification, then re-enable',
     invalidSetup: 'Language must be Turkish or English.',
     invalidSteamProfile: 'Enter a valid SteamID64, Steam profile link, or vanity name.',
     invalidStoreCountry: 'Select a valid Steam Store country.',
@@ -351,6 +505,12 @@ const catalog: Record<Language, MessageCatalog> = {
     statusMinimumDiscountLabel: 'Global minimum discount',
     statusGameOverridesLabel: 'Game-specific rules',
     statusEditMinimumDiscount: 'Edit minimum discount',
+    statusChangeRegion: 'Change region',
+    statusRegionModalTitle: 'Steam Store region',
+    statusRegionInputLabel: 'Country code or name',
+    statusRegionInputPlaceholder: 'US, United States, TR, or Turkey',
+    statusRegionSaved: (country) => `Your Steam Store region was saved as ${country}. The price baseline was refreshed safely.`,
+    statusRegionSaveFailed: 'Your Store region could not be saved. Enter a valid country and try again.',
     statusMinimumDiscountModalTitle: 'Global minimum discount',
     statusMinimumDiscountInputLabel: 'Minimum discount percent (0-100)',
     statusMinimumDiscountPlaceholder: 'Example: 30',
