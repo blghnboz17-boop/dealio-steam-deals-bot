@@ -1,0 +1,201 @@
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs';
+import { resolve } from 'node:path';
+import { loadEnvironment, type EnvironmentConfig } from '../config/environment.js';
+import { startBot, type StartBotOptions } from './start-bot.js';
+
+interface BotProcessRuntime {
+  stop(): Promise<void>;
+}
+
+interface BotProcessTimer {
+  clear(): void;
+  unref(): void;
+}
+
+interface BotProcessClock {
+  setInterval(callback: () => void, delayMs: number): BotProcessTimer;
+}
+
+interface BotProcessFileSystem {
+  existsSync(path: string): boolean;
+  mkdirSync(path: string, options: { readonly recursive: true }): void;
+  readFileSync(path: string, encoding: 'utf8'): string;
+  rmSync(path: string, options: { readonly force: true }): void;
+}
+
+interface BotProcessHost {
+  readonly pid: number;
+  exitCode: string | number | null | undefined;
+  on(signal: 'SIGINT' | 'SIGTERM', listener: () => void): void;
+}
+
+interface BotProcessDependencies {
+  readonly process: BotProcessHost;
+  readonly fileSystem: BotProcessFileSystem;
+  readonly clock: BotProcessClock;
+  readonly logger: Pick<Console, 'log' | 'error'>;
+  readonly now: () => Date;
+  readonly loadEnvironment: () => EnvironmentConfig;
+  readonly startBot: (
+    environment: EnvironmentConfig,
+    options: StartBotOptions,
+  ) => Promise<BotProcessRuntime>;
+}
+
+interface RunBotProcessOptions {
+  readonly runtimeDirectory?: string;
+  readonly dependencies?: BotProcessDependencies;
+}
+
+export interface BotProcessControl {
+  readonly completion: Promise<void>;
+}
+
+const systemClock: BotProcessClock = {
+  setInterval: (callback, delayMs) => {
+    const timer = setInterval(callback, delayMs);
+    return {
+      clear: () => clearInterval(timer),
+      unref: () => timer.unref(),
+    };
+  },
+};
+
+const systemFileSystem: BotProcessFileSystem = {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+};
+
+const systemProcess: BotProcessHost = {
+  get pid() {
+    return process.pid;
+  },
+  get exitCode() {
+    return process.exitCode;
+  },
+  set exitCode(value) {
+    process.exitCode = value;
+  },
+  on: (signal, listener) => {
+    process.on(signal, listener);
+  },
+};
+
+const defaultDependencies: BotProcessDependencies = {
+  process: systemProcess,
+  fileSystem: systemFileSystem,
+  clock: systemClock,
+  logger: console,
+  now: () => new Date(),
+  loadEnvironment,
+  startBot,
+};
+
+export function runBotProcess(options: RunBotProcessOptions = {}): BotProcessControl {
+  const dependencies = options.dependencies ?? defaultDependencies;
+  const runtimeDirectory = options.runtimeDirectory ?? resolve('.runtime');
+  const shutdownRequestPath = resolve(runtimeDirectory, 'shutdown.request');
+  const nodePidPath = resolve(runtimeDirectory, 'bot.node.pid');
+  const healthPath = resolve(runtimeDirectory, 'bot.health.json');
+  const startupAbortController = new AbortController();
+  let runtime: BotProcessRuntime | null = null;
+  let shutdownRequested = false;
+
+  dependencies.fileSystem.mkdirSync(runtimeDirectory, { recursive: true });
+  const shutdownRequestTimer = dependencies.clock.setInterval(() => {
+    try {
+      if (!dependencies.fileSystem.existsSync(shutdownRequestPath)) {
+        return;
+      }
+
+      const requestedProcess = dependencies.fileSystem
+        .readFileSync(shutdownRequestPath, 'utf8')
+        .trim();
+      if (requestedProcess !== 'all' && requestedProcess !== String(dependencies.process.pid)) {
+        return;
+      }
+
+      dependencies.fileSystem.rmSync(shutdownRequestPath, { force: true });
+      requestShutdown('control request');
+    } catch (error: unknown) {
+      dependencies.logger.error(
+        `${dependencies.now().toISOString()} Could not process cooperative shutdown request`,
+        error,
+      );
+    }
+  }, 500);
+  shutdownRequestTimer.unref();
+
+  const removeNodePid = (): void => {
+    try {
+      if (
+        dependencies.fileSystem.readFileSync(nodePidPath, 'utf8').trim() ===
+        String(dependencies.process.pid)
+      ) {
+        dependencies.fileSystem.rmSync(nodePidPath, { force: true });
+      }
+    } catch (_error: unknown) {
+      return;
+    }
+  };
+
+  const requestShutdown = (signal: string): void => {
+    if (shutdownRequested) {
+      return;
+    }
+
+    shutdownRequested = true;
+    shutdownRequestTimer.clear();
+    dependencies.logger.log(
+      `${dependencies.now().toISOString()} Received ${signal}; shutting down.`,
+    );
+    startupAbortController.abort();
+    if (runtime) {
+      void runtime.stop()
+        .catch((error: unknown) => {
+          dependencies.logger.error(
+            `${dependencies.now().toISOString()} Bot shutdown failed`,
+            error,
+          );
+        })
+        .finally(removeNodePid);
+    }
+  };
+
+  dependencies.process.on('SIGINT', () => requestShutdown('SIGINT'));
+  dependencies.process.on('SIGTERM', () => requestShutdown('SIGTERM'));
+
+  const completion = Promise.resolve()
+    .then(() => dependencies.startBot(dependencies.loadEnvironment(), {
+      signal: startupAbortController.signal,
+      nodePidPath,
+      healthPath,
+    }))
+    .then(async (startedRuntime) => {
+      runtime = startedRuntime;
+      if (shutdownRequested) {
+        await runtime.stop();
+        removeNodePid();
+      }
+    })
+    .catch((error: unknown) => {
+      shutdownRequestTimer.clear();
+      if (!shutdownRequested) {
+        dependencies.logger.error(
+          `${dependencies.now().toISOString()} Bot failed to start`,
+          error,
+        );
+        dependencies.process.exitCode = 1;
+      }
+      removeNodePid();
+    });
+
+  return { completion };
+}
