@@ -496,6 +496,10 @@ describe('NotificationService', () => {
     const secondResult = await services.service.deliverPending('discord-user');
 
     expect(services.repository.findNotificationStatus(services.candidate)).toBe('terminal_failed');
+    expect(services.userConfigRepository.findByDiscordUserId('discord-user')).toMatchObject({
+      enabled: false,
+      dmDeliveryErrorCode: 'DISCORD_DM_BLOCKED',
+    });
     expect(secondResult).toEqual({ candidateCount: 0, sentCount: 0, failedCount: 0 });
     expect(sender.send).toHaveBeenCalledOnce();
     services.database.close();

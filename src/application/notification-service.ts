@@ -256,7 +256,8 @@ export class NotificationService {
 
       const message = error instanceof Error ? error.message : 'Unknown Discord error';
       const attemptCount = batch.attemptCount + 1;
-      const terminal = isPermanentDiscordError(error) || attemptCount >= this.maxAttempts;
+      const permanentlyBlocked = isPermanentDiscordError(error);
+      const terminal = permanentlyBlocked || attemptCount >= this.maxAttempts;
       const retryDelayMs = Math.min(
         this.retryBaseDelayMs * (2 ** Math.max(0, attemptCount - 1)),
         this.maxRetryDelayMs,
@@ -270,6 +271,13 @@ export class NotificationService {
         nextAttemptAt,
         terminal,
       );
+      if (permanentlyBlocked) {
+        this.userConfigRepository.markDmDeliveryBlocked(
+          batch.notifications[0].discordUserId,
+          'DISCORD_DM_BLOCKED',
+          this.now().toISOString(),
+        );
+      }
       return {
         sentCount: 0,
         failedCount: batch.notifications.length,
@@ -295,7 +303,7 @@ export class NotificationService {
   }
 }
 
-function isPermanentDiscordError(error: unknown): boolean {
+export function isPermanentDiscordError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) {
     return false;
   }
