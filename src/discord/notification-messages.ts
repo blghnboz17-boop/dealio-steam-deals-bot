@@ -6,6 +6,7 @@ import type {
 import type { Language } from '../domain/user-config.js';
 import { storeCountryLabel } from '../domain/store-country.js';
 import { messagesFor } from './messages.js';
+import { dealioBrand } from './ui/brand.js';
 
 const maxGameNameLength = 256;
 
@@ -57,8 +58,10 @@ export function buildSaleNotificationEmbed(
   const gameName = sanitizeGameName(notification.gameName);
 
   return {
-    color: 0x66c0f4,
-    author: options.test ? { name: messages.testNotificationTitle } : undefined,
+    color: dealioBrand.colors.primary,
+    author: options.test
+      ? { name: messages.testNotificationTitle }
+      : { name: 'Dealio · Steam Sale Alert' },
     title: gameName,
     url: storeUrl,
     description: options.test

@@ -1,0 +1,185 @@
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  SectionBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
+} from 'discord.js';
+import type {
+  InitialWishlistSale,
+  InitialWishlistSummary,
+} from '../application/initial-wishlist-summary-service.js';
+import type { NotificationSendOptions, SaleNotification } from '../application/notification-service.js';
+import { storeCountryLabel } from '../domain/store-country.js';
+import type { Language } from '../domain/user-config.js';
+import { formatMinorPrice, sanitizeGameName } from './notification-messages.js';
+import { sortInitialWishlistSales, type InitialSummaryPresentationOptions } from './initial-wishlist-summary-messages.js';
+import { messagesFor } from './messages.js';
+import { dealioBrand } from './ui/brand.js';
+import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
+
+export function buildSaleNotificationPanel(
+  notifications: readonly SaleNotification[],
+  language: Language,
+  options: NotificationSendOptions = {},
+): ContainerBuilder {
+  if (notifications.length === 0 || notifications.length > 10) {
+    throw new Error('A Dealio notification panel must contain between 1 and 10 games');
+  }
+  const messages = messagesFor(language);
+  const container = new ContainerBuilder()
+    .setAccentColor(options.test ? dealioBrand.colors.accent : dealioBrand.colors.success)
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `# ${options.test ? '🧪' : '🏷️'} ${options.test ? messages.testNotificationTitle : saleTitle(language, notifications.length)}`,
+      ),
+      new TextDisplayBuilder().setContent(
+        options.test ? messages.testNotificationDescription : saleDescription(language, notifications.length),
+      ),
+    )
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+
+  for (const notification of notifications) {
+    const storeUrl = `https://store.steampowered.com/app/${notification.appId}/`;
+    const normalPrice = formatMinorPrice(notification.normalPriceMinor, notification.currency, language);
+    const finalPrice = formatMinorPrice(notification.finalPriceMinor, notification.currency, language);
+    const discount = language === 'tr'
+      ? `%${notification.discountPercent} indirim`
+      : `${notification.discountPercent}% off`;
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(
+          new TextDisplayBuilder().setContent([
+            `## [${sanitizeGameName(notification.gameName)}](${storeUrl})`,
+            `🔥 **${discount}** · ~~${normalPrice}~~ → **${finalPrice}**`,
+            `-# ${storeCountryLabel(notification.storeCountryCode, language)} · [${messages.openSteamStore}](${storeUrl})`,
+          ].join('\n')),
+        )
+        .setThumbnailAccessory(
+          new ThumbnailBuilder()
+            .setURL(`https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${notification.appId}/header.jpg`)
+            .setDescription(notification.gameName.slice(0, 100)),
+        ),
+    );
+  }
+  container
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(dealioFooter(language)));
+  assertComponentsV2Limit([container]);
+  return container;
+}
+
+export interface InitialWishlistV2Page {
+  readonly components: readonly ContainerBuilder[];
+  readonly pageIndex: number;
+  readonly totalPages: number;
+}
+
+export function buildInitialWishlistV2Page(
+  summary: InitialWishlistSummary,
+  options: InitialSummaryPresentationOptions,
+  sessionId: string,
+  requestedPageIndex: number,
+  disabled = false,
+): InitialWishlistV2Page {
+  const messages = messagesFor(summary.language);
+  const sales = sortInitialWishlistSales(summary.sales);
+  const totalPages = Math.max(1, sales.length);
+  const pageIndex = Math.min(Math.max(0, requestedPageIndex), totalPages - 1);
+  const sale = sales[pageIndex];
+  const profileUrl = `https://steamcommunity.com/profiles/${summary.steamId64}`;
+  const container = new ContainerBuilder().setAccentColor(dealioBrand.colors.success);
+  if (options.bannerUrl) {
+    container.addMediaGalleryComponents(
+      new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL(options.bannerUrl).setDescription('Dealio'),
+      ),
+    );
+  }
+  if (options.avatarUrl) {
+    container.addSectionComponents(
+      new SectionBuilder()
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent('**Dealio**'))
+        .setThumbnailAccessory(
+          new ThumbnailBuilder().setURL(options.avatarUrl).setDescription('Dealio'),
+        ),
+    );
+  }
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`# ✅ ${messages.initialSummaryTitle}`),
+    new TextDisplayBuilder().setContent(messages.initialSummaryDescription(summary.sales.length)),
+    new TextDisplayBuilder().setContent([
+      `**${messages.initialSummaryAccount}:** [${maskSteamId(summary.steamId64)}](${profileUrl})`,
+      `**${messages.initialSummaryRegion}:** ${storeCountryLabel(summary.storeCountryCode, summary.language)}`,
+      `**${messages.initialSummaryLanguage}:** ${summary.language === 'tr' ? 'Türkçe' : 'English'}`,
+      `**${messages.initialSummarySchedule}:** ${messages.setupWizardFrequency(options.pollIntervalHours ?? 6)}`,
+      `**${messages.initialSummaryThreshold}:** ${summary.language === 'tr' ? `%${summary.minimumDiscountPercent}` : `${summary.minimumDiscountPercent}%`}`,
+      `**${messages.initialSummaryWishlist}:** ${summary.totalGameCount}${summary.failedItemCount > 0 ? ` · ${messages.wishlistFailedItems(summary.failedItemCount)}` : ''}`,
+    ].join('\n')),
+  );
+
+  if (sale) {
+    container
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+      .addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          new MediaGalleryItemBuilder()
+            .setURL(`https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${sale.appId}/header.jpg`)
+            .setDescription(sale.gameName.slice(0, 100)),
+        ),
+      )
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(initialSaleText(sale, summary)));
+  } else {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`> ✅ ${messages.initialSummaryNoSales}`),
+    );
+  }
+
+  if (totalPages > 1) {
+    container.addActionRowComponents(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setCustomId(`dealio-summary:${sessionId}:previous`).setEmoji('◀️').setStyle(ButtonStyle.Secondary).setDisabled(disabled || pageIndex === 0),
+        new ButtonBuilder().setCustomId(`dealio-summary:${sessionId}:page`).setLabel(`${pageIndex + 1} / ${totalPages}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+        new ButtonBuilder().setCustomId(`dealio-summary:${sessionId}:next`).setEmoji('▶️').setStyle(ButtonStyle.Secondary).setDisabled(disabled || pageIndex >= totalPages - 1),
+      ),
+    );
+  }
+  container
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(dealioFooter(summary.language)));
+  assertComponentsV2Limit([container]);
+  return { components: [container], pageIndex, totalPages };
+}
+
+function initialSaleText(sale: InitialWishlistSale, summary: InitialWishlistSummary): string {
+  const messages = messagesFor(summary.language);
+  const storeUrl = `https://store.steampowered.com/app/${sale.appId}/`;
+  return [
+    `## [${sanitizeGameName(sale.gameName)}](${storeUrl})`,
+    `🔥 ${messages.wishlistDiscountValue(sale.discountPercent)}`,
+    `~~${formatMinorPrice(sale.normalPriceMinor, sale.currency, summary.language)}~~ → **${formatMinorPrice(sale.finalPriceMinor, sale.currency, summary.language)}**`,
+    `-# ${storeCountryLabel(summary.storeCountryCode, summary.language)} · [${messages.openSteamStore}](${storeUrl})`,
+  ].join('\n');
+}
+
+function maskSteamId(steamId64: string): string {
+  return `${steamId64.slice(0, 5)}••••••••${steamId64.slice(-4)}`;
+}
+
+function saleTitle(language: Language, count: number): string {
+  return language === 'tr'
+    ? count === 1 ? 'Wishlistinde yeni bir indirim var' : `Wishlistinde ${count} yeni indirim var`
+    : count === 1 ? 'A new wishlist sale is live' : `${count} new wishlist sales are live`;
+}
+
+function saleDescription(language: Language, count: number): string {
+  return language === 'tr'
+    ? `${count} oyun bildirim eşiğini geçti. Fiyatlar seçtiğin Steam mağaza bölgesinden alındı.`
+    : `${count} games crossed your alert threshold. Prices come from your selected Steam Store region.`;
+}
