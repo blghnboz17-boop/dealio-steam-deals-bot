@@ -1,4 +1,12 @@
-import { Routes, type APIEmbed, type Client } from 'discord.js';
+import { randomUUID } from 'node:crypto';
+import {
+  Events,
+  MessageFlags,
+  Routes,
+  type APIEmbed,
+  type Client,
+  type Interaction,
+} from 'discord.js';
 import type { Language } from '../domain/user-config.js';
 import type { NotificationBatch } from '../domain/wishlist-state.js';
 import type {
@@ -16,14 +24,34 @@ import {
   embedTextLength,
 } from './notification-messages.js';
 import {
-  buildInitialWishlistSaleEmbed,
-  initialWishlistContinuationMessage,
-  initialWishlistNoSaleMessage,
-  initialWishlistSaleMessage,
+  parseInitialSummaryPageAction,
+  type InitialSummaryPresentationOptions,
 } from './initial-wishlist-summary-messages.js';
+import {
+  buildInitialWishlistV2Page,
+  buildSaleNotificationPanel,
+} from './notification-components-v2.js';
+import { languageFromDiscordLocale } from './language.js';
+import {
+  buildExpiredPanel,
+  buildNoticePanel,
+  dealioEphemeralV2Flags,
+} from './ui/components-v2.js';
+import { dealioUiSessions } from './ui/session-manager.js';
 
-const maximumEmbedsPerMessage = 10;
+const maximumEmbedsPerMessage = 5;
 const maximumEmbedTextPerMessage = 6_000;
+const initialSummarySessionLifetimeMs = 15 * 60 * 1_000;
+
+interface InitialSummaryPaginationSession {
+  readonly summary: InitialWishlistSummary;
+  readonly channelId: string;
+  readonly messageId: string;
+  readonly expiresAt: number;
+  readonly timeout: NodeJS.Timeout;
+  readonly closeUiSession: () => void;
+  pageIndex: number;
+}
 
 export class DiscordNotificationTimeoutError extends Error {
   public readonly name = 'DiscordNotificationTimeoutError';
@@ -32,17 +60,54 @@ export class DiscordNotificationTimeoutError extends Error {
 export class DiscordNotificationSender implements NotificationSender, InitialWishlistSummarySender {
   private readonly timeoutMs: number;
   private readonly lifecycleSignal?: AbortSignal;
+  private readonly initialSummaryPresentation: InitialSummaryPresentationOptions;
+  private readonly initialSummarySessions = new Map<string, InitialSummaryPaginationSession>();
+  private readonly interactionListener = (interaction: Interaction): void => {
+    if (typeof interaction.isButton !== 'function' || !interaction.isButton()) {
+      return;
+    }
+    const action = parseInitialSummaryPageAction(interaction.customId);
+    if (!action) {
+      return;
+    }
+    void this.handleInitialSummaryPageInteraction(interaction, action).catch((error: unknown) => {
+      console.error('Dealio initial-summary pagination failed', error);
+    });
+  };
 
   public constructor(
     private readonly client: Client,
-    options: { readonly timeoutMs?: number; readonly lifecycleSignal?: AbortSignal } = {},
+    options: {
+      readonly timeoutMs?: number;
+      readonly lifecycleSignal?: AbortSignal;
+      readonly bannerUrl?: string;
+      readonly pollIntervalHours?: number;
+    } = {},
   ) {
     this.timeoutMs = options.timeoutMs ?? 20_000;
     this.lifecycleSignal = options.lifecycleSignal;
+    this.initialSummaryPresentation = {
+      bannerUrl: options.bannerUrl,
+      pollIntervalHours: options.pollIntervalHours,
+    };
 
     if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs <= 0) {
       throw new Error('Discord notification timeout must be a positive safe integer');
     }
+
+    if (typeof this.client.on === 'function') {
+      this.client.on(Events.InteractionCreate, this.interactionListener);
+    }
+    this.lifecycleSignal?.addEventListener('abort', () => {
+      if (typeof this.client.off === 'function') {
+        this.client.off(Events.InteractionCreate, this.interactionListener);
+      }
+      for (const session of this.initialSummarySessions.values()) {
+        clearTimeout(session.timeout);
+        session.closeUiSession();
+      }
+      this.initialSummarySessions.clear();
+    }, { once: true });
   }
 
   public plan<T extends SaleNotification>(
@@ -127,9 +192,8 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
 
     await this.client.rest.post(Routes.channelMessages(channel.id), {
       body: {
-        embeds: batch.notifications.map((notification) =>
-          buildSaleNotificationEmbed(notification, language, options)
-        ),
+        flags: MessageFlags.IsComponentsV2,
+        components: [buildSaleNotificationPanel(batch.notifications, language, options).toJSON()],
         allowed_mentions: { parse: [] },
       },
       signal,
@@ -148,35 +212,138 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
       throw new Error('Discord returned an invalid DM channel');
     }
 
-    const batches = partitionNotificationBatches(
-      summary.sales,
-      (sale) => buildInitialWishlistSaleEmbed(sale, summary),
+    const sessionId = randomUUID();
+    const firstPage = buildInitialWishlistV2Page(
+      summary,
+      this.currentInitialSummaryPresentation(),
+      sessionId,
+      0,
     );
-    if (batches.length === 0) {
-      await this.client.rest.post(Routes.channelMessages(channel.id), {
-        body: {
-          content: initialWishlistNoSaleMessage,
-          allowed_mentions: { parse: [] },
-        },
-        signal,
+    const message = await this.client.rest.post(Routes.channelMessages(channel.id), {
+      body: {
+        flags: MessageFlags.IsComponentsV2,
+        components: firstPage.components.map((component) => component.toJSON()),
+        allowed_mentions: { parse: [] },
+      },
+      signal,
+    }) as { id?: unknown };
+    if (typeof message.id !== 'string' || !/^\d+$/.test(message.id)) {
+      throw new Error('Discord returned an invalid initial-summary message');
+    }
+
+    if (firstPage.totalPages > 1) {
+      const closeUiSession = dealioUiSessions.open(
+        sessionId,
+        summary.discordUserId,
+        ['dealio-summary'],
+        initialSummarySessionLifetimeMs,
+      );
+      const timeout = setTimeout(() => {
+        void this.expireInitialSummarySession(sessionId);
+      }, initialSummarySessionLifetimeMs);
+      timeout.unref();
+      this.initialSummarySessions.set(sessionId, {
+        summary,
+        channelId: channel.id,
+        messageId: message.id,
+        expiresAt: Date.now() + initialSummarySessionLifetimeMs,
+        timeout,
+        closeUiSession,
+        pageIndex: 0,
       });
+    }
+  }
+
+  private async handleInitialSummaryPageInteraction(
+    interaction: Extract<Interaction, { customId: string }>,
+    action: { readonly sessionId: string; readonly action: 'previous' | 'next' },
+  ): Promise<void> {
+    if (!interaction.isButton()) {
+      return;
+    }
+    const session = this.initialSummarySessions.get(action.sessionId);
+    if (!session || session.expiresAt <= Date.now()) {
+      if (session) {
+        this.initialSummarySessions.delete(action.sessionId);
+        clearTimeout(session.timeout);
+        session.closeUiSession();
+      }
+      return;
+    }
+    if (interaction.message.id !== session.messageId || interaction.channelId !== session.channelId) {
+      const language = languageFromDiscordLocale(interaction.locale);
+      await interaction.reply({
+        components: [buildExpiredPanel(language)],
+        flags: dealioEphemeralV2Flags,
+      }).catch(() => undefined);
+      return;
+    }
+    if (interaction.user.id !== session.summary.discordUserId) {
+      await interaction.reply({
+        components: [buildNoticePanel(
+          session.summary.language,
+          'warning',
+          session.summary.language === 'tr' ? 'Bu panel sana ait değil' : 'This panel is not yours',
+          session.summary.language === 'tr'
+            ? 'Kendi Dealio panelini açmak için /wishlist komutunu kullan.'
+            : 'Use /wishlist to open your own Dealio panel.',
+        )],
+        flags: dealioEphemeralV2Flags,
+      }).catch(() => undefined);
       return;
     }
 
-    for (const [index, batch] of batches.entries()) {
-      await this.client.rest.post(Routes.channelMessages(channel.id), {
-        body: {
-          content: index === 0
-            ? initialWishlistSaleMessage
-            : initialWishlistContinuationMessage,
-          embeds: batch.notifications.map((sale) =>
-            buildInitialWishlistSaleEmbed(sale, summary)
-          ),
-          allowed_mentions: { parse: [] },
-        },
-        signal,
-      });
+    const requestedPage = session.pageIndex + (action.action === 'next' ? 1 : -1);
+    const page = buildInitialWishlistV2Page(
+      session.summary,
+      this.currentInitialSummaryPresentation(),
+      action.sessionId,
+      requestedPage,
+    );
+    session.pageIndex = page.pageIndex;
+    await interaction.update({
+      components: [...page.components],
+      allowedMentions: { parse: [] },
+    });
+  }
+
+  private async expireInitialSummarySession(sessionId: string): Promise<void> {
+    const session = this.initialSummarySessions.get(sessionId);
+    if (!session) {
+      return;
     }
+    this.initialSummarySessions.delete(sessionId);
+    clearTimeout(session.timeout);
+    session.closeUiSession();
+    const page = buildInitialWishlistV2Page(
+      session.summary,
+      this.currentInitialSummaryPresentation(),
+      sessionId,
+      session.pageIndex,
+      true,
+    );
+    try {
+      await this.runWithDeadline(async (signal) => {
+        await this.client.rest.patch(Routes.channelMessage(session.channelId, session.messageId), {
+          body: { components: page.components.map((component) => component.toJSON()) },
+          signal,
+        });
+      });
+    } catch (error: unknown) {
+      if (!this.lifecycleSignal?.aborted) {
+        console.error('Dealio initial-summary pagination expiry failed', error);
+      }
+    }
+  }
+
+  private currentInitialSummaryPresentation(): InitialSummaryPresentationOptions {
+    let avatarUrl: string | undefined;
+    try {
+      avatarUrl = this.client.user?.displayAvatarURL({ extension: 'png', size: 128 });
+    } catch (_error: unknown) {
+      avatarUrl = undefined;
+    }
+    return { ...this.initialSummaryPresentation, avatarUrl };
   }
 }
 
