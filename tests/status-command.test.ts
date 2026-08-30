@@ -109,6 +109,10 @@ describe('/status component session', () => {
           label: 'Edit minimum discount',
           style: ButtonStyle.Secondary,
         },
+        {
+          label: 'Change region',
+          style: ButtonStyle.Secondary,
+        },
       ] }],
     });
     expect(interaction.client.user.displayAvatarURL).toHaveBeenCalledWith({
@@ -137,6 +141,11 @@ describe('/status component session', () => {
         {
           custom_id: 'status:status-session:minimum-discount',
           label: 'Edit minimum discount',
+          style: ButtonStyle.Secondary,
+        },
+        {
+          custom_id: 'status:status-session:region',
+          label: 'Change region',
           style: ButtonStyle.Secondary,
         },
       ] }],
@@ -239,6 +248,58 @@ describe('/status component session', () => {
     });
     expect(modal.deferUpdate).toHaveBeenCalledOnce();
     expect(interaction.editReply.mock.calls[0]?.[0].content).toContain('45%');
+    collector.emit('end', new Map(), 'time');
+    await handling;
+  });
+
+  it('changes the Steam Store region from the status dashboard', async () => {
+    const collector = new FakeCollector();
+    const { interaction, createMessageComponentCollector } = interactionFixture(collector);
+    const updatedDashboard = dashboard(true);
+    updatedDashboard.config.storeCountryCode = 'DE' as never;
+    updatedDashboard.latestPriceCurrencies = ['EUR'];
+    const statusService = {
+      getDashboard: vi.fn()
+        .mockReturnValueOnce(dashboard(true))
+        .mockReturnValueOnce(updatedDashboard),
+    };
+    const configurationService = {
+      setEnabled: vi.fn(),
+      setStoreCountry: vi.fn().mockResolvedValue(updatedDashboard.config),
+    };
+    const modal = {
+      customId: 'status-region:status-session:owner:1',
+      user: { id: 'owner' },
+      fields: { getTextInputValue: vi.fn().mockReturnValue('Germany') },
+      deferUpdate: vi.fn().mockResolvedValue(undefined),
+    };
+    const component = {
+      customId: 'status:status-session:region',
+      user: { id: 'owner' },
+      showModal: vi.fn().mockResolvedValue(undefined),
+      awaitModalSubmit: vi.fn().mockResolvedValue(modal),
+      deferUpdate: vi.fn(),
+    };
+
+    const handling = handleStatus(
+      interaction as never,
+      statusService as never,
+      configurationService as never,
+    );
+    await vi.waitFor(() => expect(createMessageComponentCollector).toHaveBeenCalledOnce());
+    collector.emit('collect', component);
+    await vi.waitFor(() => expect(configurationService.setStoreCountry)
+      .toHaveBeenCalledWith('owner', 'Germany'));
+
+    expect(component.deferUpdate).not.toHaveBeenCalled();
+    expect(component.showModal.mock.calls[0]?.[0].toJSON()).toMatchObject({
+      title: 'Steam Store region',
+      components: [{ components: [{ value: 'US' }] }],
+    });
+    expect(modal.deferUpdate).toHaveBeenCalledOnce();
+    expect(interaction.editReply.mock.calls[0]?.[0].content).toContain('Germany (DE)');
+    expect(JSON.stringify(interaction.editReply.mock.calls[0]?.[0].embeds))
+      .toContain('Latest price currency');
     collector.emit('end', new Map(), 'time');
     await handling;
   });

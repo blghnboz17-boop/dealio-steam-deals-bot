@@ -23,6 +23,7 @@ import type { Language, UserConfig } from '../../domain/user-config.js';
 import { storeCountryLabel } from '../../domain/store-country.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
+import { dealioBrand } from '../ui/brand.js';
 
 export const statusCommand = new SlashCommandBuilder()
   .setName('status')
@@ -30,14 +31,14 @@ export const statusCommand = new SlashCommandBuilder()
   .setDescriptionLocalizations({ tr: 'Steam wishlist dashboardunu göster' });
 
 export const statusEmbedColors = {
-  healthy: 0x57f287,
-  pending: 0xfee75c,
-  unhealthy: 0xed4245,
-  disabled: 0x95a5a6,
+  healthy: dealioBrand.colors.success,
+  pending: dealioBrand.colors.warning,
+  unhealthy: dealioBrand.colors.danger,
+  disabled: dealioBrand.colors.muted,
 } as const;
 const statusSessionTimeoutMs = 2 * 60 * 1_000;
 export type StatusToggleAction = 'enable' | 'disable';
-export type StatusAction = StatusToggleAction | 'minimum-discount';
+export type StatusAction = StatusToggleAction | 'minimum-discount' | 'region';
 
 function displayTime(value: string | null, emptyValue: string): string {
   if (!value) {
@@ -116,6 +117,9 @@ export function buildStatusDashboardEmbed(
             ? result.latestPriceCurrencies.join(' / ')
             : messages.statusNever}**`,
           `${messages.statusEnabledLabel}: **${config.enabled ? messages.statusEnabled : messages.statusDisabled}**`,
+          `${messages.statusDmDeliveryLabel}: **${config.dmDeliveryBlockedAt
+            ? messages.statusDmBlocked
+            : messages.statusDmHealthy}**`,
           `${messages.statusMinimumDiscountLabel}: **${config.minimumDiscountPercent}%**`,
           `${messages.statusGameOverridesLabel}: **${result.gameDiscountOverrideCount ?? 0}**`,
           `${messages.statusUpdatedAtLabel}: ${displayTime(config.updatedAt, messages.statusNever)}`,
@@ -181,6 +185,13 @@ export function buildStatusComponents(
       custom_id: `status:${sessionId}:minimum-discount`,
       label: messages.statusEditMinimumDiscount,
       disabled,
+    }, {
+      type: ComponentType.Button,
+      style: ButtonStyle.Secondary,
+      custom_id: `status:${sessionId}:region`,
+      label: messages.statusChangeRegion,
+      emoji: { name: '🌍' },
+      disabled,
     }],
   }];
 }
@@ -212,7 +223,10 @@ export function parseStatusAction(customId: string, sessionId: string): StatusAc
   if (toggle) {
     return toggle;
   }
-  return customId === `status:${sessionId}:minimum-discount` ? 'minimum-discount' : null;
+  if (customId === `status:${sessionId}:minimum-discount`) {
+    return 'minimum-discount';
+  }
+  return customId === `status:${sessionId}:region` ? 'region' : null;
 }
 
 export async function handleStatus(
@@ -275,6 +289,102 @@ export async function handleStatus(
 
   collector.on('collect', (component) => {
     const action = parseStatusAction(component.customId, interaction.id);
+    if (action === 'region') {
+      const modalCustomId = `status-region:${interaction.id}:${interaction.user.id}:${++modalSequence}`;
+      const modalTask = (async () => {
+        try {
+          await component.showModal(buildStatusRegionModal(
+            modalCustomId,
+            currentResult.language,
+            currentResult.config.storeCountryCode,
+          ));
+          let cancelModal = (): void => undefined;
+          const cancelled = new Promise<null>((resolve) => {
+            cancelModal = () => resolve(null);
+            if (modalAbortController.signal.aborted) {
+              resolve(null);
+              return;
+            }
+            modalAbortController.signal.addEventListener('abort', cancelModal, { once: true });
+          });
+          const modal = await Promise.race([
+            component.awaitModalSubmit({
+              time: Math.max(1, sessionExpiresAt - Date.now()),
+              filter: (submission) => submission.customId === modalCustomId
+                && submission.user.id === interaction.user.id,
+            }),
+            cancelled,
+          ]).catch(() => null);
+          modalAbortController.signal.removeEventListener('abort', cancelModal);
+          if (!modal || modalAbortController.signal.aborted) {
+            return;
+          }
+          const rawCountry = modal.fields.getTextInputValue('store-country').trim();
+          await modal.deferUpdate();
+          operations = operations.then(async () => {
+            if (modalAbortController.signal.aborted) {
+              return;
+            }
+            const updatedConfig = await userConfigurationService.setStoreCountry(
+              interaction.user.id,
+              rawCountry,
+            );
+            if (!updatedConfig) {
+              controlsRemoved = true;
+              collector.stop('not-configured');
+              await interaction.editReply({
+                content: messagesFor(currentResult.language).statusNotConfigured,
+                embeds: [],
+                components: [],
+              });
+              return;
+            }
+            const refreshed = statusService.getDashboard(interaction.user.id, fallbackLanguage);
+            if (refreshed.status !== 'ready') {
+              controlsRemoved = true;
+              collector.stop('unavailable');
+              await interaction.editReply({
+                content: messagesFor(refreshed.language).statusDashboardUnavailable,
+                embeds: [],
+                components: [],
+              });
+              return;
+            }
+            currentResult = refreshed;
+            await interaction.editReply({
+              content: messagesFor(currentResult.language).statusRegionSaved(
+                storeCountryLabel(updatedConfig.storeCountryCode, currentResult.language),
+              ),
+              embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
+              components: buildStatusComponents(
+                interaction.id,
+                currentResult.language,
+                currentResult.config.enabled,
+              ),
+            });
+          }).catch(async (error: unknown) => {
+            console.error('Discord status region update failed', error);
+            await interaction.editReply({
+              content: messagesFor(currentResult.language).statusRegionSaveFailed,
+              embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
+              components: buildStatusComponents(
+                interaction.id,
+                currentResult.language,
+                currentResult.config.enabled,
+              ),
+            }).catch(() => undefined);
+          });
+          await operations;
+        } catch (error: unknown) {
+          if (!modalAbortController.signal.aborted) {
+            console.error('Discord status region modal failed', error);
+          }
+        }
+      })();
+      modalTasks.add(modalTask);
+      void modalTask.finally(() => modalTasks.delete(modalTask));
+      return;
+    }
     if (action === 'minimum-discount') {
       if (!thresholdService) {
         void component.deferUpdate();
@@ -508,5 +618,25 @@ function buildStatusThresholdModal(
   return new ModalBuilder()
     .setCustomId(customId)
     .setTitle(messages.statusMinimumDiscountModalTitle)
+    .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+}
+
+function buildStatusRegionModal(
+  customId: string,
+  language: Language,
+  currentStoreCountry: string,
+): ModalBuilder {
+  const messages = messagesFor(language);
+  const input = new TextInputBuilder()
+    .setCustomId('store-country')
+    .setLabel(messages.statusRegionInputLabel)
+    .setPlaceholder(messages.statusRegionInputPlaceholder)
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(80)
+    .setValue(currentStoreCountry);
+  return new ModalBuilder()
+    .setCustomId(customId)
+    .setTitle(messages.statusRegionModalTitle)
     .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
 }
