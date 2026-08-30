@@ -42,6 +42,21 @@ describe('loadEnvironment', () => {
       .not.toHaveProperty('steamWebApiKey');
   });
 
+  it('accepts only HTTPS Dealio banner URLs', () => {
+    expect(loadEnvironment({
+      ...validEnvironment,
+      DEALIO_BANNER_URL: 'https://example.com/dealio.png',
+    })).toMatchObject({ dealioBannerUrl: 'https://example.com/dealio.png' });
+    expect(() => loadEnvironment({
+      ...validEnvironment,
+      DEALIO_BANNER_URL: 'http://example.com/dealio.png',
+    })).toThrow('DEALIO_BANNER_URL must use HTTPS');
+    expect(() => loadEnvironment({
+      ...validEnvironment,
+      DEALIO_BANNER_URL: 'not-a-url',
+    })).toThrow('DEALIO_BANNER_URL must be a valid HTTPS URL');
+  });
+
   it('stops when a required value is missing', () => {
     const environment = { ...validEnvironment };
     delete environment.DISCORD_TOKEN;

@@ -6,6 +6,7 @@ export interface EnvironmentConfig {
   readonly pollIntervalHours: number;
   readonly notificationRetryIntervalSeconds: number;
   readonly steamWebApiKey?: string;
+  readonly dealioBannerUrl?: string;
 }
 
 const defaultDatabasePath = './data/wishlist.db';
@@ -60,6 +61,19 @@ export function loadEnvironment(
   const discordClientId = requiredValue(environment, 'DISCORD_CLIENT_ID');
   const discordGuildId = environment.DISCORD_GUILD_ID?.trim() || undefined;
   const steamWebApiKey = environment.STEAM_WEB_API_KEY?.trim() || undefined;
+  const dealioBannerUrl = environment.DEALIO_BANNER_URL?.trim() || undefined;
+
+  if (dealioBannerUrl !== undefined) {
+    let parsed: URL;
+    try {
+      parsed = new URL(dealioBannerUrl);
+    } catch (_error: unknown) {
+      throw new Error('Environment variable DEALIO_BANNER_URL must be a valid HTTPS URL');
+    }
+    if (parsed.protocol !== 'https:') {
+      throw new Error('Environment variable DEALIO_BANNER_URL must use HTTPS');
+    }
+  }
 
   if (!/^\d+$/.test(discordClientId)) {
     throw new Error('Environment variable DISCORD_CLIENT_ID must be numeric');
@@ -95,5 +109,6 @@ export function loadEnvironment(
     pollIntervalHours,
     notificationRetryIntervalSeconds,
     ...(steamWebApiKey ? { steamWebApiKey } : {}),
+    ...(dealioBannerUrl ? { dealioBannerUrl } : {}),
   };
 }
