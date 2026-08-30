@@ -36,6 +36,9 @@ function readyResult(
       storeCountryCode: 'US',
       enabled: true,
       minimumDiscountPercent: 30,
+      dmOptInAt: '2026-08-21T00:00:00.000Z',
+      dmDeliveryBlockedAt: null,
+      dmDeliveryErrorCode: null,
       createdAt: '2026-08-21T00:00:00.000Z',
       updatedAt: '2026-08-21T01:00:00.000Z',
     },
@@ -79,6 +82,7 @@ describe('status dashboard presentation', () => {
     expect(text).toContain('Game-specific rules: **2**');
     expect(text).toContain('Steam Store region: **United States (US)**');
     expect(text).toContain('Latest price currency: **USD**');
+    expect(text).toContain('DM delivery: **Ready**');
     expect(text).toContain('<t:');
     expect(text).toContain(':f> (<t:');
     expect(text).toContain(':R>)');
@@ -106,6 +110,10 @@ describe('status dashboard presentation', () => {
     });
     expect(turkishEnable[0]?.components[0]?.label).toBe('Bildirimleri Aç');
     expect(englishDisable[0]?.components[0]?.label).toBe('Disable notifications');
+    expect(disable[0]?.components[2]).toMatchObject({
+      custom_id: 'status:session-id:region',
+      label: 'Bölgeyi Değiştir',
+    });
     expect(canUseStatusComponent(
       'status:session-id:disable', 'owner', 'owner', 'session-id',
     )).toBe(true);
@@ -115,6 +123,9 @@ describe('status dashboard presentation', () => {
     expect(canUseStatusComponent(
       'status:old-session:disable', 'owner', 'owner', 'session-id',
     )).toBe(false);
+    expect(canUseStatusComponent(
+      'status:session-id:region', 'owner', 'owner', 'session-id',
+    )).toBe(true);
   });
 
   it('localizes Turkish fields and hides technical Steam error codes', () => {

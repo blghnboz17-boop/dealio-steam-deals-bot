@@ -1,6 +1,7 @@
 import { isLanguage, isSteamId64, type Language, type UserConfig } from '../domain/user-config.js';
 import {
-  parseStoreCountryCode,
+  resolveStoreCountry,
+  type StoreCountryCode,
 } from '../domain/store-country.js';
 import { SteamWishlistError } from '../domain/steam.js';
 import { UserConfigRepository } from '../persistence/user-config-repository.js';
@@ -27,6 +28,13 @@ export interface ConfigureUserOptions {
   readonly resetPricingContext?: boolean;
 }
 
+export interface PreparedUserConfiguration {
+  readonly discordUserId: string;
+  readonly steamId64: string;
+  readonly language: Language;
+  readonly storeCountryCode: StoreCountryCode;
+}
+
 export class UserConfigurationService {
   public constructor(
     private readonly repository: UserConfigRepository,
@@ -46,7 +54,7 @@ export class UserConfigurationService {
     if (!isLanguage(language)) {
       throw new InvalidUserConfigurationError('Language must be tr or en');
     }
-    if (storeCountryInput !== undefined && !parseStoreCountryCode(storeCountryInput)) {
+    if (storeCountryInput !== undefined && !resolveStoreCountry(storeCountryInput)) {
       throw new InvalidUserConfigurationError(
         'Store country must be a supported country code',
         'INVALID_STORE_COUNTRY',
@@ -75,7 +83,7 @@ export class UserConfigurationService {
     }
     const requestedStoreCountry = storeCountryInput === undefined
       ? undefined
-      : parseStoreCountryCode(storeCountryInput);
+      : resolveStoreCountry(storeCountryInput);
     if (storeCountryInput !== undefined && !requestedStoreCountry) {
       throw new InvalidUserConfigurationError(
         'Store country must be a supported country code',
@@ -120,6 +128,44 @@ export class UserConfigurationService {
     })();
   }
 
+  public async prepare(
+    discordUserId: string,
+    profileInput: string,
+    language: Language,
+    storeCountryInput: string,
+  ): Promise<PreparedUserConfiguration> {
+    if (!isLanguage(language)) {
+      throw new InvalidUserConfigurationError('Language must be tr or en');
+    }
+    const storeCountryCode = resolveStoreCountry(storeCountryInput);
+    if (!storeCountryCode) {
+      throw new InvalidUserConfigurationError(
+        'Store country must be a supported country code or exact country name',
+        'INVALID_STORE_COUNTRY',
+      );
+    }
+    const steamId64 = await this.identityResolver.resolve(profileInput);
+    if (!isSteamId64(steamId64)) {
+      throw new InvalidUserConfigurationError('Resolved SteamID64 is invalid');
+    }
+    await this.wishlistAccessValidator.validateWishlistAccess(steamId64);
+    return { discordUserId, steamId64, language, storeCountryCode };
+  }
+
+  public configurePreparedWithinUserOperation(
+    prepared: PreparedUserConfiguration,
+    options: ConfigureUserOptions = {},
+  ): UserConfig {
+    return this.repository.upsert(
+      prepared.discordUserId,
+      prepared.steamId64,
+      prepared.language,
+      prepared.storeCountryCode,
+      this.now().toISOString(),
+      { forcePricingReset: options.resetPricingContext },
+    );
+  }
+
   public get(discordUserId: string): UserConfig | null {
     return this.repository.findByDiscordUserId(discordUserId);
   }
@@ -134,7 +180,7 @@ export class UserConfigurationService {
     discordUserId: string,
     storeCountryInput: string,
   ): Promise<UserConfig | null> {
-    const storeCountryCode = parseStoreCountryCode(storeCountryInput);
+    const storeCountryCode = resolveStoreCountry(storeCountryInput);
     if (!storeCountryCode) {
       throw new InvalidUserConfigurationError(
         'Store country must be a supported country code',
@@ -148,6 +194,26 @@ export class UserConfigurationService {
         storeCountryCode,
         this.now().toISOString(),
       ),
+    );
+  }
+
+  public setLanguage(discordUserId: string, language: Language): Promise<UserConfig | null> {
+    if (!isLanguage(language)) {
+      throw new InvalidUserConfigurationError('Language must be tr or en');
+    }
+    return this.coordinator.runExclusive(discordUserId, () =>
+      this.repository.setLanguage(discordUserId, language, this.now().toISOString()),
+    );
+  }
+
+  public markDmDeliveryBlocked(
+    discordUserId: string,
+    errorCode = 'DISCORD_DM_BLOCKED',
+  ): UserConfig | null {
+    return this.repository.markDmDeliveryBlocked(
+      discordUserId,
+      errorCode,
+      this.now().toISOString(),
     );
   }
 
