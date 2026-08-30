@@ -195,7 +195,7 @@ describe('InitialWishlistSummaryService', () => {
     services.sender.sendInitialSummary.mockRejectedValueOnce(new Error('Discord DM blocked'));
 
     await expect(services.service.send('discord-user')).resolves.toEqual({
-      status: 'dm-failed',
+      status: 'dm-transient-failed',
       saleCount: 1,
     });
     expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
