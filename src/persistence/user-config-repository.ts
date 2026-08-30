@@ -15,6 +15,9 @@ interface UserConfigRow {
   store_country_code: SQLOutputValue;
   enabled: SQLOutputValue;
   minimum_discount_percent: SQLOutputValue;
+  dm_opt_in_at: SQLOutputValue;
+  dm_delivery_blocked_at: SQLOutputValue;
+  dm_delivery_error_code: SQLOutputValue;
   created_at: SQLOutputValue;
   updated_at: SQLOutputValue;
 }
@@ -52,6 +55,10 @@ function percentageValue(value: SQLOutputValue, column: string): number {
   return value;
 }
 
+function nullableTextValue(value: SQLOutputValue, column: string): string | null {
+  return value === null ? null : textValue(value, column);
+}
+
 function toUserConfig(row: UserConfigRow): UserConfig {
   const storeCountryCode = parseStoreCountryCode(textValue(
     row.store_country_code,
@@ -73,6 +80,15 @@ function toUserConfig(row: UserConfigRow): UserConfig {
       row.minimum_discount_percent,
       'minimum_discount_percent',
     ),
+    dmOptInAt: textValue(row.dm_opt_in_at, 'dm_opt_in_at'),
+    dmDeliveryBlockedAt: nullableTextValue(
+      row.dm_delivery_blocked_at,
+      'dm_delivery_blocked_at',
+    ),
+    dmDeliveryErrorCode: nullableTextValue(
+      row.dm_delivery_error_code,
+      'dm_delivery_error_code',
+    ),
     createdAt: textValue(row.created_at, 'created_at'),
     updatedAt: textValue(row.updated_at, 'updated_at'),
   };
@@ -86,7 +102,8 @@ export class UserConfigRepository {
       .prepare(
         `SELECT discord_user_id, configuration_id, steam_id64, config_version, language,
                 store_country_code, enabled,
-                minimum_discount_percent, created_at, updated_at
+                minimum_discount_percent, dm_opt_in_at, dm_delivery_blocked_at,
+                dm_delivery_error_code, created_at, updated_at
          FROM user_config
          WHERE discord_user_id = ?`,
       )
@@ -100,7 +117,8 @@ export class UserConfigRepository {
       .prepare(
         `SELECT discord_user_id, configuration_id, steam_id64, config_version, language,
                 store_country_code, enabled,
-                minimum_discount_percent, created_at, updated_at
+                minimum_discount_percent, dm_opt_in_at, dm_delivery_blocked_at,
+                dm_delivery_error_code, created_at, updated_at
          FROM user_config
          WHERE enabled = 1
          ORDER BY discord_user_id ASC`,
@@ -133,8 +151,9 @@ export class UserConfigRepository {
         .prepare(
            `INSERT INTO user_config
             (discord_user_id, configuration_id, steam_id64, language, store_country_code,
-             enabled, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+             enabled, dm_opt_in_at, dm_delivery_blocked_at, dm_delivery_error_code,
+             created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 1, ?, NULL, NULL, ?, ?)
            ON CONFLICT(discord_user_id) DO UPDATE SET
               steam_id64 = excluded.steam_id64,
               config_version = CASE
@@ -147,6 +166,9 @@ export class UserConfigRepository {
               language = excluded.language,
               store_country_code = excluded.store_country_code,
               enabled = 1,
+              dm_opt_in_at = excluded.dm_opt_in_at,
+              dm_delivery_blocked_at = NULL,
+              dm_delivery_error_code = NULL,
               updated_at = excluded.updated_at`,
         )
         .run(
@@ -155,6 +177,7 @@ export class UserConfigRepository {
           steamId64,
           language,
           storeCountryCode,
+          now,
           now,
           now,
           options.forcePricingReset ? 1 : 0,
@@ -242,9 +265,12 @@ export class UserConfigRepository {
     try {
       const result = this.database.prepare(
         `UPDATE user_config
-         SET enabled = ?, updated_at = ?
+         SET enabled = ?,
+             dm_delivery_blocked_at = CASE WHEN ? = 1 THEN NULL ELSE dm_delivery_blocked_at END,
+             dm_delivery_error_code = CASE WHEN ? = 1 THEN NULL ELSE dm_delivery_error_code END,
+             updated_at = ?
          WHERE discord_user_id = ?`,
-      ).run(enabled ? 1 : 0, now, discordUserId);
+      ).run(enabled ? 1 : 0, enabled ? 1 : 0, enabled ? 1 : 0, now, discordUserId);
       if (Number(result.changes) === 0) {
         this.database.exec('COMMIT');
         return null;
@@ -267,6 +293,53 @@ export class UserConfigRepository {
       if (!config) {
         throw new Error('User configuration could not be read after enabled-state update');
       }
+      this.database.exec('COMMIT');
+      return config;
+    } catch (error: unknown) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  public setLanguage(
+    discordUserId: string,
+    language: Language,
+    now: string,
+  ): UserConfig | null {
+    const result = this.database.prepare(
+      `UPDATE user_config
+       SET language = ?, updated_at = ?
+       WHERE discord_user_id = ?`,
+    ).run(language, now, discordUserId);
+    if (Number(result.changes) === 0) {
+      return null;
+    }
+    return this.findByDiscordUserId(discordUserId);
+  }
+
+  public markDmDeliveryBlocked(
+    discordUserId: string,
+    errorCode: string,
+    now: string,
+  ): UserConfig | null {
+    this.database.exec('BEGIN IMMEDIATE');
+    try {
+      const result = this.database.prepare(
+        `UPDATE user_config
+         SET enabled = 0,
+             dm_delivery_blocked_at = ?,
+             dm_delivery_error_code = ?,
+             updated_at = ?
+         WHERE discord_user_id = ?`,
+      ).run(now, errorCode, now, discordUserId);
+      if (Number(result.changes) === 0) {
+        this.database.exec('COMMIT');
+        return null;
+      }
+      this.database.prepare(
+        `UPDATE check_state SET next_scheduled_at = NULL WHERE discord_user_id = ?`,
+      ).run(discordUserId);
+      const config = this.findByDiscordUserId(discordUserId);
       this.database.exec('COMMIT');
       return config;
     } catch (error: unknown) {

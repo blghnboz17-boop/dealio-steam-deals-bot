@@ -11,6 +11,9 @@ export interface UserConfig {
   readonly storeCountryCode: StoreCountryCode;
   readonly enabled: boolean;
   readonly minimumDiscountPercent: number;
+  readonly dmOptInAt: string;
+  readonly dmDeliveryBlockedAt: string | null;
+  readonly dmDeliveryErrorCode: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 }

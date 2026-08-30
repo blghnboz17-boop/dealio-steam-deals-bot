@@ -30,6 +30,41 @@ export function parseStoreCountryCode(value: string): StoreCountryCode | null {
   return storeCountryCodeSet.has(normalized) ? normalized as StoreCountryCode : null;
 }
 
+function searchableCountry(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .trim()
+    .toLocaleLowerCase('en-US');
+}
+
+export function resolveStoreCountry(value: string): StoreCountryCode | null {
+  const code = parseStoreCountryCode(value);
+  if (code) {
+    return code;
+  }
+
+  const query = searchableCountry(value);
+  if (!query) {
+    return null;
+  }
+  const aliases: Readonly<Record<string, StoreCountryCode>> = {
+    turkey: 'TR',
+    turkiye: 'TR',
+    usa: 'US',
+    uk: 'GB',
+  };
+  if (aliases[query]) {
+    return aliases[query];
+  }
+  const matches = storeCountryCodes.filter((candidate) => [
+    storeCountryName(candidate, 'tr'),
+    storeCountryName(candidate, 'en'),
+  ].some((name) => searchableCountry(name) === query));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export function storeCountryName(code: StoreCountryCode, language: Language): string {
   const displayNames = new Intl.DisplayNames([language === 'tr' ? 'tr-TR' : 'en-US'], {
     type: 'region',
