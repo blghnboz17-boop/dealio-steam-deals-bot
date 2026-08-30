@@ -83,6 +83,7 @@ export function createDatabase(databasePath: string): DatabaseSync {
     migrateDiscountThresholds(database);
     migrateConfigurationIdentity(database);
     migratePricingContext(database);
+    migrateDmConsentAndDelivery(database);
     return database;
   } catch (error: unknown) {
     try {
@@ -94,6 +95,42 @@ export function createDatabase(databasePath: string): DatabaseSync {
       );
     }
     throw new DatabaseInitializationError(error, true);
+  }
+}
+
+function migrateDmConsentAndDelivery(database: DatabaseSync): void {
+  const versionRow = database.prepare('PRAGMA user_version').get() as {
+    user_version: number;
+  };
+  if (versionRow.user_version >= 9) {
+    return;
+  }
+
+  database.exec('BEGIN');
+  try {
+    const columns = new Set(
+      (database.prepare('PRAGMA table_info(user_config)').all() as Array<{ name: string }>)
+        .map((column) => column.name),
+    );
+    if (!columns.has('dm_opt_in_at')) {
+      database.exec('ALTER TABLE user_config ADD COLUMN dm_opt_in_at TEXT');
+    }
+    if (!columns.has('dm_delivery_blocked_at')) {
+      database.exec('ALTER TABLE user_config ADD COLUMN dm_delivery_blocked_at TEXT');
+    }
+    if (!columns.has('dm_delivery_error_code')) {
+      database.exec('ALTER TABLE user_config ADD COLUMN dm_delivery_error_code TEXT');
+    }
+    database.exec(`
+      UPDATE user_config
+      SET dm_opt_in_at = created_at
+      WHERE dm_opt_in_at IS NULL;
+      PRAGMA user_version = 9;
+    `);
+    database.exec('COMMIT');
+  } catch (error: unknown) {
+    database.exec('ROLLBACK');
+    throw error;
   }
 }
 

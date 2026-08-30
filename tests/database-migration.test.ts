@@ -97,6 +97,9 @@ describe('database migration', () => {
         configVersion: 1,
         minimumDiscountPercent: 0,
         storeCountryCode: 'TR',
+        dmOptInAt: '2026-08-20T00:00:00.000Z',
+        dmDeliveryBlockedAt: null,
+        dmDeliveryErrorCode: null,
       });
       if (!config) {
         throw new Error('Expected migrated user configuration');
@@ -125,7 +128,7 @@ describe('database migration', () => {
         saleEpisodeId: state?.saleEpisodeId,
       });
       expect((database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version)
-        .toBe(8);
+        .toBe(9);
       expect(database.prepare(
         `SELECT name FROM sqlite_master
          WHERE type = 'table' AND name IN ('notification_batch', 'notification_batch_item')
@@ -244,7 +247,7 @@ describe('database migration', () => {
         ).toEqual({ attempt_count: 0 });
         expect(
           (database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-          ).toBe(8);
+          ).toBe(9);
       } finally {
         database.close();
       }
@@ -302,7 +305,7 @@ describe('database migration', () => {
       try {
         expect(
           (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-        ).toBe(8);
+        ).toBe(9);
         expect(migrated.prepare(
           `SELECT last_success_completed_at, last_success_checked_count,
                   last_success_on_sale_count, last_success_free_count,
