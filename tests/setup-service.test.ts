@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CheckService } from '../src/application/check-service.js';
 import { InitialWishlistSummaryService } from '../src/application/initial-wishlist-summary-service.js';
-import { SetupService } from '../src/application/setup-service.js';
+import {
+  SetupAlreadyCompletedError,
+  SetupService,
+} from '../src/application/setup-service.js';
 import { UserConfigurationService } from '../src/application/user-configuration-service.js';
 import { UserOperationCoordinator } from '../src/application/user-operation-coordinator.js';
 import type { WishlistItem } from '../src/domain/steam.js';
@@ -69,7 +72,7 @@ function services(identityResolver = { resolve: vi.fn(async (value: string) => v
 }
 
 describe('SetupService', () => {
-  it('starts a fresh baseline generation and retires old pending alerts on repeated setup', async () => {
+  it('rejects repeated setup without changing existing data or sending another baseline', async () => {
     const fixture = services();
     const oldConfig = fixture.userConfigRepository.upsert(
       'discord-user',
@@ -102,23 +105,44 @@ describe('SetupService', () => {
       '2026-08-23T00:02:10.000Z',
     );
 
-    const result = await fixture.setupService.configure(
+    await expect(fixture.setupService.configure(
       'discord-user',
       '76561198000000000',
       'en',
       'US',
+    )).rejects.toBeInstanceOf(SetupAlreadyCompletedError);
+
+    expect(fixture.userConfigRepository.findByDiscordUserId('discord-user')).toEqual(oldConfig);
+    expect(fixture.wishlistStateRepository.findNotificationStatus(oldCandidate)).toBe('candidate');
+    expect(fixture.discountThresholdRepository.findGameOverride(oldConfig, 10)).toBe(70);
+    expect(fixture.sender.sendInitialSummary).not.toHaveBeenCalled();
+    fixture.database.close();
+  });
+
+  it('rechecks setup ownership at confirmation so two open sessions cannot overwrite data', async () => {
+    const fixture = services();
+    const prepared = await fixture.setupService.prepare(
+      'discord-user',
+      '76561198000000000',
+      'tr',
+      'Türkiye',
+    );
+    fixture.userConfigRepository.upsert(
+      'discord-user',
+      '76561198000000001',
+      'en',
+      'US',
+      '2026-08-23T00:00:00.000Z',
     );
 
-    expect(result).toMatchObject({
-      config: { configVersion: 2, storeCountryCode: 'US' },
-      summary: { status: 'sent', saleCount: 1 },
+    await expect(fixture.setupService.confirm(prepared))
+      .rejects.toBeInstanceOf(SetupAlreadyCompletedError);
+    expect(fixture.userConfigRepository.findByDiscordUserId('discord-user')).toMatchObject({
+      steamId64: '76561198000000001',
+      language: 'en',
+      storeCountryCode: 'US',
     });
-    expect(fixture.wishlistStateRepository.findNotificationStatus(oldCandidate)).toBe('expired');
-    expect(fixture.wishlistStateRepository.countNotificationCandidates('discord-user', 2)).toBe(0);
-    expect(fixture.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10, 2))
-      .toMatchObject({ onSale: true, observationStatus: 'known' });
-    expect(fixture.discountThresholdRepository.findGameOverride(result.config, 10)).toBe(70);
-    expect(fixture.sender.sendInitialSummary).toHaveBeenCalledOnce();
+    expect(fixture.sender.sendInitialSummary).not.toHaveBeenCalled();
     fixture.database.close();
   });
 
@@ -148,6 +172,32 @@ describe('SetupService', () => {
     expect(fixture.sender.sendInitialSummary).toHaveBeenCalledOnce();
     expect(fixture.wishlistStateRepository.countNotificationCandidates('discord-user')).toBe(0);
     expect(fixture.steamClient.getWishlistWithErrors).toHaveBeenCalledTimes(2);
+    fixture.database.close();
+  });
+
+  it('records explicit consent and pauses notifications when Discord permanently blocks the DM', async () => {
+    const fixture = services();
+    fixture.sender.sendInitialSummary.mockRejectedValueOnce(Object.assign(
+      new Error('Cannot send messages to this user'),
+      { code: 50_007, status: 403 },
+    ));
+
+    const prepared = await fixture.setupService.prepare(
+      'discord-user',
+      '76561198000000000',
+      'tr',
+      'Türkiye',
+    );
+    const result = await fixture.setupService.confirm(prepared);
+
+    expect(result.summary).toMatchObject({ status: 'dm-blocked', saleCount: 1 });
+    expect(result.config).toMatchObject({
+      enabled: false,
+      storeCountryCode: 'TR',
+      dmDeliveryErrorCode: 'DISCORD_DM_BLOCKED',
+    });
+    expect(result.config.dmOptInAt).toBeTruthy();
+    expect(result.config.dmDeliveryBlockedAt).toBeTruthy();
     fixture.database.close();
   });
 });
