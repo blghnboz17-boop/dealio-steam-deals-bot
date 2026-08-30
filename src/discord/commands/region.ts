@@ -10,6 +10,11 @@ import {
 import { storeCountryLabel } from '../../domain/store-country.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
+import {
+  buildNoticePanel,
+  dealioEphemeralV2Flags,
+  dealioV2Flags,
+} from '../ui/components-v2.js';
 
 export const regionCommand = new SlashCommandBuilder()
   .setName('region')
@@ -34,7 +39,12 @@ export async function handleRegion(
   const language = existing?.language ?? languageFromDiscordLocale(interaction.locale);
   const messages = messagesFor(language);
   if (!existing) {
-    await interaction.reply({ content: messages.notConfigured, flags: MessageFlags.Ephemeral });
+    await interaction.reply({
+      components: [buildNoticePanel(language, 'warning',
+        language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
+        messages.notConfigured)],
+      flags: dealioEphemeralV2Flags,
+    });
     return;
   }
 
@@ -45,19 +55,38 @@ export async function handleRegion(
       interaction.options.getString('country', true),
     );
     if (!updated) {
-      await interaction.editReply({ content: messages.notConfigured });
+      await interaction.editReply({
+        flags: dealioV2Flags,
+        components: [buildNoticePanel(language, 'warning',
+          language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
+          messages.notConfigured)],
+      });
       return;
     }
     const label = storeCountryLabel(updated.storeCountryCode, updated.language);
+    const unchanged = updated.configVersion === existing.configVersion;
     await interaction.editReply({
-      content: updated.configVersion === existing.configVersion
-        ? messagesFor(updated.language).regionUnchanged(label)
-        : messagesFor(updated.language).regionSaved(label),
+      flags: dealioV2Flags,
+      components: [buildNoticePanel(
+        updated.language,
+        unchanged ? 'info' : 'success',
+        unchanged
+          ? (updated.language === 'tr' ? 'Bölge zaten seçili' : 'Region already selected')
+          : (updated.language === 'tr' ? 'Mağaza bölgesi güncellendi' : 'Store region updated'),
+        unchanged
+          ? messagesFor(updated.language).regionUnchanged(label)
+          : messagesFor(updated.language).regionSaved(label),
+      )],
     });
   } catch (error: unknown) {
     if (error instanceof InvalidUserConfigurationError
       && error.code === 'INVALID_STORE_COUNTRY') {
-      await interaction.editReply({ content: messages.invalidStoreCountry });
+      await interaction.editReply({
+        flags: dealioV2Flags,
+        components: [buildNoticePanel(language, 'warning',
+          language === 'tr' ? 'Geçersiz mağaza bölgesi' : 'Invalid Store region',
+          messages.invalidStoreCountry)],
+      });
       return;
     }
     throw error;
