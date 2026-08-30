@@ -24,6 +24,9 @@ export type CheckResult =
       readonly failedItems: readonly WishlistItemError[];
       readonly unknownPriceCount: number;
       readonly wishlistItems: readonly WishlistItem[];
+      readonly steamId64: string;
+      readonly language: import('../domain/user-config.js').Language;
+      readonly minimumDiscountPercent: number;
       readonly storeCountryCode: StoreCountryCode;
       readonly capturedAt: string;
     }
@@ -265,6 +268,9 @@ export class CheckService {
         failedItems: steamResult.errors,
         unknownPriceCount: unknownAppIds.length,
         wishlistItems: steamResult.items,
+        steamId64: config.steamId64,
+        language: config.language,
+        minimumDiscountPercent: config.minimumDiscountPercent,
         storeCountryCode: config.storeCountryCode,
         capturedAt: completedAt,
       };
