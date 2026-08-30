@@ -7,8 +7,10 @@ import { deleteDataCommand } from './commands/delete-data.js';
 import { testNotificationCommand } from './commands/test-notification.js';
 import { wishlistCommand } from './commands/wishlist.js';
 import { regionCommand } from './commands/region.js';
+import { dealioCommand } from './commands/dealio.js';
 
 export const commands = [
+  dealioCommand,
   setupCommand,
   regionCommand,
   statusCommand,

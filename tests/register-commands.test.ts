@@ -48,8 +48,8 @@ describe('Discord command registration', () => {
       name: string;
       options?: Array<{ name: string }>;
     }>;
-    expect(deployedBody.find((command) => command.name === 'setup')?.options?.[0])
-      .toMatchObject({ name: 'steam-profile' });
+    expect(deployedBody.find((command) => command.name === 'setup')?.options ?? [])
+      .toEqual([]);
     expect(get).toHaveBeenCalledOnce();
     expect(get).toHaveBeenCalledWith(
       Routes.applicationCommands(environment.discordClientId),
