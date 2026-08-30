@@ -24,3 +24,5 @@ coverage/
 .omo/
 *.log
 *.pid
+NUL
+caddy.exe

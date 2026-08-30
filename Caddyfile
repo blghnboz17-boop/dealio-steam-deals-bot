@@ -1,0 +1,13 @@
+localhost {
+	tls internal
+	header Strict-Transport-Security "max-age=31536000"
+	log {
+		output file .runtime/admin-access.log
+		format json
+	}
+
+	reverse_proxy 127.0.0.1:3001 {
+		header_up Host {http.request.host}
+		header_up X-Dealio-Client-IP {remote_host}
+	}
+}
