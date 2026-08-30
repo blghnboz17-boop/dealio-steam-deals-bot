@@ -25,12 +25,15 @@ describe('RuntimeHealth', () => {
         now: () => now,
       });
       let discordReady = true;
+      let guildCount = 3;
       health.setDiscordReadyProbe(() => discordReady);
+      health.setDiscordGuildCountProbe(() => guildCount);
       expect(JSON.parse(readFileSync(healthPath, 'utf8'))).toMatchObject({
         schemaVersion: 1,
         phase: 'starting',
         pid: process.pid,
         discordReady: false,
+        guildCount: null,
       });
 
       health.markReady();
@@ -39,12 +42,21 @@ describe('RuntimeHealth', () => {
       expect(JSON.parse(readFileSync(healthPath, 'utf8'))).toMatchObject({
         phase: 'ready',
         discordReady: true,
+        guildCount: 3,
+      });
+      guildCount = 0;
+      health.refreshDiscordReady();
+      expect(JSON.parse(readFileSync(healthPath, 'utf8'))).toMatchObject({
+        phase: 'ready',
+        discordReady: true,
+        guildCount: 0,
       });
       discordReady = false;
       health.refreshDiscordReady();
       expect(JSON.parse(readFileSync(healthPath, 'utf8'))).toMatchObject({
         phase: 'ready',
         discordReady: false,
+        guildCount: null,
       });
       health.markStopping();
       health.markStopped();
@@ -54,10 +66,12 @@ describe('RuntimeHealth', () => {
         phase: 'stopped',
         heartbeatAt: '2026-08-21T00:00:10.000Z',
         discordReady: false,
+        guildCount: null,
       });
       expect(Object.keys(document).sort()).toEqual([
         'discordReady',
         'failedAt',
+        'guildCount',
         'heartbeatAt',
         'phase',
         'pid',

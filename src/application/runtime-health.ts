@@ -14,6 +14,7 @@ interface RuntimeHealthDocument {
   readonly failedAt: string | null;
   readonly heartbeatAt: string;
   readonly discordReady: boolean;
+  readonly guildCount: number | null;
 }
 
 interface RuntimeHealthClock {
@@ -34,6 +35,7 @@ export class RuntimeHealth {
   private timer: ReturnType<typeof setInterval> | null;
   private document: RuntimeHealthDocument;
   private discordReadyProbe: (() => boolean) | null = null;
+  private discordGuildCountProbe: (() => number) | null = null;
 
   public constructor(
     private readonly healthPath: string,
@@ -65,6 +67,7 @@ export class RuntimeHealth {
       failedAt: null,
       heartbeatAt: startedAt,
       discordReady: false,
+      guildCount: null,
     };
     mkdirSync(dirname(healthPath), { recursive: true });
     this.write();
@@ -78,12 +81,14 @@ export class RuntimeHealth {
     }
 
     const now = this.now().toISOString();
+    const discordReady = this.discordReadyProbe?.() ?? true;
     this.document = {
       ...this.document,
       phase: 'ready',
       readyAt: this.document.readyAt ?? now,
       heartbeatAt: now,
-      discordReady: this.discordReadyProbe?.() ?? true,
+      discordReady,
+      guildCount: this.guildCountWhenReady(discordReady),
     };
     this.writeSafely();
   }
@@ -93,16 +98,22 @@ export class RuntimeHealth {
       return;
     }
 
+    const discordReady = this.discordReadyProbe?.() ?? false;
     this.document = {
       ...this.document,
       heartbeatAt: this.now().toISOString(),
-      discordReady: this.discordReadyProbe?.() ?? false,
+      discordReady,
+      guildCount: this.guildCountWhenReady(discordReady),
     };
     this.writeSafely();
   }
 
   public setDiscordReadyProbe(probe: () => boolean): void {
     this.discordReadyProbe = probe;
+  }
+
+  public setDiscordGuildCountProbe(probe: () => number): void {
+    this.discordGuildCountProbe = probe;
   }
 
   public markStopping(): void {
@@ -117,6 +128,7 @@ export class RuntimeHealth {
       stoppingAt: this.document.stoppingAt ?? now,
       heartbeatAt: now,
       discordReady: false,
+      guildCount: null,
     };
     this.writeSafely();
   }
@@ -129,6 +141,7 @@ export class RuntimeHealth {
       stoppedAt: now,
       heartbeatAt: now,
       discordReady: false,
+      guildCount: null,
     };
     if (this.writeSafely()) {
       this.stopHeartbeat();
@@ -143,6 +156,7 @@ export class RuntimeHealth {
       failedAt: now,
       heartbeatAt: now,
       discordReady: false,
+      guildCount: null,
     };
     if (this.writeSafely()) {
       this.stopHeartbeat();
@@ -157,12 +171,14 @@ export class RuntimeHealth {
       return;
     }
 
+    const discordReady = this.document.phase === 'ready'
+      ? this.discordReadyProbe?.() ?? this.document.discordReady
+      : false;
     this.document = {
       ...this.document,
       heartbeatAt: this.now().toISOString(),
-      discordReady: this.document.phase === 'ready'
-        ? this.discordReadyProbe?.() ?? this.document.discordReady
-        : false,
+      discordReady,
+      guildCount: this.guildCountWhenReady(discordReady),
     };
     this.writeSafely();
   }
@@ -172,6 +188,16 @@ export class RuntimeHealth {
       this.clock.clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  private guildCountWhenReady(discordReady: boolean): number | null {
+    if (!discordReady) {
+      return null;
+    }
+    const guildCount = this.discordGuildCountProbe?.();
+    return guildCount !== undefined && Number.isSafeInteger(guildCount) && guildCount >= 0
+      ? guildCount
+      : null;
   }
 
   private writeSafely(): boolean {
