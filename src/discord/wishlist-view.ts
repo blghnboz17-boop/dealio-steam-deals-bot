@@ -1,6 +1,16 @@
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
   ButtonStyle,
+  ContainerBuilder,
   ComponentType,
+  SectionBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
+  TextDisplayBuilder,
+  ThumbnailBuilder,
   type APIActionRowComponent,
   type APIButtonComponent,
   type APIEmbed,
@@ -10,13 +20,16 @@ import { storeCountryLabel, type StoreCountryCode } from '../domain/store-countr
 import type { Language } from '../domain/user-config.js';
 import { embedTextLength, formatMinorPrice } from './notification-messages.js';
 import { messagesFor } from './messages.js';
+import { dealioBrand } from './ui/brand.js';
+import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
+import { uiCopy } from './ui/copy.js';
 
 export const wishlistPageSize = 3;
 export const wishlistEmbedColors = {
-  sale: 0x57f287,
-  normal: 0x2a475e,
-  free: 0xfee75c,
-  unknown: 0x95a5a6,
+  sale: dealioBrand.colors.success,
+  normal: dealioBrand.colors.neutral,
+  free: dealioBrand.colors.warning,
+  unknown: dealioBrand.colors.muted,
 } as const;
 const maximumEmbedsPerMessage = 10;
 const maximumEmbedTextPerMessage = 6_000;
@@ -41,6 +54,181 @@ export interface WishlistPage {
   readonly components: APIActionRowComponent<APIButtonComponent>[];
   readonly pageIndex: number;
   readonly pageCount: number;
+}
+
+export type WishlistV2View = 'all' | 'sale' | 'discount' | 'recent';
+
+export interface WishlistV2Page {
+  readonly components: readonly ContainerBuilder[];
+  readonly items: readonly WishlistItem[];
+  readonly pageIndex: number;
+  readonly pageCount: number;
+  readonly totalFilteredItems: number;
+}
+
+export function buildWishlistV2Page(
+  snapshot: WishlistSnapshot,
+  language: Language,
+  requestedPageIndex: number,
+  sessionId: string,
+  view: WishlistV2View = 'all',
+  controls: WishlistControls = 'active',
+): WishlistV2Page {
+  const text = uiCopy(language);
+  const filtered = filterAndSortWishlist(snapshot.items, view);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / wishlistPageSize));
+  const pageIndex = Math.min(Math.max(0, requestedPageIndex), pageCount - 1);
+  const items = filtered.slice(pageIndex * wishlistPageSize, (pageIndex + 1) * wishlistPageSize);
+  const disabled = controls === 'disabled';
+  const container = new ContainerBuilder()
+    .setAccentColor(dealioBrand.colors.primary)
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`# 🎮 ${text.wishlistTitle}`),
+      new TextDisplayBuilder().setContent(text.wishlistSummary(
+        filtered.length,
+        snapshot.items.length + snapshot.failedItemCount,
+        snapshot.items.filter((item) => item.onSale === true).length,
+      )),
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    );
+
+  if (items.length === 0) {
+    container.addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`> ${text.wishlistEmptyFiltered}`),
+    );
+  } else {
+    for (const item of items) {
+      container.addSectionComponents(buildWishlistV2GameSection(item, snapshot, language));
+    }
+  }
+
+  if (controls !== 'hidden') {
+    const viewSelect = new StringSelectMenuBuilder()
+      .setCustomId(`wishlist-v2:${sessionId}:view`)
+      .setPlaceholder(text.wishlistViewPlaceholder)
+      .setDisabled(disabled)
+      .addOptions([
+        ['all', text.wishlistAll, '📚'],
+        ['sale', text.wishlistSale, '🏷️'],
+        ['discount', text.wishlistDiscount, '🔥'],
+        ['recent', text.wishlistRecent, '🕒'],
+      ].map(([value, label, emoji]) => new StringSelectMenuOptionBuilder()
+        .setValue(value)
+        .setLabel(label)
+        .setEmoji(emoji)
+        .setDefault(value === view)));
+    container.addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    );
+    container.addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(viewSelect),
+    );
+
+    if (items.length > 0) {
+      const ruleSelect = new StringSelectMenuBuilder()
+        .setCustomId(`wishlist-v2:${sessionId}:game`)
+        .setPlaceholder(text.wishlistRulePlaceholder)
+        .setDisabled(disabled)
+        .addOptions(items.map((item) => new StringSelectMenuOptionBuilder()
+          .setValue(String(item.appId))
+          .setLabel(buttonLabel(item.name))));
+      container.addActionRowComponents(
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(ruleSelect),
+      );
+    }
+
+    const previous = new ButtonBuilder()
+      .setCustomId(`wishlist-v2:${sessionId}:previous`)
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('◀️')
+      .setLabel(text.previous)
+      .setDisabled(disabled || pageIndex === 0);
+    const indicator = new ButtonBuilder()
+      .setCustomId(`wishlist-v2:${sessionId}:page`)
+      .setStyle(ButtonStyle.Secondary)
+      .setLabel(text.page(pageIndex + 1, pageCount))
+      .setDisabled(true);
+    const next = new ButtonBuilder()
+      .setCustomId(`wishlist-v2:${sessionId}:next`)
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('▶️')
+      .setLabel(text.next)
+      .setDisabled(disabled || pageIndex >= pageCount - 1);
+    const close = new ButtonBuilder()
+      .setCustomId(`wishlist-v2:${sessionId}:close`)
+      .setStyle(ButtonStyle.Danger)
+      .setLabel(text.close)
+      .setDisabled(disabled);
+    container.addActionRowComponents(
+      new ActionRowBuilder<ButtonBuilder>().addComponents(previous, indicator, next, close),
+    );
+  }
+
+  container
+    .addSeparatorComponents(
+      new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(dealioFooter(language)));
+  assertComponentsV2Limit([container]);
+  return {
+    components: [container],
+    items,
+    pageIndex,
+    pageCount,
+    totalFilteredItems: filtered.length,
+  };
+}
+
+function buildWishlistV2GameSection(
+  item: WishlistItem,
+  snapshot: WishlistSnapshot,
+  language: Language,
+): SectionBuilder {
+  const text = uiCopy(language);
+  const storeUrl = `https://store.steampowered.com/app/${item.appId}/`;
+  const override = snapshot.gameMinimumDiscountOverrides?.get(item.appId);
+  const threshold = override ?? snapshot.globalMinimumDiscountPercent ?? 0;
+  const price = item.price === null || (!item.price.isFree && item.price.currency === null)
+    ? text.wishlistPriceUnknown
+    : item.price.isFree
+      ? `**${text.wishlistFree}**`
+      : item.price.currency === null
+        ? text.wishlistPriceUnknown
+        : item.onSale && item.price.discountPercent > 0
+          ? `~~${formatMinorPrice(item.price.initialMinor, item.price.currency, language)}~~ → **${formatMinorPrice(item.price.finalMinor, item.price.currency, language)}** · **${language === 'tr' ? `%${item.price.discountPercent}` : `${item.price.discountPercent}%`}**`
+          : `**${formatMinorPrice(item.price.finalMinor, item.price.currency, language)}**`;
+  return new SectionBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        `## [${sanitizeWishlistGameName(item.name)}](${storeUrl})\n${price}\n${text.wishlistThreshold(threshold, override !== undefined)}`,
+      ),
+    )
+    .setThumbnailAccessory(
+      new ThumbnailBuilder()
+        .setURL(`https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${item.appId}/header.jpg`)
+        .setDescription(item.name.slice(0, 100)),
+    );
+}
+
+export function filterAndSortWishlist(
+  items: readonly WishlistItem[],
+  view: WishlistV2View,
+): WishlistItem[] {
+  const filtered = view === 'sale' ? items.filter((item) => item.onSale === true) : [...items];
+  if (view === 'discount' || view === 'sale') {
+    return [...filtered].sort((left, right) =>
+      (right.price?.discountPercent ?? -1) - (left.price?.discountPercent ?? -1)
+        || left.appId - right.appId
+    );
+  }
+  if (view === 'recent') {
+    return [...filtered].sort((left, right) =>
+      (right.dateAdded ?? -1) - (left.dateAdded ?? -1) || left.appId - right.appId
+    );
+  }
+  return [...filtered];
 }
 
 export function buildWishlistPage(
@@ -98,7 +286,7 @@ export function buildWishlistSummaryEmbed(
   const capturedAt = Math.floor(new Date(snapshot.capturedAt).getTime() / 1_000);
 
   return {
-    color: 0x1b9bd7,
+    color: dealioBrand.colors.primary,
     title: messages.wishlistTitle,
     description: snapshot.items.length === 0 && snapshot.failedItemCount === 0
       ? messages.wishlistEmpty

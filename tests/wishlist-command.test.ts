@@ -8,6 +8,22 @@ import {
 } from '../src/discord/commands/wishlist.js';
 import type { WishlistItem } from '../src/domain/steam.js';
 
+function componentText(payload: unknown): string {
+  return JSON.stringify((payload as { components?: unknown[] } | undefined)?.components ?? []);
+}
+
+function walkComponents(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) return value.flatMap(walkComponents);
+  if (!value || typeof value !== 'object') return [];
+  if ('toJSON' in value && typeof (value as { toJSON?: unknown }).toJSON === 'function') {
+    return walkComponents((value as { toJSON: () => unknown }).toJSON());
+  }
+  const component = value as Record<string, unknown>;
+  const children = Array.isArray(component.components) ? component.components : [];
+  const accessory = component.accessory ? [component.accessory] : [];
+  return [component, ...[...children, ...accessory].flatMap(walkComponents)];
+}
+
 class FakeCollector extends EventEmitter {
   public stop(reason: string): void {
     this.emit('end', new Map(), reason);
@@ -64,11 +80,7 @@ describe('/wishlist command', () => {
 
     expect(interaction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
     expect(service.load).toHaveBeenCalledWith('invoking-user', 'en');
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining('/setup'),
-      embeds: [],
-      components: [],
-    });
+    expect(componentText(interaction.editReply.mock.calls[0]?.[0])).toContain('/setup');
   });
 
   it('does not show an unavailable Steam response as an empty wishlist', async () => {
@@ -86,11 +98,7 @@ describe('/wishlist command', () => {
       }),
     } as never);
 
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining('yüklenemedi'),
-      embeds: [],
-      components: [],
-    });
+    expect(componentText(interaction.editReply.mock.calls[0]?.[0])).toContain('yüklenemedi');
   });
 
   it('paginates the initial snapshot without refetch and disables controls on timeout', async () => {
@@ -119,27 +127,29 @@ describe('/wishlist command', () => {
     await vi.waitFor(() => expect(createMessageComponentCollector).toHaveBeenCalledOnce());
     const options = createMessageComponentCollector.mock.calls[0]?.[0];
     expect(options.filter({
-      customId: 'wishlist:interaction-id:next', user: { id: 'other-user' },
+      customId: 'wishlist-v2:interaction-id:next', user: { id: 'other-user' },
     })).toBe(false);
     expect(options.filter({
-      customId: 'wishlist:interaction-id:next', user: { id: 'invoking-user' },
+      customId: 'wishlist-v2:interaction-id:next', user: { id: 'invoking-user' },
     })).toBe(true);
     collector.emit('collect', {
-      customId: 'wishlist:interaction-id:next',
+      customId: 'wishlist-v2:interaction-id:next',
       user: { id: 'invoking-user' },
+      isStringSelectMenu: () => false,
+      isButton: () => true,
       deferUpdate: vi.fn().mockResolvedValue(undefined),
     });
     await vi.waitFor(() => expect(interaction.editReply).toHaveBeenCalledTimes(2));
-    expect(interaction.editReply.mock.calls[1]?.[0].embeds).toHaveLength(4);
+    expect(componentText(interaction.editReply.mock.calls[1]?.[0])).toContain('Game 4');
     expect(service.load).toHaveBeenCalledOnce();
 
     collector.emit('end', new Map(), 'time');
     await handling;
 
     const cleanupComponents = interaction.editReply.mock.calls.at(-1)?.[0].components;
-    expect(cleanupComponents[0].components.every((button: { disabled?: boolean }) =>
-      button.disabled === true
-    )).toBe(true);
+    expect(walkComponents(cleanupComponents)
+      .filter((component) => component.custom_id)
+      .every((component) => component.disabled === true)).toBe(true);
     expect(service.load).toHaveBeenCalledOnce();
   });
 
@@ -165,13 +175,16 @@ describe('/wishlist command', () => {
     await vi.waitFor(() => expect(createMessageComponentCollector).toHaveBeenCalledOnce());
 
     collector.emit('collect', {
-      customId: 'wishlist:interaction-id:close',
+      customId: 'wishlist-v2:interaction-id:close',
       user: { id: 'invoking-user' },
+      isStringSelectMenu: () => false,
+      isButton: () => true,
       deferUpdate: vi.fn().mockResolvedValue(undefined),
     });
     await handling;
 
-    expect(interaction.editReply.mock.calls.at(-1)?.[0].components).toEqual([]);
+    expect(walkComponents(interaction.editReply.mock.calls.at(-1)?.[0].components)
+      .some((component) => component.custom_id)).toBe(false);
   });
 
   it('opens an owner-scoped game modal and updates the captured snapshot without refetching', async () => {
@@ -211,10 +224,14 @@ describe('/wishlist command', () => {
       fields: { getTextInputValue: vi.fn().mockReturnValue('65') },
       deferUpdate: vi.fn().mockResolvedValue(undefined),
       reply: vi.fn(),
+      followUp: vi.fn().mockResolvedValue(undefined),
     };
     const component = {
-      customId: 'wishlist:interaction-id:game:1',
+      customId: 'wishlist-v2:interaction-id:game',
       user: { id: 'invoking-user' },
+      values: ['1'],
+      isStringSelectMenu: () => true,
+      isButton: () => false,
       showModal: vi.fn().mockResolvedValue(undefined),
       awaitModalSubmit: vi.fn().mockResolvedValue(modal),
       deferUpdate: vi.fn(),
@@ -237,8 +254,7 @@ describe('/wishlist command', () => {
       title: 'Game minimum discount',
     });
     expect(service.load).toHaveBeenCalledOnce();
-    expect(JSON.stringify(interaction.editReply.mock.calls.at(-1)?.[0].embeds))
-      .toContain('65% (game-specific)');
+    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0])).toContain('65%');
     collector.emit('end', new Map(), 'time');
     await handling;
   });
@@ -273,8 +289,11 @@ describe('/wishlist command', () => {
     );
     await vi.waitFor(() => expect(createMessageComponentCollector).toHaveBeenCalledOnce());
     const component = {
-      customId: 'wishlist:interaction-id:game:1',
+      customId: 'wishlist-v2:interaction-id:game',
       user: { id: 'invoking-user' },
+      values: ['1'],
+      isStringSelectMenu: () => true,
+      isButton: () => false,
       showModal: vi.fn().mockResolvedValue(undefined),
       awaitModalSubmit: vi.fn().mockReturnValue(new Promise(() => undefined)),
       deferUpdate: vi.fn(),

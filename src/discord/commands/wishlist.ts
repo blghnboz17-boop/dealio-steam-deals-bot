@@ -1,7 +1,6 @@
 import {
   ChatInputCommandInteraction,
-  ActionRowBuilder,
-  ComponentType,
+  LabelBuilder,
   MessageFlags,
   ModalBuilder,
   SlashCommandBuilder,
@@ -12,20 +11,21 @@ import { WishlistViewService } from '../../application/wishlist-view-service.js'
 import { DiscountThresholdService } from '../../application/discount-threshold-service.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
+import { buildWishlistV2Page, type WishlistV2View } from '../wishlist-view.js';
 import {
-  buildWishlistPage,
-  canUseWishlistComponent,
-  parseWishlistAction,
-} from '../wishlist-view.js';
+  buildNoticePanel,
+  dealioEphemeralV2Flags,
+  dealioUiSessionTimeoutMs,
+  dealioV2Flags,
+} from '../ui/components-v2.js';
+import { dealioUiSessions } from '../ui/session-manager.js';
 
-const wishlistSessionTimeoutMs = 2 * 60 * 1_000;
+const wishlistSessionTimeoutMs = dealioUiSessionTimeoutMs;
 
 export const wishlistCommand = new SlashCommandBuilder()
   .setName('wishlist')
   .setDescription('Show your live Steam wishlist')
-  .setDescriptionLocalizations({
-    tr: 'Güncel Steam wishlistini göster',
-  });
+  .setDescriptionLocalizations({ tr: 'Güncel Steam wishlistini göster' });
 
 export async function handleWishlist(
   interaction: ChatInputCommandInteraction,
@@ -41,17 +41,23 @@ export async function handleWishlist(
   const messages = messagesFor(result.language);
 
   if (result.status === 'not-configured') {
-    await interaction.editReply({ content: messages.notConfigured, embeds: [], components: [] });
+    await interaction.editReply({
+      flags: dealioV2Flags,
+      components: [buildNoticePanel(result.language, 'warning',
+        result.language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
+        messages.notConfigured)],
+    });
     return;
   }
-
   if (result.status === 'unavailable') {
+    const description = result.errorCode === 'STEAM_WISHLIST_INACCESSIBLE'
+      ? messages.wishlistInaccessible
+      : messages.wishlistUnavailable;
     await interaction.editReply({
-      content: result.errorCode === 'STEAM_WISHLIST_INACCESSIBLE'
-        ? messages.wishlistInaccessible
-        : messages.wishlistUnavailable,
-      embeds: [],
-      components: [],
+      flags: dealioV2Flags,
+      components: [buildNoticePanel(result.language, 'danger',
+        result.language === 'tr' ? 'Wishlist yüklenemedi' : 'Wishlist unavailable',
+        description)],
     });
     return;
   }
@@ -67,41 +73,51 @@ export async function handleWishlist(
   const configVersion = result.configVersion;
   const configurationId = result.configurationId;
   let pageIndex = 0;
-  const initialPage = buildWishlistPage(
-    snapshot,
-    result.language,
-    pageIndex,
-    interaction.id,
-  );
+  let view: WishlistV2View = 'all';
+  let controlsHidden = false;
+  let modalSequence = 0;
+  const initialPage = buildWishlistV2Page(snapshot, result.language, pageIndex, interaction.id, view);
   const message = await interaction.editReply({
-    content: null,
-    embeds: initialPage.embeds,
-    components: initialPage.components,
+    flags: dealioV2Flags,
+    components: [...initialPage.components],
   });
+  const closeUiSession = dealioUiSessions.open(
+    interaction.id,
+    interaction.user.id,
+    ['wishlist-v2'],
+    wishlistSessionTimeoutMs,
+  );
   const collector = message.createMessageComponentCollector({
-    componentType: ComponentType.Button,
     time: wishlistSessionTimeoutMs,
-    filter: (component) => canUseWishlistComponent(
-      component.customId,
-      component.user.id,
-      interaction.user.id,
-      interaction.id,
-    ),
+    filter: (component) => component.user.id === interaction.user.id
+      && component.customId.startsWith(`wishlist-v2:${interaction.id}:`),
   });
   const sessionExpiresAt = Date.now() + wishlistSessionTimeoutMs;
   let operations = Promise.resolve();
-  let controlsHidden = false;
-  let modalSequence = 0;
   const modalTasks = new Set<Promise<void>>();
   const modalAbortController = new AbortController();
 
   collector.on('collect', (component) => {
-    const action = parseWishlistAction(component.customId, interaction.id);
-    if (action === 'close') {
-      collector.stop('closed');
+    const action = component.customId.slice(`wishlist-v2:${interaction.id}:`.length);
+    if (component.isStringSelectMenu() && action === 'view') {
+      const selected = component.values[0];
+      if (isWishlistView(selected)) {
+        view = selected;
+        pageIndex = 0;
+      }
+      const acknowledgement = component.deferUpdate();
+      operations = operations.then(async () => {
+        await acknowledgement;
+        const page = buildWishlistV2Page(snapshot, result.language, pageIndex, interaction.id, view);
+        pageIndex = page.pageIndex;
+        await interaction.editReply({ components: [...page.components] });
+      }).catch((error: unknown) => console.error('Discord wishlist view update failed', error));
+      return;
     }
-    if (action !== null && typeof action === 'object') {
-      const item = snapshot.items.find((candidate) => candidate.appId === action.appId);
+
+    if (component.isStringSelectMenu() && action === 'game') {
+      const appId = Number(component.values[0]);
+      const item = snapshot.items.find((candidate) => candidate.appId === appId);
       if (!item || !thresholdService) {
         void component.deferUpdate();
         return;
@@ -126,9 +142,7 @@ export async function handleWishlist(
               resolve(null);
               return;
             }
-            modalAbortController.signal.addEventListener('abort', cancelModal, {
-              once: true,
-            });
+            modalAbortController.signal.addEventListener('abort', cancelModal, { once: true });
           });
           const modal = await Promise.race([
             component.awaitModalSubmit({
@@ -146,16 +160,18 @@ export async function handleWishlist(
           const percent = parseOptionalDiscountPercent(rawValue);
           if (percent === undefined) {
             await modal.reply({
-              content: messagesFor(result.language).discountThresholdInvalid,
-              flags: MessageFlags.Ephemeral,
+              flags: dealioEphemeralV2Flags,
+              components: [buildNoticePanel(
+                result.language,
+                'warning',
+                result.language === 'tr' ? 'Geçersiz indirim oranı' : 'Invalid discount threshold',
+                messagesFor(result.language).discountThresholdInvalid,
+              )],
             });
             return;
           }
           await modal.deferUpdate();
           operations = operations.then(async () => {
-            if (modalAbortController.signal.aborted) {
-              return;
-            }
             const updated = await thresholdService.setGame(
               interaction.user.id,
               item.appId,
@@ -164,10 +180,7 @@ export async function handleWishlist(
               configurationId,
             );
             if (!updated) {
-              await interaction.editReply({
-                content: messagesFor(result.language).discountThresholdSaveFailed,
-              });
-              return;
+              throw new Error('Wishlist threshold configuration became stale');
             }
             snapshot.globalMinimumDiscountPercent = updated.config.minimumDiscountPercent;
             if (percent === null) {
@@ -175,24 +188,25 @@ export async function handleWishlist(
             } else {
               snapshot.gameMinimumDiscountOverrides.set(item.appId, percent);
             }
-            const refreshedPage = buildWishlistPage(
+            const refreshed = buildWishlistV2Page(
               snapshot,
               result.language,
               pageIndex,
               interaction.id,
+              view,
             );
-            await interaction.editReply({
-              content: percent === null
-                ? messagesFor(result.language).wishlistThresholdReset(
-                    item.name,
-                    updated.effectivePercent,
-                  )
-                : messagesFor(result.language).wishlistThresholdSaved(item.name, percent),
-              embeds: refreshedPage.embeds,
-              components: refreshedPage.components,
+            await interaction.editReply({ components: [...refreshed.components] });
+            await modal.followUp({
+              flags: dealioEphemeralV2Flags,
+              components: [buildNoticePanel(
+                result.language,
+                'success',
+                result.language === 'tr' ? 'Bildirim eşiği güncellendi' : 'Alert threshold updated',
+                percent === null
+                  ? messagesFor(result.language).wishlistThresholdReset(item.name, updated.effectivePercent)
+                  : messagesFor(result.language).wishlistThresholdSaved(item.name, percent),
+              )],
             });
-          }).catch((error: unknown) => {
-            console.error('Discord wishlist threshold update failed', error);
           });
           await operations;
         } catch (error: unknown) {
@@ -205,48 +219,34 @@ export async function handleWishlist(
       void modalTask.finally(() => modalTasks.delete(modalTask));
       return;
     }
+
+    if (!component.isButton()) {
+      void component.deferUpdate();
+      return;
+    }
+    if (action === 'close') {
+      collector.stop('closed');
+    }
     const acknowledgement = component.deferUpdate();
     operations = operations.then(async () => {
       await acknowledgement;
-      if (action === null) {
-        return;
-      }
       if (action === 'close') {
-        const closedPage = buildWishlistPage(
-          snapshot,
-          result.language,
-          pageIndex,
-          interaction.id,
-          'hidden',
+        const closed = buildWishlistV2Page(
+          snapshot, result.language, pageIndex, interaction.id, view, 'hidden',
         );
-        await interaction.editReply({ embeds: closedPage.embeds, components: [] });
+        await interaction.editReply({ components: [...closed.components] });
         controlsHidden = true;
         return;
       }
-
-      const currentPage = buildWishlistPage(
-        snapshot,
-        result.language,
-        pageIndex,
-        interaction.id,
-      );
+      const current = buildWishlistV2Page(snapshot, result.language, pageIndex, interaction.id, view);
       pageIndex = action === 'previous'
-        ? Math.max(0, currentPage.pageIndex - 1)
-        : Math.min(currentPage.pageCount - 1, currentPage.pageIndex + 1);
-      const nextPage = buildWishlistPage(
-        snapshot,
-        result.language,
-        pageIndex,
-        interaction.id,
-      );
-      await interaction.editReply({
-        content: null,
-        embeds: nextPage.embeds,
-        components: nextPage.components,
-      });
-    }).catch((error: unknown) => {
-      console.error('Discord wishlist component update failed', error);
-    });
+        ? Math.max(0, current.pageIndex - 1)
+        : action === 'next'
+          ? Math.min(current.pageCount - 1, current.pageIndex + 1)
+          : current.pageIndex;
+      const next = buildWishlistV2Page(snapshot, result.language, pageIndex, interaction.id, view);
+      await interaction.editReply({ components: [...next.components] });
+    }).catch((error: unknown) => console.error('Discord wishlist component update failed', error));
   });
 
   const endReason = new Promise<string>((resolve) => {
@@ -257,32 +257,27 @@ export async function handleWishlist(
   if (lifecycleSignal?.aborted) {
     collector.stop('shutdown');
   }
-
   try {
     const reason = await endReason;
     modalAbortController.abort();
     await Promise.allSettled([...modalTasks]);
     await operations;
-    if (reason !== 'closed' || !controlsHidden) {
-      const expiredPage = buildWishlistPage(
-        snapshot,
-        result.language,
-        pageIndex,
-        interaction.id,
-        'disabled',
+    if ((reason !== 'closed' || !controlsHidden) && !controlsHidden) {
+      const expired = buildWishlistV2Page(
+        snapshot, result.language, pageIndex, interaction.id, view, 'disabled',
       );
-      try {
-        await interaction.editReply({
-          embeds: expiredPage.embeds,
-          components: expiredPage.components,
-        });
-      } catch (error: unknown) {
+      await interaction.editReply({ components: [...expired.components] }).catch((error: unknown) => {
         console.error('Discord wishlist component cleanup failed', error);
-      }
+      });
     }
   } finally {
+    closeUiSession();
     lifecycleSignal?.removeEventListener('abort', stopForShutdown);
   }
+}
+
+function isWishlistView(value: string | undefined): value is WishlistV2View {
+  return value === 'all' || value === 'sale' || value === 'discount' || value === 'recent';
 }
 
 export function parseOptionalDiscountPercent(value: string): number | null | undefined {
@@ -313,7 +308,6 @@ function buildWishlistThresholdModal(
   const messages = messagesFor(language);
   const input = new TextInputBuilder()
     .setCustomId('minimum-discount-percent')
-    .setLabel(messages.wishlistThresholdInputLabel)
     .setPlaceholder(messages.wishlistThresholdPlaceholder)
     .setStyle(TextInputStyle.Short)
     .setRequired(false)
@@ -324,5 +318,9 @@ function buildWishlistThresholdModal(
   return new ModalBuilder()
     .setCustomId(customId)
     .setTitle(messages.wishlistThresholdModalTitle)
-    .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel(messages.wishlistThresholdInputLabel)
+        .setTextInputComponent(input),
+    );
 }
