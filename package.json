@@ -12,6 +12,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
+    "admin:start": "node dist/admin/main.js",
+    "admin:dev": "tsx src/admin/main.ts",
+    "admin:password": "tsx src/admin/password-cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
