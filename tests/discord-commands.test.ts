@@ -13,8 +13,13 @@ import { SteamWishlistError } from '../src/domain/steam.js';
 import { SteamIdentityError } from '../src/domain/steam-identity.js';
 
 describe('Discord slash commands', () => {
+  const componentText = (payload: unknown): string => JSON.stringify(
+    (payload as { components?: unknown[] } | undefined)?.components ?? [],
+  );
+
   it('registers the supported commands', () => {
     expect(commands.map((command) => command.name)).toEqual([
+      'dealio',
       'setup',
       'region',
       'status',
@@ -37,38 +42,49 @@ describe('Discord slash commands', () => {
     });
   });
 
-  it('requires explicit confirmation for data deletion', () => {
+  it('uses an option-free interactive confirmation flow for data deletion', () => {
     const command = commands.find((candidate) => candidate.name === 'delete-data');
-    expect(command?.toJSON().options).toEqual([
-      expect.objectContaining({ name: 'confirm', required: true, type: 5 }),
-    ]);
+    expect(command?.toJSON()).toMatchObject({
+      name: 'delete-data',
+      description_localizations: { tr: 'Dealio verilerini kalıcı olarak sil' },
+      options: [],
+    });
   });
 
-  it('accepts a Steam profile and offers both notification languages', () => {
+  it('registers setup as a guided command without technical options', () => {
     const setup = commands.find((command) => command.name === 'setup');
-    const options = setup?.toJSON().options ?? [];
+    expect(setup?.toJSON()).toMatchObject({
+      name: 'setup',
+      description: 'Start the guided Steam wishlist setup',
+      options: [],
+    });
+  });
 
-    expect(options[0]).toMatchObject({
-      name: 'steam-profile',
-      required: true,
-      description: 'Steam profile ID, link, or vanity name',
-      description_localizations: {
-        tr: 'Steam profil ID, bağlantı veya vanity adı',
-      },
-    });
-    expect(options[1]).toMatchObject({
-      name: 'language',
-      required: true,
-      choices: [
-        { name: 'Türkçe', value: 'tr' },
-        { name: 'English', value: 'en' },
-      ],
-    });
-    expect(options[2]).toMatchObject({
-      name: 'store-country',
-      required: true,
-      autocomplete: true,
-    });
+  it('blocks repeated setup before opening the wizard and points to data deletion', async () => {
+    const interaction = {
+      user: { id: 'discord-user' },
+      locale: 'tr',
+      client: { user: null },
+      reply: vi.fn().mockResolvedValue(undefined),
+      options: { getString: vi.fn() },
+    };
+    const service = {
+      hasExistingConfiguration: vi.fn().mockReturnValue(true),
+      prepare: vi.fn(),
+      confirm: vi.fn(),
+      configure: vi.fn(),
+    };
+
+    await handleSetup(interaction as never, service as never);
+
+    expect(service.hasExistingConfiguration).toHaveBeenCalledWith('discord-user');
+    const reply = interaction.reply.mock.calls[0]?.[0];
+    expect(componentText(reply)).toContain('zaten kurulu');
+    expect(componentText(reply)).toContain('/delete-data');
+    expect(reply.flags).toBe(MessageFlags.Ephemeral | MessageFlags.IsComponentsV2);
+    expect(service.prepare).not.toHaveBeenCalled();
+    expect(service.confirm).not.toHaveBeenCalled();
+    expect(service.configure).not.toHaveBeenCalled();
   });
 
   it('registers autocomplete country selection for setup and region', () => {
@@ -122,9 +138,7 @@ describe('Discord slash commands', () => {
     await handleRegion(interaction as never, service as never);
 
     expect(service.setStoreCountry).toHaveBeenCalledWith('discord-user', 'DE');
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining('Germany (DE)'),
-    });
+    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0])).toContain('Germany (DE)');
   });
 
   it('explains an inaccessible wishlist after a manual check', async () => {
@@ -154,9 +168,8 @@ describe('Discord slash commands', () => {
       notificationService as never,
     );
 
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining('Game details public'),
-    });
+    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0]))
+      .toContain('Game details public');
     expect(notificationService.deliverPending).not.toHaveBeenCalled();
   });
 
@@ -189,9 +202,8 @@ describe('Discord slash commands', () => {
 
     expect(checkService.check).toHaveBeenCalledWith('discord-user');
     expect(notificationService.deliverPending).not.toHaveBeenCalled();
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining('No DM was sent because notifications are disabled'),
-    });
+    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0]))
+      .toContain('No DM was sent because notifications are disabled');
   });
 
   it('re-reads notification state after a manual check before delivering DMs', async () => {
@@ -222,9 +234,8 @@ describe('Discord slash commands', () => {
 
     expect(statusService.get).toHaveBeenCalledTimes(2);
     expect(notificationService.deliverPending).not.toHaveBeenCalled();
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining('notifications are disabled'),
-    });
+    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0]))
+      .toContain('notifications are disabled');
   });
 
   it('rejects setup when Steam reports an inaccessible wishlist', async () => {
@@ -249,9 +260,8 @@ describe('Discord slash commands', () => {
     await handleSetup(interaction as never, service as never);
 
     expect(interaction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining('Game details public'),
-    });
+    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0]))
+      .toContain('Game details public');
   });
 
   it.each([
@@ -285,15 +295,13 @@ describe('Discord slash commands', () => {
       language,
       'US',
     );
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining(expectedText),
-    });
+    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0])).toContain(expectedText);
   });
 
   it.each([
     ['steam-unavailable', 'Steam prices are currently unavailable'],
     ['persistence-error', 'Steam prices are currently unavailable'],
-    ['dm-failed', 'initial summary DM could not be sent'],
+    ['dm-transient-failed', 'welcome DM could not be sent'],
   ] as const)('keeps setup successful when the initial summary result is %s', async (
     status,
     expectedText,
@@ -321,10 +329,8 @@ describe('Discord slash commands', () => {
       } as never,
     );
 
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining(expectedText),
-    });
-    expect(interaction.editReply.mock.calls[0]?.[0].content)
+    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0])).toContain(expectedText);
+    expect(componentText(interaction.editReply.mock.calls[0]?.[0]))
       .toContain('wishlist notifications are configured');
   });
 
@@ -401,7 +407,7 @@ describe('Discord slash commands', () => {
       } as never,
     );
 
-    const content = interaction.editReply.mock.calls[0]?.[0].content;
+    const content = componentText(interaction.editReply.mock.calls[0]?.[0]);
     expect(content).toContain(expectedText);
     expect(content).not.toContain('secret-api-key');
     expect(content).not.toContain('endpoint');
@@ -429,9 +435,7 @@ describe('Discord slash commands', () => {
 
     expect(interaction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
     expect(testNotificationService.send).toHaveBeenCalledWith('invoking-user', 'tr', 'TR');
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining('DM olarak gönderildi'),
-    });
+    expect(componentText(interaction.editReply.mock.calls[0]?.[0])).toContain('DM’i gönderildi');
   });
 
   it('uses the Discord locale when the user has no saved configuration', async () => {
@@ -450,9 +454,7 @@ describe('Discord slash commands', () => {
     );
 
     expect(testNotificationService.send).toHaveBeenCalledWith('invoking-user', 'en', 'TR');
-    expect(interaction.editReply).toHaveBeenCalledWith({
-      content: expect.stringContaining('sent by DM'),
-    });
+    expect(componentText(interaction.editReply.mock.calls[0]?.[0])).toContain('Test DM sent');
   });
 
   it('hides technical Discord errors behind an understandable localized result', async () => {
@@ -475,8 +477,8 @@ describe('Discord slash commands', () => {
       errorLog.mockRestore();
     }
 
-    const reply = interaction.editReply.mock.calls[0]?.[0];
-    expect(reply?.content).toContain('geçici bir Discord sorunu');
-    expect(reply?.content).not.toContain(technicalMessage);
+    const reply = componentText(interaction.editReply.mock.calls[0]?.[0]);
+    expect(reply).toContain('geçici bir Discord sorunu');
+    expect(reply).not.toContain(technicalMessage);
   });
 });
