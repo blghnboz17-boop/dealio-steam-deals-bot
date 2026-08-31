@@ -1,169 +1,233 @@
-# Dealio
+# 🎮 Dealio
 
-Dealio is a Discord bot that checks Steam wishlist prices and sends a direct message when a game goes on sale.
+> 🌐 **Language / Dil:** [🇺🇸 English](README.md) · [🇹🇷 Türkçe](README.tr.md)
 
-## Status
+**A Discord bot that watches your Steam wishlist and sends you a direct message the moment a game actually goes on sale — with the region, currency, discount and observation time attached, so you can decide without leaving Discord.**
 
-The first version includes Steam wishlist checks, Discord commands, and local Windows development controls.
+![Discord](https://img.shields.io/badge/Discord-Add%20to%20server-5865F2?logo=discord&logoColor=white)
+![Steam](https://img.shields.io/badge/Steam-wishlist%20tracking-000000?logo=steam&logoColor=white)
+![Languages](https://img.shields.io/badge/languages-T%C3%BCrk%C3%A7e%20%C2%B7%20English-informational)
+![Setup](https://img.shields.io/badge/setup-no%20password%20required-success)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
-## Setup
+---
 
-Requirements:
+> ⚠️ **Notice:** Dealio is an independent project and is **not affiliated with, endorsed by, or sponsored by Valve Corporation or Discord Inc.** It reads only **publicly visible** Steam wishlist data and never asks for your Steam password, cookies or login. Prices come directly from Steam and are shown as-is — always confirm the final price on the Steam store page before you buy.
 
-- Node.js 22.16 or newer
-- A Discord application and bot token
-- A public Steam profile with Game details set to Public
+---
 
-```bash
-npm install
-cp .env.example .env
-npm run typecheck
-npm test
-```
+## 🚀 Getting Started
 
-Never commit `.env` or the database file.
+No downloads. No terminal. No Steam login. Three steps:
 
-`DISCORD_TOKEN` and `DISCORD_CLIENT_ID` are required. `STEAM_WEB_API_KEY` is optional at startup and is needed only to resolve vanity names and `/id/` profile links. Obtain a key from Steam's official [Web API key page](https://steamcommunity.com/dev/apikey), put it only in `.env`, and never commit or log it. Existing SteamID64 and `/profiles/{SteamID64}` setup inputs work without this key.
+### 1️⃣ Add Dealio to your server
 
-Slash commands are registered globally and become available in every server where the application was installed with the `applications.commands` scope. Discord's global command propagation can take time, so commands may not appear in every server immediately after startup. Schema changes such as the `/setup` option rename from `steamid64` to `steam-profile` can also take time to appear after deployment. `DISCORD_GUILD_ID` is optional and is used only to remove legacy guild-specific commands from that server during migration; it can be removed after cleanup succeeds.
+👉 **[Add Dealio to Discord](https://discord.com/oauth2/authorize?client_id=1540325119690412172&scope=bot+applications.commands&permissions=0)**
 
-## Admin Panel
+### 2️⃣ Run `/setup`
 
-The Turkish admin panel runs as a separate process from the bot. It remains available while the bot is stopped and provides health, incident, usage, notification, batch, and Discord server-count summaries at `/admin/login`. It reads `.runtime/bot.health.json` and SQLite in read-only mode. An unavailable source is shown as unavailable, never as a false healthy state or a zero. Discord/Steam identifiers, logs, raw errors, paths, and secrets are not displayed.
+A private wizard opens — only you can see it. It asks for two things:
 
-Generate a verifier for every administrator. Passwords must be 14-256 UTF-8 bytes. Run the command below, type the password at the hidden prompt, and press Enter:
+| Field | What to enter |
+|---|---|
+| **Steam profile** | Your SteamID64, a profile link, or just your vanity name |
+| **Store country** | Picked from a dropdown — Dealio pre-selects a guess from your Discord language |
 
-```text
-npm run admin:password
-```
-
-The command also accepts exactly one line on standard input for automation and rejects command-line passwords.
-
-Put only the generated scrypt verifier in `ADMIN_USERS_JSON`. Usernames use lowercase letters, digits, dots, underscores, or hyphens and begin with a letter. Multiple administrators can sign in independently:
-
-```dotenv
-ADMIN_PUBLIC_ORIGIN=https://admin.example.com
-ADMIN_USERS_JSON={"operator":"paste-first-generated-verifier","backup.operator":"paste-second-generated-verifier"}
-ADMIN_PORT=3001
-ADMIN_HEALTH_PATH=./.runtime/bot.health.json
-```
-
-`ADMIN_PUBLIC_ORIGIN` is required and must exactly match the canonical, pathless HTTPS origin visible in the browser. `ADMIN_PORT` defaults to `3001`; `ADMIN_HEALTH_PATH` defaults to `./.runtime/bot.health.json`; the existing `DATABASE_PATH` selects the SQLite database.
-
-The Node listener is always `127.0.0.1` and must not be exposed or port-forwarded directly to the internet. Put an HTTPS reverse proxy in front of it, preserve the original `Host`, and terminate TLS and HSTS at that proxy. A minimal Caddy configuration for a dedicated hostname is:
-
-```caddyfile
-admin.example.com {
-  header Strict-Transport-Security "max-age=31536000"
-
-  reverse_proxy 127.0.0.1:3001 {
-    header_up Host {http.request.host}
-    header_up X-Dealio-Client-IP {remote_host}
-  }
-}
-```
-
-This HSTS policy applies to the dedicated admin hostname for one year. Add
-`includeSubDomains` or `preload` only if every affected subdomain satisfies those policies.
-
-The proxy must use `header_up`, not `+header_up`, so any client-supplied
-`X-Dealio-Client-IP` value is overwritten. Login challenges and throttling trust only this
-single header when the TCP peer is loopback; `X-Forwarded-For`, `Forwarded`, and
-`X-Real-IP` are never identity inputs. Direct login access to the Node listener is
-intentionally unsupported, and the listener must remain loopback-only; other local
-processes are part of the trusted host boundary. A missing or malformed identity fails
-login without a socket-address fallback. This requires no environment or persisted-data
-migration. Sessions and login challenges are both held in memory, so restarting the admin
-process invalidates both and requires administrators to sign in again.
-
-Keep the bot and panel as separate long-running services. For development run `npm run admin:dev`. For production build first, then start the compiled panel independently:
-
-```bash
-npm run build
-npm run admin:start
-```
-
-Start, stop, and restart controls call the existing `scripts/bot-control.ps1` through `powershell.exe`. They work on the supported Windows setup; on a non-Windows host the monitoring panel remains available but lifecycle actions fail safely.
-
-Authentication uses opaque Secure, HttpOnly, SameSite=Strict cookies, independent CSRF tokens, bounded login throttling, 30-minute idle sessions, eight-hour absolute sessions, and exact Host/Origin checks. Audit records are written to standard output with allowlisted fields only. Capture that output with the service manager without logging or exporting environment variables.
-
-## Windows Local Bot Controls
-
-Run these commands from Windows Explorer, Command Prompt, or PowerShell in the project directory:
+Anything below works for the profile field:
 
 ```text
-start-bot.bat
-stop-bot.bat
-restart-bot.bat
+76561198012345678                                  ← SteamID64
+https://steamcommunity.com/profiles/765611980...   ← profile link
+https://steamcommunity.com/id/yourname             ← vanity link
+yourname                                           ← just the name
 ```
 
-`start-bot.bat` runs `npm run dev` in the project directory and waits up to 60 seconds for actual Discord readiness. An atomic database lock prevents a second bot instance from using the same SQLite file. `stop-bot.bat` first requests cooperative shutdown and waits up to 40 seconds for active checks, notification deliveries, Discord, and SQLite to close. If that deadline is exceeded, it logs a warning and uses `taskkill /T /F` as a last-resort fallback. `restart-bot.bat` performs both operations in order.
+### 3️⃣ Turn on sale DMs
 
-The database lock is stored beside SQLite as `<database>.lock` and removed during normal shutdown. On a local filesystem within one host and PID namespace, startup can reclaim a structurally valid lock only when the operating system definitively reports its recorded PID as absent. A live PID, reused PID, malformed metadata, permission error, uncertain process state, or interrupted reclaim claim remains blocked and requires operator verification. Network/shared filesystems and cross-container PID namespaces are not supported for dead-PID inference.
+Dealio checks that your wishlist is readable, shows you a confirmation card, and **saves nothing until you explicitly enable direct messages.**
 
-The wrapper PID, Node PID, cooperative request, health snapshot, and redirected output are stored under `.runtime/` (`bot.pid`, `bot.node.pid`, `shutdown.request`, `bot.health.json`, `bot.stdout.log`, and `bot.stderr.log`). The atomic health snapshot contains only lifecycle state, the local process ID, readiness, and UTC timestamps. It is refreshed every 10 seconds and considered fresh by the Windows launcher for 30 seconds. It never contains tokens, Discord/Steam user IDs, game data, or environment values. The directory is ignored by Git.
+That's it. From then on, Dealio watches your wishlist in the background.
 
-## Notification Delivery Semantics
+---
 
-Notification delivery is at-least-once. A dedicated scheduler checks the durable notification queue every 60 seconds by default, independently of Steam polling. A claimed notification is retried when it remains in the `sending` state past the recovery timeout, so a process crash does not lose it permanently. Each live Discord delivery has a 20-second total deadline and is cancelled promptly during graceful shutdown. If Discord accepted a message but the response was lost, the bot cannot determine that outcome and a retry can produce a duplicate DM. Transient failures use bounded exponential backoff and stop after five recorded failures; permanent Discord errors such as disabled DMs become terminal immediately. Pending notifications are expired instead of sent when their sale episode is no longer active.
+## ✅ Before You Start
 
-## Commands
+Only two things need to be true:
 
-- `/dealio` open the main Dealio control panel
-- `/setup` open the guided, branded Steam wishlist setup wizard once per stored user
-- `/region` change the country configured on the caller's Steam Store account
-- `/status` open the account, tracking, notification, and latest-check panel
-- `/check` trigger a manual check
-- `/wishlist` show three compact games per page and set game-specific minimum discounts
-- `/test-notification` send an example sale panel by DM
-- `/delete-data` open the protected data-deletion confirmation flow
+| Requirement | How to check |
+|---|---|
+| **Your Steam profile is public** | Steam → Profile → Edit Profile → Privacy Settings → set **Game details** to *Public* |
+| **Your Discord DMs are open** | Server settings → Privacy Settings → allow direct messages from server members |
 
-Manual checks have a per-user cooldown. Scheduled users and Steam requests are processed through bounded concurrency queues, and Steam rate-limit responses honor `Retry-After` with bounded retries.
+> Dealio can only read what is already public. It never asks for your Steam password, cookies, session, or any login information.
 
-`/setup` opens an ephemeral five-minute wizard only when the invoking Discord user has no stored configuration. One focused Discord modal contains both the Steam profile field and a native Store-country dropdown. The dropdown preselects the country inferred from the user's Discord locale and contains 24 common regions plus **Other countries**. Choosing that option opens the complete localized country catalog in alphabetical ranges, so users never need to know or type a country code. The confirmation panel also exposes the same full country picker, while `/region` remains an autocomplete shortcut. The profile field accepts a 17-digit SteamID64, a `steamcommunity.com/profiles/{SteamID64}` link, a `steamcommunity.com/id/{vanity}` link, or a bare vanity name containing 2-32 letters, digits, underscores, or hyphens. After a successful setup, running `/setup` again is rejected before Steam is contacted. The user can manage the existing setup from `/dealio`, `/status`, `/region`, and `/wishlist`; starting over requires the protected `/delete-data` confirmation flow first. Both HTTP and HTTPS Steam links are parsed, but user-provided URLs are never fetched; HTTP input is treated as a Steam identifier and all outbound requests use fixed HTTPS Steam endpoints. Credentials, custom ports, non-Steam hosts, traversal paths, malformed profile paths, and unsafe vanity characters are rejected. Query strings and fragments on otherwise valid Steam profile links are discarded.
+---
 
-The wizard suggests a country from the Discord locale, but the user confirms the country configured for the Steam Store account from the list. Discord does not expose an authoritative Steam Store country and public Steam profile locations may be unrelated. `/region country:` changes the saved Store country later through complete-catalog autocomplete.
+## ✨ What Makes Dealio Different
 
-The wizard validates the Steam identity and public wishlist before showing a confirmation card. Nothing is saved until the user explicitly enables proactive sale DMs. Dealio then saves a notification-free baseline and sends one localized branded DM that keeps the banner summary visible while presenting exactly one discounted game per page. Owner-bound previous/next buttons replace the contents of that same message, ordered by discount, instead of stacking multiple game cards or sending multiple DMs. Games whose prices are missing or whose app details fail are omitted without preventing confirmed discounts from being sent. This one-time summary ignores global and game-specific thresholds and never enters the durable notification queue. A permanent Discord DM block pauses automatic notifications and appears on `/status`; a transient Discord failure does not become a false sale.
+- **It never invents a sale.** When Steam returns an unknown price, an error for one game, or goes down entirely, Dealio records that as exactly what it is. A failure is never turned into "on sale!"
+- **Your region, your prices.** Dealio uses the Steam Store country you configured, so the price you see is the price *you* actually pay — not a US number you have to convert in your head.
+- **The first run is silent.** Installing Dealio does not dump 200 DMs on you. The first look at your wishlist is a quiet baseline; alerts start from the next real change.
+- **One alert per sale.** Not one per check. If a game is on sale for two weeks, you hear about it once.
+- **You set the bar.** A global minimum discount for everything, plus a separate threshold for individual games you care more about.
+- **Pause without losing anything.** Turn notifications off and your wishlist, thresholds and history stay exactly where they were.
+- **Nothing happens without your consent.** No data is saved until you confirm, and `/delete-data` erases all of it whenever you want.
+- **Turkish and English.** Full interface in both, including correctly formatted local prices.
 
-Steam app-detail requests use the saved country as `cc` and the notification language as Steam's response-text language. The currency and prices come directly from Steam's regional `price_overview`; Dealio does not ask users to choose a currency and does not convert currencies. `/status` shows the selected Store region and currencies from the latest known current-region prices. Sale and test-notification footers also identify the Store region.
+---
 
-The native Discord Components V2 interface uses a shared visual system for `/dealio`, `/status`, `/wishlist`, `/check`, `/region`, setup, deletion, and sale messages. The main dashboard links to the common panels. Wishlist pages contain up to three compact games with filters and game-specific threshold controls. New sale DMs group up to five games; persisted legacy groups of up to ten remain deliverable. UI sessions are owner-bound and expire with disabled controls; stale buttons after a restart receive a localized expiry response.
+## 💬 Commands
 
-The `/status` dashboard includes a notification toggle. Disabling notifications pauses automatic Steam checks and notification retries without deleting wishlist state, pending notifications, batches, or delivery history. Manual `/check` remains available while disabled and can update the persisted wishlist/check state, but it never sends sale DMs. Re-enabling resumes automatic checks and allows still-active queued notifications to be delivered by a later retry cycle. A Discord delivery already in progress may finish before the coordinated disable operation completes.
+| Command | What it does |
+|---|---|
+| `/dealio` | Opens the main control panel |
+| `/setup` | One-time setup wizard (Steam profile + Store country) |
+| `/status` | Your account, tracking state, notification settings and last check |
+| `/wishlist` | Browse your wishlist, three games per page, and set per-game discount thresholds |
+| `/check` | Check right now instead of waiting for the next scheduled run |
+| `/region` | Change your Steam Store country |
+| `/test-notification` | Send yourself a sample sale message to see what an alert looks like |
+| `/delete-data` | Erase everything Dealio knows about you |
 
-The global minimum discount defaults to `0`, which accepts any real discount. Use the `/status` button to set a whole percentage from `0` to `100`. Each game shown by `/wishlist` has its own threshold button; a game-specific value overrides the global value, and submitting that modal empty removes the override. A known not-on-sale game starts an eligible sale episode when it goes on sale. If that episode starts below its effective threshold, it can create one notification candidate later when the discount reaches the threshold. The initial wishlist observation remains a notification-free baseline.
+> Every panel is private to you and expires on its own. Buttons only respond to the person who opened them.
 
-Changing the Store country creates a new pricing generation. Pending notifications from the previous region are expired, old regional prices are never compared with new ones, and the first successful check in the new region establishes a notification-free baseline. Global and game-specific minimum-discount settings are preserved when only the Store country changes.
+---
 
-`POLL_INTERVAL_HOURS` configures Steam polling. `NOTIFICATION_RETRY_INTERVAL_SECONDS` configures the independent notification queue scan from 1 to 3600 seconds. `DEALIO_BANNER_URL` optionally points to the public HTTPS copy of `docs/assets/dealio-onboarding-banner.png`; the setup and initial-DM panels also include the bot avatar so the presentation remains branded if the remote banner cannot be displayed.
+## 🔔 What an Alert Looks Like
 
-Steam reports wishlist access separately from the JSON body. The bot accepts an empty wishlist only when Steam explicitly marks the request successful. A private or otherwise inaccessible wishlist is reported to the user and does not create sale state. `/setup` first resolves the input to a canonical SteamID64, then verifies wishlist access before creating the configuration. A failed vanity lookup, missing optional key, invalid input, inaccessible wishlist, or transient Steam validation failure leaves the user unconfigured.
+When a game passes your threshold, you get a DM containing:
 
-A successful Steam snapshot is persisted atomically with its check summary. An item whose latest app-detail observation has an unknown price or an item-level Steam error keeps its previous sale episode but cannot be delivered until a later known observation confirms the same episode. Candidate and failed retries resume with the latest confirmed price snapshot; an already-sending batch keeps the documented at-least-once behavior. A confirmed not-on-sale observation or wishlist removal ends the episode and expires its pending alert. This prevents partial database writes and stale prices from becoming sale messages.
+- 🎮 **Game name**
+- 💸 **Original price → sale price**, in your region's currency
+- 📉 **Discount percentage**
+- 🌍 **The Store region** the price came from
+- 🕐 **When the price was observed**
+- 🔗 **A direct link to the Steam page**
 
-## Stored Data And Deletion
+Several games that go on sale together are grouped into **one message**, ordered by discount — not five separate DMs.
 
-The bot stores the Discord user ID, canonical public SteamID64, historical Steam IDs associated with earlier account generations, selected Steam Store country code, language, enabled state, DM opt-in time, latest permanent DM-block state, global and game-specific minimum discount settings, and configuration timestamps. It does not store the submitted vanity name, raw profile link, URL query/fragment, or Steam Web API key. It also stores check timestamps/status, observed wishlist app IDs, game names, regional price/currency and sale-episode state, latest observation reliability, plus notification delivery status, attempt timestamps/counts, retry time, and the last delivery error.
+**Prices are never converted.** Dealio shows exactly what Steam reports for your region, in that region's currency. It does not guess exchange rates.
 
-The bot does not request or store Steam passwords, cookies, login information, private-profile credentials, Discord messages, or Discord tokens in SQLite. Discord and Steam API credentials remain in `.env`.
+---
 
-Stored user data is retained until the user completes `/delete-data` and its required confirmation checkbox or the operator deletes it. Closing or cancelling the confirmation changes nothing. The delete command removes the user's configuration and cascades to check state, wishlist state, sale episodes, and notification history. SQLite `secure_delete` is enabled, and deletion is coordinated with active checks and notification delivery so those operations cannot recreate data after deletion completes. Copies already present in external filesystem backups are outside the bot's control and must be removed according to the operator's backup policy.
+## ⚙️ How It Works
 
-## Legal Pages And GitHub Pages
+```
+        Your Steam wishlist (public)
+                    │
+                    ▼
+        Dealio checks it every few hours
+                    │
+                    ▼
+   ┌────────────────────────────────────┐
+   │  Is this a real, confirmed sale?   │
+   │  ✅ yes  → does it pass your bar?  │
+   │  ❓ unknown price → wait, don't ask│
+   │  ⚠️ Steam error → wait, don't ask  │
+   └────────────────┬───────────────────┘
+                    │  yes to both
+                    ▼
+        Queued for delivery (survives restarts)
+                    │
+                    ▼
+              📬 Direct message to you
+```
 
-The English legal pages are in `docs/terms.html` and `docs/privacy.html`. Keep the operator's legal and contact information, effective dates, jurisdiction, venue, hosting arrangement, providers, and actual data practices up to date when the Service changes. The Privacy Policy currently describes the bot as running on an operator-controlled personal computer. Update the hosting, recipient, transfer, security, backup, and retention sections when the bot moves to a VDS or another provider.
+The check loop and the delivery loop run **separately**, so a Discord hiccup can never stop Steam from being checked, and a Steam outage can never block a message that was already queued.
 
-To publish them with GitHub Pages:
+If a delivery fails temporarily, Dealio retries with growing gaps and gives up after five attempts. If your DMs are closed, that is permanent — it stops trying and tells you on `/status`.
 
-1. Push the repository to GitHub.
-2. In the repository settings, open **Pages**.
-3. Select **Deploy from a branch**, choose the default branch, and select `/docs` as the folder.
-4. After deployment, verify that `/terms.html` and `/privacy.html` open in a private browser window.
-5. Add those two public HTTPS URLs to the Discord Developer Portal application's **Terms of Service URL** and **Privacy Policy URL** fields.
+---
 
-The legal pages are static and do not need the bot process to be running. They must remain publicly reachable even if the source repository is private; use a public legal-pages repository or a Pages provider that supports this setup if GitHub does not expose a public site for the selected plan.
+## 🔒 Your Data
 
-## License
+**What Dealio stores:** your Discord user ID, your public SteamID64, your chosen Store country and language, whether notifications are on, your discount thresholds, the games on your wishlist with their observed prices, and the delivery status of your notifications.
 
-Licensed under the MIT License. See `LICENSE`.
+**What Dealio never stores:** Steam passwords, cookies, login details, your Discord messages, the vanity name you typed, or the raw profile link you pasted.
+
+**Deleting everything:** run `/delete-data` and tick the confirmation box. It removes your configuration, wishlist state, sale history and notification records together, using SQLite's secure-delete mode. Closing or cancelling the confirmation changes nothing.
+
+📄 Full details: [Privacy Policy](docs/privacy.html) · [Terms of Service](docs/terms.html)
+
+---
+
+## ❓ FAQ
+
+<details>
+<summary><b>I set it up but haven't received anything. Is it broken?</b></summary>
+
+Probably not. The first look at your wishlist is a **silent baseline** — Dealio records what is already on sale without messaging you, so you don't get flooded on day one. You'll be notified when something *changes* after that.
+
+Also check `/status` — if your global minimum discount is set high, games below it are filtered out.
+</details>
+
+<details>
+<summary><b>Dealio says it can't read my wishlist.</b></summary>
+
+Your Steam profile's **Game details** setting must be *Public*. Steam → Profile → Edit Profile → Privacy Settings. "Friends only" is not enough — Dealio isn't your friend on Steam and never asks to be.
+</details>
+
+<details>
+<summary><b>The price shown is different from what I see on Steam.</b></summary>
+
+Check `/status` to see which Store country is configured. If it's wrong, fix it with `/region`. Changing your region starts fresh — old prices are never compared against new ones, and you get a new silent baseline.
+</details>
+
+<details>
+<summary><b>I got the same game twice.</b></summary>
+
+Rare, but possible. If Discord accepts a message and the confirmation is lost in transit, Dealio can't tell whether it arrived and may retry. We'd rather send twice than lose an alert — and we say so instead of pretending it can't happen.
+</details>
+
+<details>
+<summary><b>How do I stop the notifications without losing my setup?</b></summary>
+
+Use the notification toggle on `/status`. Your wishlist, thresholds and history stay intact. Manual `/check` still works while notifications are off. Turn it back on whenever you like.
+</details>
+
+<details>
+<summary><b>The commands don't show up in my server.</b></summary>
+
+Dealio's commands are registered globally, and Discord can take up to an hour to propagate them everywhere. Try again a bit later.
+</details>
+
+<details>
+<summary><b>How often is my wishlist checked?</b></summary>
+
+Every few hours by default. You can always force a fresh check with `/check` — there's a short per-user cooldown to keep things fair.
+</details>
+
+<details>
+<summary><b>Can I only get alerts for big discounts?</b></summary>
+
+Yes. Set a global minimum on `/status`, then use `/wishlist` to give individual games their own threshold. A per-game value overrides the global one.
+</details>
+
+---
+
+## 🗺️ Roadmap
+
+| Coming up | |
+|---|---|
+| 🎯 **Target price** | "Tell me when this drops below X" |
+| 📊 **Historical low** | See whether this is genuinely the best price yet |
+| 🏷️ **Price change type** | Real sale · permanent price cut · regional change — clearly separated |
+| 💱 **Approximate local cost** | With the exchange rate and timestamp shown, never mixed with the Steam price |
+| 🔕 **Quiet hours & digests** | Batch alerts instead of instant, on your schedule |
+| 👥 **Server summaries** | Opt-in, low-noise channel digests |
+
+**Deliberately never:** asking for your Steam password or cookies · unauthorized key resellers in results · sponsored placement mixed into "best deal" ordering.
+
+---
+
+## 👤 Author
+
+Built by **[@blghnboz17-boop](https://github.com/blghnboz17-boop)**
+
+Technical architecture is documented in [`docs/architecture.md`](docs/architecture.md).
+
+---
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE)
