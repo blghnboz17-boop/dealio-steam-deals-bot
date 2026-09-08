@@ -67,13 +67,14 @@ export async function handleSetup(
   lifecycleSignal?: AbortSignal,
   presentation: SetupPresentationOptions = {},
 ): Promise<void> {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const initialLanguage = languageFromDiscordLocale(interaction.locale ?? 'en-US');
   const avatarUrl = safeAvatarUrl(interaction);
   const viewOptions = { ...presentation, avatarUrl };
   if (service.hasExistingConfiguration?.(interaction.user.id)) {
-    await interaction.reply({
+    await interaction.editReply({
       components: [buildSetupAlreadyCompletedPanel(initialLanguage, viewOptions)],
-      flags: dealioEphemeralV2Flags,
+      flags: dealioV2Flags,
     });
     return;
   }
@@ -86,9 +87,9 @@ export async function handleSetup(
   }
 
   let language = initialLanguage;
-  const response = await interaction.reply({
+  const response = await interaction.editReply({
     components: [buildSetupWelcomePanel(language, interaction.id, viewOptions)],
-    flags: dealioEphemeralV2Flags,
+    flags: dealioV2Flags,
   });
   const closeUiSession = dealioUiSessions.open(
     interaction.id,
@@ -110,35 +111,85 @@ export async function handleSetup(
   let pendingProfileInput: string | null = null;
   let countrySelectionPurpose: 'initial' | 'change' | null = null;
   let operations = Promise.resolve();
+  const concurrentOperations = new Set<Promise<void>>();
+  const sessionClosed = new Promise<void>((resolve) => {
+    collector.once('end', () => {
+      sessionActive = false;
+      resolve();
+    });
+  });
   const confirmationViewOptions = (): SetupPresentationOptions => ({
     ...viewOptions,
     regionSelectionSource,
   });
-
+  const reportWizardFailure = async (error: unknown): Promise<void> => {
+    console.error('Discord setup wizard failed', error);
+    try {
+      await interaction.editReply({
+        components: [buildSetupErrorPanel(error, language, interaction.id)],
+      });
+    } catch (_replyError: unknown) {
+      console.error('Discord setup wizard error response failed.');
+    }
+  };
   collector.on('collect', (component) => {
     if (component.customId === `country:${interaction.id}:range` && component.isStringSelectMenu()) {
       const rangeIndex = Number(component.values[0]);
-      void component.update({
-        components: [buildCountryListPanel(
-          language,
-          interaction.id,
-          rangeIndex,
-          prepared?.storeCountryCode,
-        )],
-      });
+      const previousOperations = operations;
+      const acknowledgement = component.deferUpdate().then(
+        () => ({ status: 'fulfilled' } as const),
+        (error: unknown) => ({ status: 'rejected', error } as const),
+      );
+      operations = (async () => {
+        const acknowledgementResult = await acknowledgement;
+        await previousOperations;
+        if (acknowledgementResult.status === 'rejected') {
+          await reportWizardFailure(acknowledgementResult.error);
+          return;
+        }
+        if (!sessionActive) {
+          return;
+        }
+        await interaction.editReply({
+          components: [buildCountryListPanel(
+            language,
+            interaction.id,
+            rangeIndex,
+            prepared?.storeCountryCode,
+          )],
+        });
+      })().catch(reportWizardFailure);
       return;
     }
     if (component.customId === `country:${interaction.id}:back` && component.isButton()) {
-      void component.update({ components: [buildCountryRangePanel(language, interaction.id)] });
+      const previousOperations = operations;
+      const acknowledgement = component.deferUpdate().then(
+        () => ({ status: 'fulfilled' } as const),
+        (error: unknown) => ({ status: 'rejected', error } as const),
+      );
+      operations = (async () => {
+        const acknowledgementResult = await acknowledgement;
+        await previousOperations;
+        if (acknowledgementResult.status === 'rejected') {
+          await reportWizardFailure(acknowledgementResult.error);
+          return;
+        }
+        if (!sessionActive) {
+          return;
+        }
+        await interaction.editReply({
+          components: [buildCountryRangePanel(language, interaction.id)],
+        });
+      })().catch(reportWizardFailure);
       return;
     }
     if (component.customId === `country:${interaction.id}:select` && component.isStringSelectMenu()) {
       const selectedCountry = parseStoreCountryCode(component.values[0] ?? '');
       const purpose = countrySelectionPurpose;
       const profileInput = pendingProfileInput;
-      void (async () => {
+      const countrySelectionOperation = (async () => {
         await component.deferUpdate();
-        if (!selectedCountry || !purpose) {
+        if (!sessionActive || !selectedCountry || !purpose) {
           return;
         }
         regionSelectionSource = 'user';
@@ -163,13 +214,20 @@ export async function handleSetup(
               messagesFor(language).setupWizardPreparing,
             )],
           });
+          if (!sessionActive) {
+            return;
+          }
           try {
-            prepared = await service.prepare(
+            const nextPrepared = await service.prepare(
               interaction.user.id,
               profileInput,
               language,
               selectedCountry,
             );
+            if (!sessionActive) {
+              return;
+            }
+            prepared = nextPrepared;
             pendingProfileInput = null;
             countrySelectionPurpose = null;
             await interaction.editReply({
@@ -180,6 +238,9 @@ export async function handleSetup(
               )],
             });
           } catch (error: unknown) {
+            if (!sessionActive) {
+              return;
+            }
             pendingProfileInput = null;
             countrySelectionPurpose = null;
             await interaction.editReply({
@@ -188,12 +249,17 @@ export async function handleSetup(
           }
         }
       })().catch((error: unknown) => console.error('Discord setup country selection failed', error));
+      concurrentOperations.add(countrySelectionOperation);
+      void countrySelectionOperation.then(
+        () => concurrentOperations.delete(countrySelectionOperation),
+        () => concurrentOperations.delete(countrySelectionOperation),
+      );
       return;
     }
     const immediateAction = parseSetupAction(component.customId, interaction.id);
     if (immediateAction === 'start') {
       const sequence = ++modalSequence;
-      void (async () => {
+      const modalOperation = (async () => {
         if (completed || !sessionActive) {
           await component.deferUpdate().catch(() => undefined);
           return;
@@ -203,12 +269,18 @@ export async function handleSetup(
           interaction.locale ?? '',
         ) ?? 'US';
         await component.showModal(buildSetupModal(modalId, language, suggestedCountry));
-        const modal = await component.awaitModalSubmit({
-          time: setupSessionTimeoutMs,
-          filter: (submission) => submission.customId === modalId
-            && submission.user.id === interaction.user.id,
-        }).catch(() => null);
-        if (!modal) {
+        if (!sessionActive) {
+          return;
+        }
+        const modal = await Promise.race([
+          component.awaitModalSubmit({
+            time: setupSessionTimeoutMs,
+            filter: (submission) => submission.customId === modalId
+              && submission.user.id === interaction.user.id,
+          }).catch(() => null),
+          sessionClosed.then(() => null),
+        ]);
+        if (!modal || !sessionActive) {
           return;
         }
         await modal.deferUpdate();
@@ -282,17 +354,22 @@ export async function handleSetup(
           components: [buildSetupErrorPanel(error, language, interaction.id)],
         }).catch(() => undefined);
       });
+      concurrentOperations.add(modalOperation);
+      void modalOperation.then(
+        () => concurrentOperations.delete(modalOperation),
+        () => concurrentOperations.delete(modalOperation),
+      );
       return;
     }
 
     if (immediateAction === 'region') {
-      void (async () => {
+      const regionOperation = (async () => {
+        await component.deferUpdate();
         if (!prepared || completed || !sessionActive) {
-          await component.deferUpdate().catch(() => undefined);
           return;
         }
         countrySelectionPurpose = 'change';
-        await component.update({
+        await interaction.editReply({
           components: [buildCountryRangePanel(language, interaction.id)],
         });
       })().catch(async (error: unknown) => {
@@ -303,6 +380,11 @@ export async function handleSetup(
           }).catch(() => undefined);
         }
       });
+      concurrentOperations.add(regionOperation);
+      void regionOperation.then(
+        () => concurrentOperations.delete(regionOperation),
+        () => concurrentOperations.delete(regionOperation),
+      );
       return;
     }
 
@@ -365,16 +447,7 @@ export async function handleSetup(
         return;
       }
       await component.deferUpdate();
-    }).catch(async (error: unknown) => {
-      console.error('Discord setup wizard failed', error);
-      try {
-        await interaction.editReply({
-          components: [buildSetupErrorPanel(error, language, interaction.id)],
-        });
-      } catch (_replyError: unknown) {
-        // The interaction may have expired.
-      }
-    });
+    }).catch(reportWizardFailure);
   });
 
   const stopForShutdown = (): void => collector.stop('shutdown');
@@ -382,10 +455,10 @@ export async function handleSetup(
   if (lifecycleSignal?.aborted) {
     collector.stop('shutdown');
   }
-  await new Promise<void>((resolve) => collector.once('end', () => resolve()));
-  sessionActive = false;
+  await sessionClosed;
   closeUiSession();
   await operations;
+  await Promise.all(concurrentOperations);
   lifecycleSignal?.removeEventListener('abort', stopForShutdown);
   if (!completed) {
     const expiredPrepared = prepared as PreparedUserConfiguration | null;
@@ -473,7 +546,6 @@ async function handleLegacySetup(
   const rawLanguage = safeGetString(interaction, 'language');
   const language: Language = rawLanguage === 'en' ? 'en' : 'tr';
   const storeCountry = safeGetString(interaction, 'store-country') ?? undefined;
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     const { config, summary } = await service.configure(
       interaction.user.id,
