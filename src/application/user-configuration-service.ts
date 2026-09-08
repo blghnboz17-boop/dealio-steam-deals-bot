@@ -3,7 +3,6 @@ import {
   resolveStoreCountry,
   type StoreCountryCode,
 } from '../domain/store-country.js';
-import { SteamWishlistError } from '../domain/steam.js';
 import { UserConfigRepository } from '../persistence/user-config-repository.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
 
@@ -105,18 +104,7 @@ export class UserConfigurationService {
       if (!isSteamId64(steamId64)) {
         throw new InvalidUserConfigurationError('Resolved SteamID64 is invalid');
       }
-      try {
-        await this.wishlistAccessValidator.validateWishlistAccess(steamId64);
-      } catch (error: unknown) {
-        if (
-          !(error instanceof SteamWishlistError)
-          || error.code === 'STEAM_WISHLIST_INACCESSIBLE'
-          || error.code === 'STEAM_INVALID_REQUEST'
-          || error.code === 'STEAM_CANCELLED'
-        ) {
-          throw error;
-        }
-      }
+      await this.wishlistAccessValidator.validateWishlistAccess(steamId64);
       return this.repository.upsert(
         discordUserId,
         steamId64,

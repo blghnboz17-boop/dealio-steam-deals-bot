@@ -160,7 +160,7 @@ describe('user configuration', () => {
     services.database.close();
   });
 
-  it('keeps setup successful when wishlist validation is temporarily unavailable', async () => {
+  it('leaves the user unconfigured when wishlist validation times out', async () => {
     const wishlistAccessValidator = {
       validateWishlistAccess: vi.fn().mockRejectedValue(
         new SteamWishlistError('STEAM_TIMEOUT', 'temporary timeout'),
@@ -173,11 +173,8 @@ describe('user configuration', () => {
       '76561198000000000',
       'en',
       'US',
-    )).resolves.toMatchObject({
-      steamId64: '76561198000000000',
-      storeCountryCode: 'US',
-    });
-    expect(services.userConfigRepository.findByDiscordUserId('discord-user')).not.toBeNull();
+    )).rejects.toMatchObject({ code: 'STEAM_TIMEOUT' });
+    expect(services.userConfigRepository.findByDiscordUserId('discord-user')).toBeNull();
     services.database.close();
   });
 
