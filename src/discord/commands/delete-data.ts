@@ -6,6 +6,7 @@ import {
   CheckboxGroupOptionBuilder,
   ContainerBuilder,
   LabelBuilder,
+  MessageFlags,
   ModalBuilder,
   SeparatorBuilder,
   SeparatorSpacingSize,
@@ -21,11 +22,11 @@ import type { SetupPresentationOptions } from '../setup-view.js';
 import { dealioBrand } from '../ui/brand.js';
 import {
   assertComponentsV2Limit,
-  buildExpiredPanel,
   buildNoticePanel,
   dealioEphemeralV2Flags,
   dealioFooter,
   dealioUiSessionTimeoutMs,
+  dealioV2Flags,
 } from '../ui/components-v2.js';
 import { uiCopy } from '../ui/copy.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
@@ -42,12 +43,13 @@ export async function handleDeleteData(
   lifecycleSignal?: AbortSignal,
   setupPresentation?: SetupPresentationOptions,
 ): Promise<void> {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const config = service.get(interaction.user.id);
   const language = config?.language ?? languageFromDiscordLocale(interaction.locale);
   const text = uiCopy(language);
   const sessionId = interaction.id;
-  const message = await interaction.reply({
-    flags: dealioEphemeralV2Flags,
+  const message = await interaction.editReply({
+    flags: dealioV2Flags,
     components: [buildDeleteWarningPanel(language, sessionId)],
   });
   const closeUiSession = dealioUiSessions.open(
@@ -62,51 +64,66 @@ export async function handleDeleteData(
       && component.customId.startsWith(`delete-v2:${sessionId}:`),
   });
   let sessionActive = true;
+  const activeOperations = new Set<Promise<void>>();
+  const sessionClosed = new Promise<void>((resolve) => {
+    collector.once('end', () => {
+      sessionActive = false;
+      resolve();
+    });
+  });
 
   collector.on('collect', (component) => {
     const action = component.customId.slice(`delete-v2:${sessionId}:`.length);
     if (action === 'cancel') {
-      void component.update({
+      const operation = component.update({
         components: [buildNoticePanel(
           language,
           'info',
           language === 'tr' ? 'Silme işlemi iptal edildi' : 'Deletion cancelled',
           language === 'tr' ? 'Hiçbir verin değiştirilmedi.' : 'None of your data was changed.',
         )],
-      });
+      }).then(
+        () => undefined,
+        (error: unknown) => console.error('Discord delete-data cancel failed', error),
+      );
+      activeOperations.add(operation);
       collector.stop('cancelled');
       return;
     }
     if (action === 'setup' && setupService) {
-      collector.stop('setup');
-      void handleSetup(
+      const operation = handleSetup(
         component as unknown as ChatInputCommandInteraction,
         setupService,
         lifecycleSignal,
         setupPresentation,
       ).catch((error: unknown) => console.error('Dealio setup after deletion failed', error));
+      activeOperations.add(operation);
+      collector.stop('setup');
       return;
     }
     if (action !== 'confirm') {
-      void component.deferUpdate();
+      const operation = component.deferUpdate().then(
+        () => undefined,
+        (error: unknown) => console.error('Discord delete-data acknowledgement failed', error),
+      );
+      activeOperations.add(operation);
       return;
     }
     const modalId = `delete-confirm:${sessionId}:${interaction.user.id}`;
-    void (async () => {
+    const operation = (async () => {
       await component.showModal(buildDeleteConfirmationModal(modalId, language));
-      const modal = await component.awaitModalSubmit({
-        time: dealioUiSessionTimeoutMs,
-        filter: (submission) => submission.customId === modalId
-          && submission.user.id === interaction.user.id,
-      }).catch(() => null);
-      if (!modal) return;
       if (!sessionActive) {
-        await modal.reply({
-          flags: dealioEphemeralV2Flags,
-          components: [buildExpiredPanel(language)],
-        });
         return;
       }
+      const modal = await Promise.race([
+        component.awaitModalSubmit({
+          time: dealioUiSessionTimeoutMs,
+          filter: (submission) => submission.customId === modalId
+            && submission.user.id === interaction.user.id,
+        }).catch(() => null),
+        sessionClosed.then(() => null),
+      ]);
+      if (!modal) return;
       const confirmed = modal.fields.getCheckboxGroup('delete-consent').includes('confirmed');
       if (!confirmed) {
         await modal.reply({
@@ -138,13 +155,17 @@ export async function handleDeleteData(
         collector.stop('completed');
       }
     })().catch((error: unknown) => console.error('Discord delete-data flow failed', error));
+    activeOperations.add(operation);
   });
 
   const stopForShutdown = (): void => collector.stop('shutdown');
   lifecycleSignal?.addEventListener('abort', stopForShutdown, { once: true });
+  if (lifecycleSignal?.aborted) {
+    collector.stop('shutdown');
+  }
   try {
-    await new Promise<void>((resolve) => collector.once('end', () => resolve()));
-    sessionActive = false;
+    await sessionClosed;
+    await Promise.all(activeOperations);
   } finally {
     sessionActive = false;
     closeUiSession();
