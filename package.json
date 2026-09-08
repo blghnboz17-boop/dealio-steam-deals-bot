@@ -16,7 +16,9 @@
     "admin:dev": "tsx src/admin/main.ts",
     "admin:password": "tsx src/admin/password-cli.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "typecheck:handoff": "npm run typecheck --prefix .opencode",
+    "test": "vitest run --passWithNoTests",
+    "test:handoff": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "discord.js": "^14.19.3",
