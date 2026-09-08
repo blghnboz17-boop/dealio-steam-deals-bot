@@ -16,6 +16,14 @@ import { basename, dirname, join, resolve } from 'node:path';
 
 export class ProcessLockError extends Error {}
 
+export interface ProcessLockFileSystem {
+  readonly closeSync: typeof closeSync;
+  readonly readFileSync: typeof readFileSync;
+  readonly unlinkSync: typeof unlinkSync;
+}
+
+const defaultFileSystem: ProcessLockFileSystem = { closeSync, readFileSync, unlinkSync };
+
 interface LockMetadata {
   readonly pid: number;
   readonly token: string;
@@ -24,14 +32,19 @@ interface LockMetadata {
 
 export class ProcessLock {
   private released = false;
+  private descriptorClosed = false;
 
   private constructor(
     private readonly lockPath: string,
     private readonly descriptor: number,
     private readonly token: string,
+    private readonly fileSystem: ProcessLockFileSystem,
   ) {}
 
-  public static acquire(databasePath: string): ProcessLock {
+  public static acquire(
+    databasePath: string,
+    fileSystem: ProcessLockFileSystem = defaultFileSystem,
+  ): ProcessLock {
     const lockPath = lockPathForDatabase(databasePath);
     const token = randomUUID();
     let descriptor: number;
@@ -66,7 +79,7 @@ export class ProcessLock {
       throw error;
     }
 
-    return new ProcessLock(lockPath, descriptor, token);
+    return new ProcessLock(lockPath, descriptor, token, fileSystem);
   }
 
   public release(): void {
@@ -74,12 +87,15 @@ export class ProcessLock {
       return;
     }
 
-    this.released = true;
-    closeSync(this.descriptor);
-    const metadata = readMetadata(this.lockPath);
-    if (metadata?.token === this.token) {
-      unlinkSync(this.lockPath);
+    if (!this.descriptorClosed) {
+      this.fileSystem.closeSync(this.descriptor);
+      this.descriptorClosed = true;
     }
+    const metadata = readMetadata(this.lockPath, this.fileSystem, true);
+    if (metadata?.token === this.token) {
+      this.fileSystem.unlinkSync(this.lockPath);
+    }
+    this.released = true;
   }
 }
 
@@ -99,9 +115,13 @@ function lockPathForDatabase(databasePath: string): string {
   return `${canonicalDatabasePath}.lock`;
 }
 
-function readMetadata(lockPath: string): LockMetadata | null {
+function readMetadata(
+  lockPath: string,
+  fileSystem: ProcessLockFileSystem = defaultFileSystem,
+  strict = false,
+): LockMetadata | null {
   try {
-    const parsed = JSON.parse(readFileSync(lockPath, 'utf8')) as Partial<LockMetadata>;
+    const parsed = JSON.parse(fileSystem.readFileSync(lockPath, 'utf8')) as Partial<LockMetadata>;
     if (
       typeof parsed.pid !== 'number' ||
       !Number.isSafeInteger(parsed.pid) ||
@@ -113,12 +133,18 @@ function readMetadata(lockPath: string): LockMetadata | null {
       typeof parsed.startedAt !== 'string' ||
       !isCanonicalIsoTimestamp(parsed.startedAt)
     ) {
+      if (strict) {
+        throw new ProcessLockError(`Invalid process lock metadata at ${lockPath}.`);
+      }
       return null;
     }
 
     return parsed as LockMetadata;
-  } catch (_error: unknown) {
-    return null;
+  } catch (error: unknown) {
+    if (!strict || errorCode(error) === 'ENOENT') {
+      return null;
+    }
+    throw error;
   }
 }
 
