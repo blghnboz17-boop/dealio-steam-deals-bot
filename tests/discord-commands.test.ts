@@ -65,7 +65,8 @@ describe('Discord slash commands', () => {
       user: { id: 'discord-user' },
       locale: 'tr',
       client: { user: null },
-      reply: vi.fn().mockResolvedValue(undefined),
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      editReply: vi.fn().mockResolvedValue(undefined),
       options: { getString: vi.fn() },
     };
     const service = {
@@ -78,10 +79,10 @@ describe('Discord slash commands', () => {
     await handleSetup(interaction as never, service as never);
 
     expect(service.hasExistingConfiguration).toHaveBeenCalledWith('discord-user');
-    const reply = interaction.reply.mock.calls[0]?.[0];
+    const reply = interaction.editReply.mock.calls[0]?.[0];
     expect(componentText(reply)).toContain('zaten kurulu');
     expect(componentText(reply)).toContain('/delete-data');
-    expect(reply.flags).toBe(MessageFlags.Ephemeral | MessageFlags.IsComponentsV2);
+    expect(reply.flags).toBe(MessageFlags.IsComponentsV2);
     expect(service.prepare).not.toHaveBeenCalled();
     expect(service.confirm).not.toHaveBeenCalled();
     expect(service.configure).not.toHaveBeenCalled();

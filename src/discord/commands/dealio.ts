@@ -1,5 +1,6 @@
 import {
   ChatInputCommandInteraction,
+  MessageFlags,
   SlashCommandBuilder,
 } from 'discord.js';
 import type { CheckService } from '../../application/check-service.js';
@@ -16,8 +17,8 @@ import type { SetupPresentationOptions } from '../setup-view.js';
 import { buildStatusV2Panel } from '../status-view-v2.js';
 import {
   buildNoticePanel,
-  dealioEphemeralV2Flags,
   dealioUiSessionTimeoutMs,
+  dealioV2Flags,
 } from '../ui/components-v2.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
 import { handleCheck } from './check.js';
@@ -48,6 +49,7 @@ export async function handleDealio(
   interaction: ChatInputCommandInteraction,
   services: DealioCommandServices,
 ): Promise<void> {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const fallbackLanguage = languageFromDiscordLocale(interaction.locale);
   let current = services.statusService.getDashboard(interaction.user.id, fallbackLanguage);
   let avatarUrl: string | undefined;
@@ -76,8 +78,8 @@ export async function handleDealio(
             } }
           : {},
       );
-  const message = await interaction.reply({
-    flags: dealioEphemeralV2Flags,
+  const message = await interaction.editReply({
+    flags: dealioV2Flags,
     components: [firstPanel],
   });
   const closeUiSession = dealioUiSessions.open(

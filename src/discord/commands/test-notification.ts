@@ -25,11 +25,10 @@ export async function handleTestNotification(
   userConfigurationService: UserConfigurationService,
   testNotificationService: TestNotificationService,
 ): Promise<void> {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const config = userConfigurationService.get(interaction.user.id);
   const language = config?.language ?? languageFromDiscordLocale(interaction.locale);
   const messages = messagesFor(language);
-
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   let kind: 'success' | 'warning' | 'danger' = 'success';
   let title: string = uiCopy(language).testSentTitle;

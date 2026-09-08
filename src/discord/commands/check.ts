@@ -38,12 +38,13 @@ export async function handleCheck(
   notificationService: NotificationService,
   navigation?: CheckNavigationServices,
 ): Promise<void> {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const config = statusService.get(interaction.user.id).config;
   const language = config?.language ?? 'tr';
   const messages = messagesFor(language);
   if (!config) {
-    await interaction.reply({
-      flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+    await interaction.editReply({
+      flags: dealioV2Flags,
       components: [buildCheckPanel(language, {
         kind: 'warning',
         title: language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
@@ -53,7 +54,6 @@ export async function handleCheck(
     return;
   }
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const text = uiCopy(language);
   await interaction.editReply({
     flags: dealioV2Flags,

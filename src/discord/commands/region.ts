@@ -12,7 +12,6 @@ import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
 import {
   buildNoticePanel,
-  dealioEphemeralV2Flags,
   dealioV2Flags,
 } from '../ui/components-v2.js';
 
@@ -35,20 +34,20 @@ export async function handleRegion(
   interaction: ChatInputCommandInteraction,
   service: UserConfigurationService,
 ): Promise<void> {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const existing = service.get(interaction.user.id);
   const language = existing?.language ?? languageFromDiscordLocale(interaction.locale);
   const messages = messagesFor(language);
   if (!existing) {
-    await interaction.reply({
+    await interaction.editReply({
       components: [buildNoticePanel(language, 'warning',
         language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
         messages.notConfigured)],
-      flags: dealioEphemeralV2Flags,
+      flags: dealioV2Flags,
     });
     return;
   }
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     const updated = await service.setStoreCountry(
       interaction.user.id,

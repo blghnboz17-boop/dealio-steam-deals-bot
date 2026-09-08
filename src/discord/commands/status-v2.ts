@@ -42,12 +42,13 @@ export async function handleStatusV2(
   thresholdService?: DiscountThresholdService,
   testNotificationService?: TestNotificationService,
 ): Promise<void> {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const fallbackLanguage = languageFromDiscordLocale(interaction.locale);
   const initial = statusService.getDashboard(interaction.user.id, fallbackLanguage);
   if (initial.status !== 'ready') {
     const messages = messagesFor(initial.language);
-    await interaction.reply({
-      flags: dealioEphemeralV2Flags,
+    await interaction.editReply({
+      flags: dealioV2Flags,
       components: [buildNoticePanel(
         initial.language,
         initial.status === 'not-configured' ? 'warning' : 'danger',
@@ -67,8 +68,8 @@ export async function handleStatusV2(
   } catch (_error: unknown) {
     avatarUrl = undefined;
   }
-  const message = await interaction.reply({
-    flags: dealioEphemeralV2Flags,
+  const message = await interaction.editReply({
+    flags: dealioV2Flags,
     components: [buildStatusV2Panel(current, interaction.id, { avatarUrl })],
   });
   const closeUiSession = dealioUiSessions.open(
