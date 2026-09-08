@@ -6,7 +6,11 @@ import {
 } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadEnvironment, type EnvironmentConfig } from '../config/environment.js';
-import { startBot, type StartBotOptions } from './start-bot.js';
+import {
+  BotStartupCancelledError,
+  startBot,
+  type StartBotOptions,
+} from './start-bot.js';
 
 interface BotProcessRuntime {
   stop(): Promise<void>;
@@ -105,8 +109,11 @@ export function runBotProcess(options: RunBotProcessOptions = {}): BotProcessCon
   const nodePidPath = resolve(runtimeDirectory, 'bot.node.pid');
   const healthPath = resolve(runtimeDirectory, 'bot.health.json');
   const startupAbortController = new AbortController();
-  let runtime: BotProcessRuntime | null = null;
   let shutdownRequested = false;
+  let resolveShutdownRequest = (): void => undefined;
+  const shutdownRequest = new Promise<void>((resolve) => {
+    resolveShutdownRequest = resolve;
+  });
 
   dependencies.fileSystem.mkdirSync(runtimeDirectory, { recursive: true });
   const shutdownRequestTimer = dependencies.clock.setInterval(() => {
@@ -157,45 +164,34 @@ export function runBotProcess(options: RunBotProcessOptions = {}): BotProcessCon
       `${dependencies.now().toISOString()} Received ${signal}; shutting down.`,
     );
     startupAbortController.abort();
-    if (runtime) {
-      void runtime.stop()
-        .catch((error: unknown) => {
-          dependencies.logger.error(
-            `${dependencies.now().toISOString()} Bot shutdown failed`,
-            error,
-          );
-        })
-        .finally(removeNodePid);
-    }
+    resolveShutdownRequest();
   };
 
   dependencies.process.on('SIGINT', () => requestShutdown('SIGINT'));
   dependencies.process.on('SIGTERM', () => requestShutdown('SIGTERM'));
 
-  const completion = Promise.resolve()
-    .then(() => dependencies.startBot(dependencies.loadEnvironment(), {
-      signal: startupAbortController.signal,
-      nodePidPath,
-      healthPath,
-    }))
-    .then(async (startedRuntime) => {
-      runtime = startedRuntime;
-      if (shutdownRequested) {
-        await runtime.stop();
-        removeNodePid();
-      }
-    })
-    .catch((error: unknown) => {
-      shutdownRequestTimer.clear();
+  const completion = Promise.resolve().then(async () => {
+    try {
+      const runtime = await dependencies.startBot(dependencies.loadEnvironment(), {
+        signal: startupAbortController.signal,
+        nodePidPath,
+        healthPath,
+      });
       if (!shutdownRequested) {
-        dependencies.logger.error(
-          `${dependencies.now().toISOString()} Bot failed to start`,
-          error,
-        );
+        await shutdownRequest;
+      }
+      await runtime.stop();
+    } catch (error: unknown) {
+      if (!(shutdownRequested && error instanceof BotStartupCancelledError)) {
+        const failure = shutdownRequested ? 'Bot shutdown failed' : 'Bot failed to start';
+        dependencies.logger.error(`${dependencies.now().toISOString()} ${failure}`, error);
         dependencies.process.exitCode = 1;
       }
+    } finally {
+      shutdownRequestTimer.clear();
       removeNodePid();
-    });
+    }
+  });
 
   return { completion };
 }

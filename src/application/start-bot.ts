@@ -41,12 +41,18 @@ export interface StartBotOptions {
   readonly health?: RuntimeHealth;
 }
 
+export class BotStartupCancelledError extends Error {
+  public readonly name = 'BotStartupCancelledError';
+
+  public constructor() { super('Bot startup was cancelled'); }
+}
+
 export async function startBot(
   environment: EnvironmentConfig = loadEnvironment(),
   options: StartBotOptions = {},
 ): Promise<BotRuntime> {
   if (options.signal?.aborted) {
-    throw new Error('Bot startup was cancelled');
+    throw new BotStartupCancelledError();
   }
 
   const processLock = ProcessLock.acquire(environment.databasePath);
@@ -200,11 +206,30 @@ export async function startBot(
 
     await registerCommands(environment, options.signal);
     if (options.signal?.aborted) {
-      throw new Error('Bot startup was cancelled');
+      throw new BotStartupCancelledError();
     }
-    await client.login(environment.discordToken);
+    const loginPromise = client.login(environment.discordToken);
+    if (options.signal) {
+      const startupSignal = options.signal;
+      let rejectForAbort = (_error: BotStartupCancelledError): void => undefined;
+      const abortPromise = new Promise<never>((_resolve, reject) => {
+        rejectForAbort = reject;
+      });
+      const handleLoginAbort = (): void => rejectForAbort(new BotStartupCancelledError());
+      startupSignal.addEventListener('abort', handleLoginAbort, { once: true });
+      if (startupSignal.aborted) {
+        handleLoginAbort();
+      }
+      try {
+        await Promise.race([loginPromise, abortPromise]);
+      } finally {
+        startupSignal.removeEventListener('abort', handleLoginAbort);
+      }
+    } else {
+      await loginPromise;
+    }
     if (options.signal?.aborted) {
-      throw new Error('Bot startup was cancelled');
+      throw new BotStartupCancelledError();
     }
     return startedRuntime;
   } catch (error: unknown) {
@@ -223,6 +248,7 @@ export async function startBot(
     }
     if (options.signal?.aborted) {
       health?.markStopped();
+      throw new BotStartupCancelledError();
     } else {
       health?.markFailed();
     }

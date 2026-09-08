@@ -81,7 +81,7 @@ type Listener = (interaction?: InteractionFake) => void;
 class DiscordClientFake {
   public ready = false;
   public readonly guilds = { cache: new Map<string, unknown>() };
-  public readonly login = vi.fn(async () => undefined);
+  public readonly login = vi.fn(async (_token?: string): Promise<string> => 'test-token');
   public readonly destroy = vi.fn();
   private readonly listeners = new Map<string, Listener[]>();
 
@@ -188,6 +188,52 @@ describe('bot wiring', () => {
 
     expect(mocks.registerCommands.mock.invocationCallOrder[0])
       .toBeLessThan(client?.login.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY);
+  });
+
+  it('rejects promptly after cleanup when aborted during unresolved Discord login', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'bot-wiring-login-abort-'));
+    directories.push(directory);
+    let rejectLogin = (_error: Error): void => undefined;
+    const pendingLogin = new Promise<string>((_resolve, reject) => {
+      rejectLogin = reject;
+    });
+    const client = new DiscordClientFake();
+    client.login.mockImplementationOnce(() => pendingLogin);
+    clients.push(client);
+    mocks.createClient.mockReturnValueOnce(client);
+    const abortController = new AbortController();
+    const unhandledReasons: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown): void => {
+      unhandledReasons.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandledRejection);
+    const startup = startBot(
+      { ...environment, databasePath: join(directory, 'wishlist.db') },
+      { signal: abortController.signal },
+    );
+    const startupOutcome = startup.then(
+      () => 'resolved' as const,
+      () => 'rejected' as const,
+    );
+
+    try {
+      await vi.waitFor(() => expect(client.login).toHaveBeenCalledOnce());
+      abortController.abort();
+
+      expect(await Promise.race([
+        startupOutcome,
+        new Promise<'pending'>((resolve) => setImmediate(() => resolve('pending'))),
+      ])).toBe('rejected');
+      expect(client.destroy).toHaveBeenCalledOnce();
+
+      rejectLogin(new Error('late login failure'));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(unhandledReasons).toEqual([]);
+    } finally {
+      rejectLogin(new Error('test cleanup'));
+      await startupOutcome;
+      process.off('unhandledRejection', onUnhandledRejection);
+    }
   });
 
   it('starts both schedulers and marks health ready only on ClientReady', async () => {
