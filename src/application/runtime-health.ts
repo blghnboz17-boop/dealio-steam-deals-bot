@@ -81,7 +81,9 @@ export class RuntimeHealth {
     }
 
     const now = this.now().toISOString();
-    const discordReady = this.discordReadyProbe?.() ?? true;
+    const discordReady = this.discordReadyProbe === null
+      ? true
+      : this.probeDiscordReady(false);
     this.document = {
       ...this.document,
       phase: 'ready',
@@ -98,7 +100,7 @@ export class RuntimeHealth {
       return;
     }
 
-    const discordReady = this.discordReadyProbe?.() ?? false;
+    const discordReady = this.probeDiscordReady(false);
     this.document = {
       ...this.document,
       heartbeatAt: this.now().toISOString(),
@@ -172,7 +174,7 @@ export class RuntimeHealth {
     }
 
     const discordReady = this.document.phase === 'ready'
-      ? this.discordReadyProbe?.() ?? this.document.discordReady
+      ? this.probeDiscordReady(this.document.discordReady)
       : false;
     this.document = {
       ...this.document,
@@ -194,10 +196,24 @@ export class RuntimeHealth {
     if (!discordReady) {
       return null;
     }
-    const guildCount = this.discordGuildCountProbe?.();
-    return guildCount !== undefined && Number.isSafeInteger(guildCount) && guildCount >= 0
-      ? guildCount
-      : null;
+    try {
+      const guildCount = this.discordGuildCountProbe?.();
+      return guildCount !== undefined && Number.isSafeInteger(guildCount) && guildCount >= 0
+        ? guildCount
+        : null;
+    } catch (_error: unknown) {
+      this.logger.error(`${new Date().toISOString()} [health] Could not probe Discord guild count.`);
+      return null;
+    }
+  }
+
+  private probeDiscordReady(fallback: boolean): boolean {
+    try {
+      return this.discordReadyProbe?.() ?? fallback;
+    } catch (_error: unknown) {
+      this.logger.error(`${new Date().toISOString()} [health] Could not probe Discord readiness.`);
+      return false;
+    }
   }
 
   private writeSafely(): boolean {
