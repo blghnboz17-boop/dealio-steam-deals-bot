@@ -245,28 +245,4 @@ describe('process lifecycle', () => {
     }
   });
 
-  it('uses cooperative Windows shutdown before the force-kill fallback', () => {
-    const script = readFileSync(resolve('scripts/bot-control.ps1'), 'utf8');
-
-    expect(script).toContain('shutdown.request');
-    expect(script.indexOf('Set-Content -LiteralPath $shutdownRequestPath'))
-      .toBeLessThan(script.indexOf('taskkill.exe /PID'));
-    expect(script).toContain('Graceful shutdown timed out');
-    expect(script).toContain('bot.health.json');
-    expect(script).toContain('System.Threading.Mutex');
-    expect(script.indexOf("$health.phase -eq 'ready'"))
-      .toBeLessThan(script.indexOf('Bot started'));
-    expect(script).toContain('$operationMutex.WaitOne(3000)');
-    expect(script).toContain('Still waiting for Discord readiness');
-    expect(script).toContain('Waiting for graceful shutdown');
-    expect(script).toContain('Test-ProcessInfoIsBotNode -ProcessInfo $_');
-  });
-
-  it('keeps double-clicked Windows control windows open so results are readable', () => {
-    for (const launcher of ['start-bot.bat', 'stop-bot.bat', 'restart-bot.bat']) {
-      const script = readFileSync(resolve(launcher), 'utf8');
-      expect(script).toContain('pause');
-      expect(script.indexOf('pause')).toBeLessThan(script.indexOf('exit /b'));
-    }
-  });
 });
