@@ -119,7 +119,10 @@ export async function handleWishlist(
       const appId = Number(component.values[0]);
       const item = snapshot.items.find((candidate) => candidate.appId === appId);
       if (!item || !thresholdService) {
-        void component.deferUpdate();
+        const acknowledgement = component.deferUpdate();
+        operations = operations.then(() => acknowledgement)
+          .then(() => undefined)
+          .catch((error: unknown) => console.error('Discord wishlist fallback acknowledgement failed', error));
         return;
       }
       const modalCustomId = wishlistThresholdModalId(
@@ -221,7 +224,10 @@ export async function handleWishlist(
     }
 
     if (!component.isButton()) {
-      void component.deferUpdate();
+      const acknowledgement = component.deferUpdate();
+      operations = operations.then(() => acknowledgement)
+        .then(() => undefined)
+        .catch((error: unknown) => console.error('Discord wishlist fallback acknowledgement failed', error));
       return;
     }
     if (action === 'close') {
