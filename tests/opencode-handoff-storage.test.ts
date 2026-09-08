@@ -1,8 +1,15 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { renderHandoffMarkdown } from '../.opencode/plugins/handoff/render.js';
 import { parseHandoffJson, parseHandoffState, type HandoffState } from '../.opencode/plugins/handoff/schema.js';
+import {
+  retainedCorruptHandoffJson,
+  retainedHandoffJson,
+  retainedHandoffMarkdown,
+  retainedLockFixture,
+} from './fixtures/opencode-handoff-storage.js';
 import {
   createHandoffStorage,
   nodeStorageFileSystem,
@@ -11,7 +18,6 @@ import {
   type StorageWritableFile,
 } from '../.opencode/plugins/handoff/storage.js';
 
-const fixtureRoot = join(process.cwd(), '.omo', 'evidence', 'durable-opencode-handoff', 'task-4-fixtures');
 const fixtureDirectories: string[] = [];
 const worktreeHash = 'a'.repeat(64);
 
@@ -38,8 +44,7 @@ const stateAt = (revision: number): HandoffState => parseHandoffState({
 });
 
 async function createFixture(): Promise<string> {
-  await mkdir(fixtureRoot, { recursive: true });
-  const directory = await mkdtemp(join(fixtureRoot, 'storage-'));
+  const directory = await mkdtemp(join(tmpdir(), 'dealio-handoff-storage-'));
   fixtureDirectories.push(directory);
   return directory;
 }
@@ -115,10 +120,10 @@ afterEach(async () => {
 describe('atomic handoff storage', () => {
   it('retains bounded synthetic artifacts for independent read-only inspection', async () => {
     // Given
-    const retainedJson = await readFile(join(fixtureRoot, 'BACKTO.json'), 'utf8');
-    const retainedMarkdown = await readFile(join(fixtureRoot, 'BACKTO.md'), 'utf8');
-    const quarantine = await readFile(join(fixtureRoot, 'BACKTO.corrupt-retained.json'), 'utf8');
-    const lock = JSON.parse(await readFile(join(fixtureRoot, 'BACKTO.lock.fixture.json'), 'utf8'));
+    const retainedJson = retainedHandoffJson;
+    const retainedMarkdown = retainedHandoffMarkdown;
+    const quarantine = retainedCorruptHandoffJson;
+    const lock = retainedLockFixture;
 
     // When
     const retained = parseHandoffJson(retainedJson);
