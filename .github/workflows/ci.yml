@@ -17,6 +17,8 @@ jobs:
           node-version: 22.16.0
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix .opencode
       - run: npm run typecheck
+      - run: npm run typecheck:handoff
       - run: npm test
       - run: npm run build
