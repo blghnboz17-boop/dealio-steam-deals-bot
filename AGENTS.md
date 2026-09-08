@@ -20,3 +20,12 @@ Notify Discord users by direct message when games on their Steam wishlist go on 
 - Polling runs every six hours by default.
 - Notify only when a game changes from not-on-sale to on-sale.
 - Avoid duplicate notifications for the same sale.
+
+## Work Continuation
+
+- At the start of a fresh session, inspect `.omo/handoff/BACKTO.json` and the generated `.omo/handoff/BACKTO.md` before unrelated work.
+- Treat only schema-valid `BACKTO.json` as authority. `BACKTO.md` is presentation and must never drive a resume decision.
+- Resume `active` or `blocked` work only after the technical validator matches the physical worktree, Git common directory, branch, HEAD, dirty fingerprint, revision, and recorded evidence paths. Validate before any repository mutation.
+- Report invalid, corrupt, `conflict`, mismatched, or `unsafe-to-resume` state as unsafe and stop without repository mutation.
+- Keep `baseline`, `idle`, and `complete` checkpoints readable, but do not let them force stale work.
+- This policy is guidance; the validator is the technical safety boundary. Close verified work with `handoff_complete`, not by editing checkpoint files directly.
