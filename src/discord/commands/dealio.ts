@@ -18,8 +18,10 @@ import { buildStatusV2Panel } from '../status-view-v2.js';
 import {
   buildNoticePanel,
   dealioUiSessionTimeoutMs,
+  dealioEphemeralV2Flags,
   dealioV2Flags,
 } from '../ui/components-v2.js';
+import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
 import { handleCheck } from './check.js';
 import { handleSetup } from './setup.js';
@@ -93,7 +95,19 @@ export async function handleDealio(
     filter: (component) => component.user.id === interaction.user.id
       && component.customId.startsWith(`dealio:${interaction.id}:`),
   });
-  let operations = Promise.resolve();
+  const operations = new PanelOperationQueue(async (error) => {
+    console.error('Discord panel update failed', error);
+    await interaction.followUp({
+      flags: dealioEphemeralV2Flags,
+      components: [buildNoticePanel(
+        current.language, 'warning',
+        current.language === 'tr' ? 'İşlem tamamlanamadı' : 'Action could not be completed',
+        current.language === 'tr'
+          ? 'İşlem sonucu gösterilemedi. Güncel durumu görmek için paneli yeniden açabilirsin.'
+          : 'The result could not be displayed. Reopen the panel to check the current state.',
+      )],
+    });
+  });
 
   collector.on('collect', (component) => {
     const action = component.customId.slice(`dealio:${interaction.id}:`.length);
@@ -152,35 +166,50 @@ export async function handleDealio(
     }
     if (action === 'refresh') {
       const acknowledgement = component.deferUpdate();
-      operations = operations.then(async () => {
-        await acknowledgement;
+      void operations.enqueue(acknowledgement, async () => {
         current = services.statusService.getDashboard(interaction.user.id, fallbackLanguage);
         const refreshed = current.status === 'ready'
           ? buildStatusV2Panel(current, interaction.id, { mode: 'home', bannerUrl, avatarUrl })
           : buildNoticePanel(
               current.language,
-              'warning',
-              current.language === 'tr' ? 'Dealio kurulumu bulunamadı' : 'Dealio setup not found',
-              messagesFor(current.language).statusNotConfigured,
+              current.status === 'not-configured' ? 'warning' : 'danger',
+              current.status === 'not-configured'
+                ? (current.language === 'tr' ? 'Dealio kurulumu bulunamadı' : 'Dealio setup not found')
+                : (current.language === 'tr' ? 'Durum bilgisi alınamadı' : 'Status unavailable'),
+              current.status === 'not-configured'
+                ? messagesFor(current.language).statusNotConfigured
+                : messagesFor(current.language).statusDashboardUnavailable,
             );
         await interaction.editReply({ components: [refreshed] });
       });
       return;
     }
-    void component.deferUpdate();
+    void operations.enqueue(component.deferUpdate(), async () => undefined);
   });
 
+  const ended = new Promise<void>((resolve) => collector.once('end', () => resolve()));
   const stopForShutdown = (): void => collector.stop('shutdown');
   services.lifecycleSignal?.addEventListener('abort', stopForShutdown, { once: true });
+  if (services.lifecycleSignal?.aborted) collector.stop('shutdown');
   try {
-    await new Promise<void>((resolve) => collector.once('end', () => resolve()));
-    await operations;
+    await ended;
+    await operations.drain();
     if (current.status === 'ready') {
       await interaction.editReply({
         components: [buildStatusV2Panel(current, interaction.id, {
           mode: 'home', bannerUrl, avatarUrl, disabled: true,
         })],
       }).catch((error: unknown) => console.error('Dealio home cleanup failed', error));
+    } else {
+      await interaction.editReply({
+        components: [buildNoticePanel(
+          current.language, 'info',
+          current.language === 'tr' ? 'Panel kapatıldı' : 'Panel closed',
+          current.language === 'tr'
+            ? 'Devam etmek için /dealio komutuyla yeni bir panel aç.'
+            : 'Open a fresh panel with /dealio to continue.',
+        )],
+      }).catch((error: unknown) => console.error('Dealio welcome cleanup failed', error));
     }
   } finally {
     closeUiSession();

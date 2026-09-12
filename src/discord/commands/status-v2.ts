@@ -29,6 +29,7 @@ import {
 } from '../ui/components-v2.js';
 import { buildCountryListPanel, buildCountryRangePanel } from '../ui/country-picker.js';
 import { uiCopy } from '../ui/copy.js';
+import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
 import { parseDiscountPercent } from './status.js';
 
@@ -88,7 +89,19 @@ export async function handleStatusV2(
   let modalSequence = 0;
   let controlsRemoved = false;
   let sessionActive = true;
-  let operations = Promise.resolve();
+  const operations = new PanelOperationQueue(async (error) => {
+    console.error('Discord panel update failed', error);
+    await interaction.followUp({
+      flags: dealioEphemeralV2Flags,
+      components: [buildNoticePanel(
+        current.language, 'warning',
+        current.language === 'tr' ? 'İşlem tamamlanamadı' : 'Action could not be completed',
+        current.language === 'tr'
+          ? 'İşlem sonucu gösterilemedi. Güncel durumu görmek için paneli yeniden açabilirsin.'
+          : 'The result could not be displayed. Reopen the panel to check the current state.',
+      )],
+    });
+  });
 
   const refresh = async (): Promise<boolean> => {
     const refreshed = statusService.getDashboard(interaction.user.id, fallbackLanguage);
@@ -98,9 +111,11 @@ export async function handleStatusV2(
       await interaction.editReply({
         components: [buildNoticePanel(
           refreshed.language,
-          'warning',
+          refreshed.status === 'not-configured' ? 'warning' : 'danger',
           refreshed.language === 'tr' ? 'Panel kapatıldı' : 'Panel closed',
-          messagesFor(refreshed.language).statusNotConfigured,
+          refreshed.status === 'not-configured'
+            ? messagesFor(refreshed.language).statusNotConfigured
+            : messagesFor(refreshed.language).statusDashboardUnavailable,
         )],
       });
       return false;
@@ -116,8 +131,7 @@ export async function handleStatusV2(
     if (component.customId === `country:${interaction.id}:range` && component.isStringSelectMenu()) {
       const rangeIndex = Number(component.values[0]);
       const acknowledgement = component.deferUpdate();
-      operations = operations.then(async () => {
-        await acknowledgement;
+      void operations.enqueue(acknowledgement, async () => {
         await interaction.editReply({
           components: [buildCountryListPanel(current.language, interaction.id, rangeIndex, current.config.storeCountryCode)],
         });
@@ -126,8 +140,7 @@ export async function handleStatusV2(
     }
     if (component.customId === `country:${interaction.id}:back` && component.isButton()) {
       const acknowledgement = component.deferUpdate();
-      operations = operations.then(async () => {
-        await acknowledgement;
+      void operations.enqueue(acknowledgement, async () => {
         await interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id)] });
       });
       return;
@@ -135,8 +148,7 @@ export async function handleStatusV2(
     if (component.customId === `country:${interaction.id}:select` && component.isStringSelectMenu()) {
       const country = parseStoreCountryCode(component.values[0] ?? '');
       const acknowledgement = component.deferUpdate();
-      operations = operations.then(async () => {
-        await acknowledgement;
+      void operations.enqueue(acknowledgement, async () => {
         if (country) {
           await userConfigurationService.setStoreCountry(interaction.user.id, country);
         }
@@ -145,14 +157,13 @@ export async function handleStatusV2(
       return;
     }
     if (!component.isButton()) {
-      void component.deferUpdate();
+      void operations.enqueue(component.deferUpdate(), async () => undefined);
       return;
     }
     const action = component.customId.slice(`status-v2:${interaction.id}:`.length);
     if (action === 'region') {
       const acknowledgement = component.deferUpdate();
-      operations = operations.then(async () => {
-        await acknowledgement;
+      void operations.enqueue(acknowledgement, async () => {
         await interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id)] });
       });
       return;
@@ -219,8 +230,7 @@ export async function handleStatusV2(
     }
     if (action === 'test' && testNotificationService) {
       const acknowledgement = component.deferReply({ flags: MessageFlags.Ephemeral });
-      operations = operations.then(async () => {
-        await acknowledgement;
+      void operations.enqueue(acknowledgement, async () => {
         const text = uiCopy(current.language);
         try {
           await testNotificationService.send(
@@ -252,22 +262,26 @@ export async function handleStatusV2(
     }
     if (action === 'enable' || action === 'disable') {
       const acknowledgement = component.deferUpdate();
-      operations = operations.then(async () => {
-        await acknowledgement;
+      void operations.enqueue(acknowledgement, async () => {
         await userConfigurationService.setEnabled(interaction.user.id, action === 'enable');
         await refresh();
       });
       return;
     }
-    void component.deferUpdate();
+    void operations.enqueue(component.deferUpdate(), async () => undefined);
   });
 
+  const ended = new Promise<void>((resolve) => collector.once('end', () => {
+    sessionActive = false;
+    resolve();
+  }));
   const stopForShutdown = (): void => collector.stop('shutdown');
   lifecycleSignal?.addEventListener('abort', stopForShutdown, { once: true });
+  if (lifecycleSignal?.aborted) collector.stop('shutdown');
   try {
-    await new Promise<void>((resolve) => collector.once('end', () => resolve()));
+    await ended;
     sessionActive = false;
-    await operations;
+    await operations.drain();
     if (!controlsRemoved) {
       await interaction.editReply({
         components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, disabled: true })],

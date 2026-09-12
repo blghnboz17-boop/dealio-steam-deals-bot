@@ -385,7 +385,7 @@ export class SteamClient {
         }
       }
 
-      return await Promise.race([response.json(), timeoutPromise]) as unknown;
+      return await Promise.race([response.json(), timeoutPromise, cancellationPromise]) as unknown;
     } catch (error: unknown) {
       if (error instanceof SteamWishlistError) {
         throw error;

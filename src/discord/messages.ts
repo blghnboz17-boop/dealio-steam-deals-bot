@@ -224,7 +224,9 @@ const catalog: Record<Language, MessageCatalog> = {
     setupWizardDmTransient: 'Kurulum kaydedildi ancak karşılama DM\'i geçici bir Discord sorunu nedeniyle gönderilemedi. Dealio daha sonra normal kontrollerine devam edecek.',
     setupWizardAlreadyCompletedTitle: 'Dealio zaten kurulu',
     setupWizardAlreadyCompletedDescription: 'Bu Discord hesabı için `/setup` daha önce tamamlanmış. Mevcut ayarlarını `/dealio`, `/status`, `/region` ve `/wishlist` ile yönetebilirsin. Baştan kurmak istiyorsan `/delete-data` içindeki güvenli onay ekranıyla kayıtlarını kalıcı olarak silmelisin.',
-    setupWizardFrequency: (hours) => `Her ${hours} saatte bir`,
+    setupWizardFrequency: (hours) => hours < 1
+      ? `Her ${Math.round(hours * 60)} dakikada bir`
+      : `Her ${hours} saatte bir`,
     initialSummaryTitle: 'Dealio hazır — indirim nöbetin başladı',
     initialSummaryDescription: (saleCount) => saleCount > 0
       ? `Wishlistinde şu anda indirimde olan ${saleCount} oyun aşağıda. Bunlar başlangıç kaydıdır; indirimden çıkıp yeniden indirime girmeden tekrar bildirilmez.`
@@ -414,7 +416,9 @@ const catalog: Record<Language, MessageCatalog> = {
     setupWizardDmTransient: 'Setup was saved, but the welcome DM could not be sent because of a temporary Discord problem. Dealio will continue its normal checks.',
     setupWizardAlreadyCompletedTitle: 'Dealio is already configured',
     setupWizardAlreadyCompletedDescription: '`/setup` has already been completed for this Discord account. Manage it with `/dealio`, `/status`, `/region`, and `/wishlist`. To start over, permanently delete your records through the safe confirmation flow in `/delete-data`.',
-    setupWizardFrequency: (hours) => `Every ${hours} hours`,
+    setupWizardFrequency: (hours) => hours < 1
+      ? `Every ${Math.round(hours * 60)} minutes`
+      : hours === 1 ? 'Every hour' : `Every ${hours} hours`,
     initialSummaryTitle: 'Dealio is ready — your sale watch has started',
     initialSummaryDescription: (saleCount) => saleCount > 0
       ? `${saleCount} games on your wishlist are currently discounted below. This is your starting snapshot; they will not alert again until they leave the sale and go on sale again.`

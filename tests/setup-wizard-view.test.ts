@@ -78,6 +78,19 @@ describe('guided setup presentation', () => {
     });
   });
 
+  it.each([
+    ['tr', 'Her 30 dakikada bir'],
+    ['en', 'Every 30 minutes'],
+  ] as const)('shows the default half-hour schedule in %s', (language, expected) => {
+    const embed = buildSetupConfirmationEmbed({
+      discordUserId: 'discord-user',
+      steamId64: '76561198000000000',
+      language,
+      storeCountryCode: 'TR',
+    });
+    expect(JSON.stringify(embed)).toContain(expected);
+  });
+
   it('binds setup actions to the owner and rejects stale or unknown controls', () => {
     expect(parseSetupAction('setup:session:confirm', 'session')).toBe('confirm');
     expect(parseSetupAction('setup:other:confirm', 'session')).toBeNull();

@@ -646,6 +646,64 @@ describe('SteamClient', () => {
     });
   });
 
+  it('cancels immediately while a response body ignores abort', async () => {
+    vi.useFakeTimers();
+    try {
+      const lifecycle = new AbortController();
+      const response = jsonResponse({ response: {} });
+      const readBody = vi.spyOn(response, 'json').mockReturnValue(new Promise(() => undefined));
+      let outcome: unknown;
+      const request = new SteamClient({
+        fetchImpl: createFetchMock().mockResolvedValue(response),
+        lifecycleSignal: lifecycle.signal,
+        timeoutMs: 500,
+      }).getWishlist('76561198000000000', 'TR', 'tr')
+        .catch((error: unknown) => { outcome = error; });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(readBody).toHaveBeenCalledOnce();
+      lifecycle.abort();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(outcome).toMatchObject({ code: 'STEAM_CANCELLED' });
+      await request;
+    } finally {
+      await vi.runAllTimersAsync();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    { initial: 1000, final: 1200, discount_percent: 50 },
+    { initial: 1000, final: 1000, discount_percent: 50 },
+    { initial: 1000, final: 500, discount_percent: 0 },
+    { initial: 1000, final: 500, discount_percent: 100 },
+  ])('rejects contradictory price metadata: %j', async (price) => {
+    const fetchMock = createFetchMock()
+      .mockResolvedValueOnce(jsonResponse({ response: { items: [{ appid: 10 }] } }))
+      .mockResolvedValueOnce(jsonResponse({
+        '10': { success: true, data: {
+          steam_appid: 10, name: 'Inconsistent game', is_free: false,
+          price_overview: { currency: 'USD', ...price },
+        } },
+      }));
+    await expect(new SteamClient({ fetchImpl: fetchMock })
+      .getWishlistWithErrors('76561198000000000', 'US', 'en'))
+      .resolves.toEqual({ items: [], errors: [{ appId: 10, code: 'STEAM_SCHEMA_INVALID' }] });
+  });
+
+  it('keeps a real 100 percent discount distinct from permanently free games', async () => {
+    const fetchMock = createFetchMock()
+      .mockResolvedValueOnce(jsonResponse({ response: { items: [{ appid: 10 }] } }))
+      .mockResolvedValueOnce(jsonResponse({
+        '10': { success: true, data: {
+          steam_appid: 10, name: 'Giveaway', is_free: false,
+          price_overview: { currency: 'USD', initial: 1000, final: 0, discount_percent: 100 },
+        } },
+      }));
+    await expect(new SteamClient({ fetchImpl: fetchMock })
+      .getWishlist('76561198000000000', 'US', 'en'))
+      .resolves.toMatchObject([{ onSale: true, price: { isFree: false, finalMinor: 0 } }]);
+  });
+
   it('URL encodes the SteamID64 before requesting the wishlist', async () => {
     const fetchMock = createFetchMock().mockResolvedValueOnce(
       jsonResponse({ response: {} }),

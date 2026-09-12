@@ -11,6 +11,7 @@ import {
   buildStoreCountryRanges,
 } from '../src/discord/ui/country-picker.js';
 import {
+  assertComponentsV2Limit,
   countComponentsV2,
   dealioEphemeralV2Flags,
 } from '../src/discord/ui/components-v2.js';
@@ -59,6 +60,34 @@ describe('Dealio Components V2 UI', () => {
     expect(dealioUiSessions.resolve('dealio:session-test:wishlist', 'owner')).toBe('expired');
   });
 
+  it('rejects combined text over the Discord message limit', () => {
+    expect(() => assertComponentsV2Limit([
+      { type: 17, components: [
+        { type: 10, content: 'a'.repeat(2000) },
+        { type: 9, components: [{ type: 10, content: 'b'.repeat(2001) }] },
+      ] },
+    ] as never)).toThrow('4000');
+  });
+
+  it.each(['tr', 'en'] as const)('fits legacy ten-game alerts with long names in %s', (language) => {
+    const panel = buildSaleNotificationPanel(Array.from({ length: 10 }, (_, index) => ({
+      ...notification(index), appId: 2147483647 - index,
+      gameName: 'A'.repeat(256),
+      normalPriceMinor: 99999999, finalPriceMinor: 49999999,
+    })), language);
+    const json = JSON.stringify(panel.toJSON());
+    let length = 0;
+    JSON.stringify(panel.toJSON(), (key, value: unknown) => {
+      if (key === 'content' && typeof value === 'string') length += value.length;
+      return value;
+    });
+    expect(length).toBeGreaterThan(0);
+    expect(length).toBeLessThanOrEqual(4000);
+    for (let index = 0; index < 10; index += 1) {
+      expect(json).toContain('/app/' + (2147483647 - index) + '/');
+    }
+  });
+
   it('uses the combined ephemeral and Components V2 message flags', () => {
     expect(dealioEphemeralV2Flags)
       .toBe(MessageFlags.Ephemeral | MessageFlags.IsComponentsV2);
@@ -102,7 +131,7 @@ describe('Dealio Components V2 UI', () => {
     },
   );
 
-  it('renders the home dashboard below the Components V2 limit', () => {
+  it.each(['home', 'status'] as const)('renders the %s dashboard with valid action rows', (mode) => {
     const panel = buildStatusV2Panel({
       status: 'ready',
       language: 'tr',
@@ -128,14 +157,16 @@ describe('Dealio Components V2 UI', () => {
       latestPriceCurrencies: ['TRY'],
       gameDiscountOverrideCount: 0,
     }, 'session', {
-      mode: 'home',
+      mode,
       bannerUrl: 'https://i.imgur.com/JsawzhP.png',
       avatarUrl: 'https://example.com/avatar.png',
     });
     expect(countComponentsV2([panel])).toBeLessThanOrEqual(40);
     const serialized = JSON.stringify(panel.toJSON());
-    expect(serialized).toContain('Dealio Kontrol Merkezi');
-    expect(serialized).toContain('🔄');
+    expect(serialized).toContain(mode === 'home' ? 'İndirim radarın' : 'Dealio Durum ve Ayarlar');
+    expect(serialized).toContain('İlk kontrol bekleniyor');
+    const rows = panel.toJSON().components.filter((component) => component.type === 1);
+    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [3, 3] : [2, 3]);
     expect(serialized).not.toContain('↻');
   });
 

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dealio · Tasarım önizlemesi</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#17191c;color:#e8e9eb;font:15px/1.5 "Segoe UI",Arial,sans-serif}
+header{max-width:1260px;margin:auto;padding:30px 30px 16px}header small{color:#66c0f4;letter-spacing:.17em;font-size:11px;font-weight:700}
+h1{font-size:30px;letter-spacing:-1px;margin:8px 0}header p{color:#a8adb5;max-width:800px;font-size:14px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}nav button{padding:8px 12px;background:#25282d;border:1px solid #3a3e45;border-radius:6px;color:#d8dbe1;font:inherit;cursor:pointer}
+nav button[aria-pressed=true]{background:#264556;border-color:#66c0f4;color:#d3efff}
+.toolbar{display:flex;gap:8px;margin-top:12px}select{background:#282b30;color:#ddd;border:1px solid #454952;border-radius:5px;padding:8px;max-width:100%;font:inherit}
+main{max-width:1260px;margin:8px auto 40px;padding:0 30px;display:grid;grid-template-columns:minmax(0,760px) minmax(220px,1fr);gap:30px;align-items:start}
+.chat{background:#313338;border:1px solid #3e4148;border-radius:12px;padding:24px;min-width:0}
+.author{display:flex;align-items:center;gap:10px;margin-bottom:14px}.avatar{width:36px;height:36px;border-radius:11px;background:#244e68;color:#9bddff;display:grid;place-items:center;font-weight:800}
+.tag{font-size:10px;padding:1px 5px;background:#5865f2;border-radius:3px}.private{color:#aeb2b9;font-size:11px}
+.panel{background:#2b2d31;border:1px solid #44474e;border-left:3px solid var(--accent);border-radius:8px;padding:18px 18px 14px;overflow:hidden;min-width:0}
+.content{margin:7px 0;overflow-wrap:anywhere}.content h1{font-size:24px;margin:3px 0 8px;letter-spacing:-.6px}.content h2{font-size:20px;margin:10px 0 6px;line-height:1.3}.content h3{font-size:16px;margin:10px 0 4px}
+.content p{margin:3px 0}.content small{font-size:12px;color:#a9aeb7}.content blockquote{border-left:3px solid #b2a165;padding-left:12px;margin:9px 0;color:#ddd6bd}
+a{color:#7dcaf1;text-decoration:none}a:hover{text-decoration:underline}strong{font-weight:650;color:#f3f4f5}del{color:#9ba1aa}
+hr{border:0;border-top:1px solid #43464d;margin:14px 0}.section{display:flex;gap:16px;align-items:center}.section>div{min-width:0;flex:1}.thumb{width:100px;height:65px;object-fit:cover;border-radius:6px;background:#24262b}
+.row{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}.row button{min-height:34px;border:1px solid #51565e;background:#41454b;color:#f3f4f5;border-radius:4px;padding:6px 12px;font:600 12px/1.3 "Segoe UI",sans-serif}
+.row button.primary{background:#5865f2;border-color:#5865f2}.row button.success{background:#248046;border-color:#248046}.row button.danger{background:#c83c40;border-color:#c83c40}
+.row button:disabled{opacity:.4}.row select{width:100%;font-size:13px;min-height:38px}.gallery{width:100%;border-radius:6px}
+aside{padding:4px 0}aside h2{font-size:17px}aside p{font-size:14px;color:#a8adb5}aside ul{padding-left:18px;color:#bec3cb;font-size:13px;line-height:1.8}
+.mobile .chat{max-width:390px;padding:12px}.mobile .panel{padding:12px}.mobile .thumb{width:72px;height:52px}.mobile .row button{padding:6px 9px}
+@media(max-width:800px){header{padding:24px 16px 12px}main{display:block;padding:0 12px}.chat{padding:12px}aside{padding:15px 4px}h1{font-size:27px}.panel{padding:12px}.thumb{width:72px;height:52px}}
+</style>
+<header><small>DEALIO / DESIGN REVIEW</small><h1>Daha net bilgi. Daha kolay kontrol.</h1>
+<p>Gerçek bot bileşenlerinden oluşturulan yerel önizleme. Hesaplar ve fiyatlar örnektir; canlı veri değildir. Discord'un yazı tipi, boşlukları ve görsel yüklemesi farklılık gösterebilir.</p>
+<nav id="tabs"></nav><div class="toolbar"><select id="language" aria-label="Dil"><option value="tr">Türkçe</option><option value="en">English</option></select><select id="width" aria-label="Görünüm"><option value="desktop">Masaüstü</option><option value="mobile">Dar ekran</option></select></div></header>
+<main><div class="chat"><div class="author"><div class="avatar">D</div><strong>Dealio</strong><span class="tag">APP</span><span class="private">Tasarım önizlemesi</span></div><div id="panel"></div></div>
+<aside><h2 id="note-title"></h2><p id="note"></p><ul><li>Fiyat ve indirim önde.</li><li>İkincil bilgiler küçük ve düzenli.</li><li>Hata ve eksik veri görünür.</li><li>Mevcut bot akışlarıyla uyumlu.</li></ul><p>Paneldeki düğmeler temsili; Steam bağlantıları gerçek mağaza sayfalarını açar.</p></aside></main>
+<script id="data" type="application/json">DATA_PLACEHOLDER</script>
+<script>
+const data=JSON.parse(document.getElementById('data').textContent);
+const labels={home:'Ana panel',wishlist:'Wishlist',settings:'Ayarlar',notification:'İndirim DM',blocked:'DM engeli',partial:'Eksik veri',empty:'Boş liste',expired:'Süresi dolmuş'};
+const notes={home:'İndirim sayısı, takip durumu ve sonraki kontrol aynı bakışta görülebilir.',wishlist:'Oyun görselleri, fiyat, tasarruf ve kişisel eşik tek kartta. Ülke ve kontrol zamanı görünür.',settings:'Bildirim kuralları ile bölge ve dil kontrolleri ayrı satırlarda.',notification:'Yeni indirimler fiyat ve tasarruf odaklı tek mesajda.',blocked:'DM sorunu takip kapalı olsa da vurgulanır.',partial:'Eski veriler güncelmiş gibi sunulmaz; doğrulanamayan fiyatlar açıkça belirtilir.',empty:'Boş ekran yerine kullanıcının sonraki adımı açıklanır.',expired:'Süresi dolan kontroller devre dışı kalır.'};
+let current='home';
+function esc(x){return String(x??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;')}
+function inline(x){return esc(x).replace(/&lt;t:\d+:R&gt;/g,'<span style="background:#40444b;border-radius:3px;padding:0 3px">örnek zaman</span>').replace(/\[([^\]]+)\]\((https:\/\/[^ )]+)\)/g,'<a href="$2" target="_blank" rel="noreferrer">$1</a>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/~~(.+?)~~/g,'<del>$1</del>')}
+function md(text){return text.split('\n').map(line=>line.startsWith('-# ')?'<small>'+inline(line.slice(3))+'</small>':line.startsWith('### ')?'<h3>'+inline(line.slice(4))+'</h3>':line.startsWith('## ')?'<h2>'+inline(line.slice(3))+'</h2>':line.startsWith('# ')?'<h1>'+inline(line.slice(2))+'</h1>':line.startsWith('> ')?'<blockquote>'+inline(line.slice(2))+'</blockquote>':'<p>'+inline(line)+'</p>').join('')}
+function render(c){
+ if(c.type===17)return '<div class="panel" style="--accent:#'+Number(c.accent_color??6734068).toString(16).padStart(6,'0')+'">'+c.components.map(render).join('')+'</div>';
+ if(c.type===10)return '<div class="content">'+md(c.content)+'</div>';
+ if(c.type===14)return '<hr>';
+ if(c.type===9)return '<div class="section"><div>'+c.components.map(render).join('')+'</div>'+render(c.accessory)+'</div>';
+ if(c.type===11)return '<img class="thumb" src="'+esc(c.media.url)+'" alt="'+esc(c.description)+'">';
+ if(c.type===12)return c.items.map(i=>'<img class="gallery" src="'+esc(i.media.url)+'" alt="'+esc(i.description)+'">').join('');
+ if(c.type===1)return '<div class="row">'+c.components.map(render).join('')+'</div>';
+ if(c.type===2)return '<button '+(c.disabled?'disabled ':'')+'class="'+({1:'primary',3:'success',4:'danger'}[c.style]??'')+'">'+esc(c.emoji?.name??'')+' '+esc(c.label)+'</button>';
+ if(c.type===3)return '<select aria-label="'+esc(c.placeholder)+'" '+(c.disabled?'disabled':'')+'>'+c.options.map(o=>'<option '+(o.default?'selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select>';
+ return '';
+}
+function show(){
+ document.getElementById('panel').innerHTML=data[document.getElementById('language').value][current].map(render).join('');
+ document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.key===current)));
+ document.getElementById('note-title').textContent=labels[current];document.getElementById('note').textContent=notes[current];
+ document.querySelector('main').classList.toggle('mobile',document.getElementById('width').value==='mobile');
+}
+for(const [key,label] of Object.entries(labels)){const b=document.createElement('button');b.dataset.key=key;b.textContent=label;b.onclick=()=>{current=key;show()};document.getElementById('tabs').appendChild(b)}
+document.getElementById('language').onchange=show;document.getElementById('width').onchange=show;show();
+</script></html>

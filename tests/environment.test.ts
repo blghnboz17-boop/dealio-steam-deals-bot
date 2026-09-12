@@ -14,9 +14,16 @@ describe('loadEnvironment', () => {
       discordClientId: '123456789012345678',
       discordGuildId: '987654321098765432',
       databasePath: './data/wishlist.db',
-      pollIntervalHours: 6,
+      pollIntervalHours: 0.5,
       notificationRetryIntervalSeconds: 60,
     });
+  });
+
+  it('accepts an explicit half-hour polling interval', () => {
+    expect(loadEnvironment({
+      ...validEnvironment,
+      POLL_INTERVAL_HOURS: '0.5',
+    }).pollIntervalHours).toBe(0.5);
   });
 
   it('loads without a guild ID because commands are global', () => {
@@ -27,7 +34,7 @@ describe('loadEnvironment', () => {
       discordToken: 'test-token',
       discordClientId: '123456789012345678',
       databasePath: './data/wishlist.db',
-      pollIntervalHours: 6,
+      pollIntervalHours: 0.5,
       notificationRetryIntervalSeconds: 60,
     });
   });

@@ -1,7 +1,7 @@
 import type { StoreCountryCode } from '../domain/store-country.js';
 import type { Language } from '../domain/user-config.js';
 import type { CheckService } from './check-service.js';
-import { isPermanentDiscordError } from './notification-service.js';
+import { isDiscordDmBlocked } from './notification-service.js';
 
 export interface InitialWishlistSale {
   readonly appId: number;
@@ -107,7 +107,7 @@ export class InitialWishlistSummaryService {
       return { status: 'sent', saleCount: sales.length };
     } catch (error: unknown) {
       return {
-        status: isPermanentDiscordError(error) ? 'dm-blocked' : 'dm-transient-failed',
+        status: isDiscordDmBlocked(error) ? 'dm-blocked' : 'dm-transient-failed',
         saleCount: sales.length,
       };
     }

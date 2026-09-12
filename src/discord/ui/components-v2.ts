@@ -96,6 +96,7 @@ export function buildExpiredPanel(language: Language): ContainerBuilder {
 
 interface ComponentJson {
   readonly type?: unknown;
+  readonly content?: unknown;
   readonly components?: readonly ComponentJson[];
   readonly accessory?: ComponentJson;
   readonly component?: ComponentJson;
@@ -114,9 +115,25 @@ export function countComponentsV2(
   }, 0);
 }
 
+export function componentsV2TextLength(
+  components: readonly (ComponentJson | JSONEncodable<ComponentJson>)[],
+): number {
+  const length = (component: ComponentJson): number =>
+    (component.type === 10 && typeof component.content === 'string' ? component.content.length : 0)
+    + (component.components ?? []).reduce((total, child) => total + length(child), 0)
+    + (component.accessory ? length(component.accessory) : 0)
+    + (component.component ? length(component.component) : 0);
+  return components.reduce((total, value) =>
+    total + length('toJSON' in value ? value.toJSON() : value), 0);
+}
+
 export function assertComponentsV2Limit(
   components: readonly (ComponentJson | JSONEncodable<ComponentJson>)[],
 ): void {
+  const textLength = componentsV2TextLength(components);
+  if (textLength > 4000) {
+    throw new Error(`Dealio Components V2 payload exceeds Discord's 4000 character limit (${textLength})`);
+  }
   const count = countComponentsV2(components);
   if (count > 40) {
     throw new Error(`Dealio Components V2 payload exceeds Discord's 40 component limit (${count})`);

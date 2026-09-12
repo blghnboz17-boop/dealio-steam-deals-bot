@@ -108,6 +108,23 @@ function addCandidate(
 }
 
 describe('NotificationService', () => {
+  it('does not disable tracking or blame DM privacy for an invalid message payload', async () => {
+    const sender = createSender(vi.fn().mockRejectedValue(Object.assign(
+      new Error('Invalid Form Body'), { code: 50035, status: 400 },
+    )));
+    const services = createService('en', sender);
+    try {
+      await expect(services.service.deliverPending('discord-user'))
+        .resolves.toMatchObject({ sentCount: 0, failedCount: 1 });
+      expect(services.userConfigRepository.findByDiscordUserId('discord-user'))
+        .toMatchObject({ enabled: true, dmDeliveryBlockedAt: null });
+      await services.service.deliverPending('discord-user');
+      expect(sender.send).toHaveBeenCalledOnce();
+    } finally {
+      services.database.close();
+    }
+  });
+
   it('sends a candidate and marks it sent', async () => {
     const sender = createSender();
     const services = createService('tr', sender);

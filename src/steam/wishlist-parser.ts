@@ -158,6 +158,17 @@ export function parseAppDetailsResponse(value: unknown, appId: number): ParsedAp
     schemaError(`Steam discount percent for app ${appId} must be between 0 and 100`);
   }
 
+  // Preserve the last confirmed observation when upstream pricing contradicts itself.
+  // Do not require exact percentage arithmetic: Steam can round regional prices.
+  if (
+    finalMinor > initialMinor
+    || (discountPercent > 0 && finalMinor >= initialMinor)
+    || (discountPercent === 0 && finalMinor !== initialMinor)
+    || (discountPercent === 100 && finalMinor !== 0)
+  ) {
+    schemaError(`Steam price_overview for app ${appId} contains contradictory sale values`);
+  }
+
   return {
     name: data.name,
     price: {

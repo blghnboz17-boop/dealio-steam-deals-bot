@@ -320,6 +320,38 @@ describe('WishlistScheduler', () => {
     await scheduler.stop();
   });
 
+  it.each([
+    ['2026-08-22T06:00:00.000Z', '2026-08-22T00:30:00.000Z', 30],
+    ['2026-08-22T00:10:00.000Z', '2026-08-22T00:10:00.000Z', 10],
+  ])('resumes %s with a half-hour interval without delaying an earlier target', async (saved, expected, minutes) => {
+    const checkService = { check: vi.fn().mockResolvedValue(successResult()) };
+    const scheduleRepository = createScheduleRepository(saved);
+    const clock = createClock();
+    const scheduler = new WishlistScheduler({
+      intervalHours: 0.5,
+      userConfigRepository: { findEnabled: () => [user('user-a')] },
+      checkService,
+      notificationService: createNotificationService(),
+      scheduleRepository,
+      clock: clock.clock,
+      logger: createLogger(),
+      now: () => new Date('2026-08-22T00:00:00.000Z'),
+    });
+
+    try {
+      scheduler.start();
+      expect(checkService.check).not.toHaveBeenCalled();
+      expect(clock.clock.setTimeout).toHaveBeenCalledWith(expect.any(Function), minutes * 60_000);
+      expect(scheduleRepository.setNextScheduledAt).toHaveBeenCalledWith(expected);
+      clock.trigger();
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(checkService.check).toHaveBeenCalledWith('user-a', 'automatic');
+      expect(clock.clock.setTimeout).toHaveBeenLastCalledWith(expect.any(Function), 30 * 60_000);
+    } finally {
+      await scheduler.stop();
+    }
+  });
+
   it('persists completion plus interval after an automatic run', async () => {
     let now = new Date('2026-08-22T00:00:00.000Z');
     const checkService = {

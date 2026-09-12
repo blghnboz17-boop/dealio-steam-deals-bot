@@ -1,3 +1,4 @@
+import { defaultPollIntervalHours } from '../config/environment.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -22,7 +23,7 @@ import { formatMinorPrice, sanitizeGameName } from './notification-messages.js';
 import { sortInitialWishlistSales, type InitialSummaryPresentationOptions } from './initial-wishlist-summary-messages.js';
 import { messagesFor } from './messages.js';
 import { dealioBrand } from './ui/brand.js';
-import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
+import { assertComponentsV2Limit, componentsV2TextLength, dealioFooter } from './ui/components-v2.js';
 
 export function buildSaleNotificationPanel(
   notifications: readonly SaleNotification[],
@@ -37,7 +38,7 @@ export function buildSaleNotificationPanel(
     .setAccentColor(options.test ? dealioBrand.colors.accent : dealioBrand.colors.success)
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `# ${options.test ? '🧪' : '🏷️'} ${options.test ? messages.testNotificationTitle : saleTitle(language, notifications.length)}`,
+        `# ${options.test ? '🧪 ' : ''}${options.test ? messages.testNotificationTitle : saleTitle(language, notifications.length)}`,
       ),
       new TextDisplayBuilder().setContent(
         options.test ? messages.testNotificationDescription : saleDescription(language, notifications.length),
@@ -45,6 +46,7 @@ export function buildSaleNotificationPanel(
     )
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
 
+  const gameTexts: Array<{ display: TextDisplayBuilder; name: string; storeUrl: string; details: string }> = [];
   for (const notification of notifications) {
     const storeUrl = `https://store.steampowered.com/app/${notification.appId}/`;
     const normalPrice = formatMinorPrice(notification.normalPriceMinor, notification.currency, language);
@@ -52,15 +54,19 @@ export function buildSaleNotificationPanel(
     const discount = language === 'tr'
       ? `%${notification.discountPercent} indirim`
       : `${notification.discountPercent}% off`;
+    const name = sanitizeGameName(notification.gameName);
+    const savings = formatMinorPrice(
+      notification.normalPriceMinor - notification.finalPriceMinor, notification.currency, language,
+    );
+    const details = [
+      `**${finalPrice}** · ${discount} · ~~${normalPrice}~~`,
+      `${language === 'tr' ? 'Kazancın' : 'You save'} **${savings}**`,
+      `-# ${storeCountryLabel(notification.storeCountryCode, language)}`,
+    ].join('\n');
+    const display = new TextDisplayBuilder().setContent(`## [${name}](${storeUrl})\n${details}`);
+    gameTexts.push({ display, name, storeUrl, details });
     container.addSectionComponents(
-      new SectionBuilder()
-        .addTextDisplayComponents(
-          new TextDisplayBuilder().setContent([
-            `## [${sanitizeGameName(notification.gameName)}](${storeUrl})`,
-            `🔥 **${discount}** · ~~${normalPrice}~~ → **${finalPrice}**`,
-            `-# ${storeCountryLabel(notification.storeCountryCode, language)} · [${messages.openSteamStore}](${storeUrl})`,
-          ].join('\n')),
-        )
+      new SectionBuilder().addTextDisplayComponents(display)
         .setThumbnailAccessory(
           new ThumbnailBuilder()
             .setURL(`https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${notification.appId}/header.jpg`)
@@ -71,6 +77,17 @@ export function buildSaleNotificationPanel(
   container
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(dealioFooter(language)));
+  // Legacy durable batches retain all their games and their delivery identity.
+  // Shorten only titles when necessary to fit Discord's combined text budget.
+  let excess = componentsV2TextLength([container]) - 4000;
+  for (const game of [...gameTexts].sort((a, b) => b.name.length - a.name.length)) {
+    if (excess <= 0) break;
+    const limit = Math.max(16, game.name.length - excess);
+    if (limit >= game.name.length) continue;
+    const shortName = game.name.slice(0, limit - 3).replace(/\\$/, '') + '...';
+    game.display.setContent(`## [${shortName}](${game.storeUrl})\n${game.details}`);
+    excess -= game.name.length - shortName.length;
+  }
   assertComponentsV2Limit([container]);
   return container;
 }
@@ -118,7 +135,7 @@ export function buildInitialWishlistV2Page(
       `**${messages.initialSummaryAccount}:** [${maskSteamId(summary.steamId64)}](${profileUrl})`,
       `**${messages.initialSummaryRegion}:** ${storeCountryLabel(summary.storeCountryCode, summary.language)}`,
       `**${messages.initialSummaryLanguage}:** ${summary.language === 'tr' ? 'Türkçe' : 'English'}`,
-      `**${messages.initialSummarySchedule}:** ${messages.setupWizardFrequency(options.pollIntervalHours ?? 6)}`,
+      `**${messages.initialSummarySchedule}:** ${messages.setupWizardFrequency(options.pollIntervalHours ?? defaultPollIntervalHours)}`,
       `**${messages.initialSummaryThreshold}:** ${summary.language === 'tr' ? `%${summary.minimumDiscountPercent}` : `${summary.minimumDiscountPercent}%`}`,
       `**${messages.initialSummaryWishlist}:** ${summary.totalGameCount}${summary.failedItemCount > 0 ? ` · ${messages.wishlistFailedItems(summary.failedItemCount)}` : ''}`,
     ].join('\n')),

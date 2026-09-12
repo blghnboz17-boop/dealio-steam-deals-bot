@@ -116,7 +116,7 @@ Aynı anda indirime giren birden fazla oyun, indirime göre sıralanmış **tek 
         Steam istek listen (herkese açık)
                     │
                     ▼
-        Dealio birkaç saatte bir kontrol eder
+        Dealio 30 dakikalık aralıklarla kontrol eder
                     │
                     ▼
    ┌────────────────────────────────────┐
@@ -195,7 +195,7 @@ Dealio'nun komutları global olarak kayıtlıdır ve Discord'un bunları her yer
 <details>
 <summary><b>İstek listem ne sıklıkla kontrol ediliyor?</b></summary>
 
-Varsayılan olarak birkaç saatte bir. `/check` ile istediğin an taze bir kontrol zorlayabilirsin — herkese adil olsun diye kullanıcı başına kısa bir bekleme süresi vardır.
+Dealio varsayılan olarak **her tamamlanan taramadan sonra 30 dakika bekler** (`POLL_INTERVAL_HOURS=0.5`) ve yeniden kontrol eder. Eşiği karşılayan indirim tespit edilince bildirim gönderilir. Tarama süresi ve Steam/Discord kesintileri gecikmeyi artırabilir; anlık teslim garantisi yoktur. `/check` ile kullanıcı başına kısa bekleme süresine tabi olarak hemen kontrol başlatabilirsin.
 </details>
 
 <details>
@@ -232,3 +232,10 @@ Teknik mimari [`docs/architecture.md`](docs/architecture.md) dosyasında belgele
 ## 📄 Lisans
 
 MIT — [LICENSE](LICENSE) dosyasına bakın
+
+## Tasarım önizlemesi
+
+`npm run preview:ui` komutu, botun gerçek arayüz bileşenlerini örnek verilerle
+`.runtime/ui-preview.html` dosyasına çıkarır. Türkçe/İngilizce ve dar ekran seçenekleri
+vardır. Bu yerel önizleme Discord'a bağlanmaz ve bildirim göndermez. Discord içindeki
+son görünüm ve etkileşim kontrolü ayrıca yapılmalıdır.

@@ -204,3 +204,16 @@ describe('InitialWishlistSummaryService', () => {
     services.database.close();
   });
 });
+
+describe('initial summary delivery error classification', () => {
+  it('does not classify malformed notification content as a user DM block', async () => {
+    const services = fixture({ getWishlistWithErrors: vi.fn().mockResolvedValue({ items: [item(10, 50)], errors: [] }) } as never);
+    try {
+      services.sender.sendInitialSummary.mockRejectedValueOnce(Object.assign(
+        new Error('Invalid Form Body'), { code: 50035, status: 400 },
+      ));
+      await expect(services.service.send('discord-user'))
+        .resolves.toMatchObject({ status: 'dm-transient-failed' });
+    } finally { services.database.close(); }
+  });
+});

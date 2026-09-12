@@ -1,3 +1,4 @@
+import { defaultPollIntervalHours } from '../config/environment.js';
 import {
   ButtonStyle,
   ComponentType,
@@ -122,7 +123,7 @@ export function buildInitialWishlistHeroEmbed(
       inline: true,
     }, {
       name: messages.initialSummarySchedule,
-      value: `**${messages.setupWizardFrequency(options.pollIntervalHours ?? 6)}**`,
+      value: `**${messages.setupWizardFrequency(options.pollIntervalHours ?? defaultPollIntervalHours)}**`,
       inline: true,
     }, {
       name: messages.initialSummaryThreshold,

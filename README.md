@@ -116,7 +116,7 @@ Several games that go on sale together are grouped into **one message**, ordered
         Your Steam wishlist (public)
                     │
                     ▼
-        Dealio checks it every few hours
+        Dealio checks it on a 30-minute schedule
                     │
                     ▼
    ┌────────────────────────────────────┐
@@ -194,7 +194,7 @@ Dealio's commands are registered globally, and Discord can take up to an hour to
 <details>
 <summary><b>How often is my wishlist checked?</b></summary>
 
-Every few hours by default. You can always force a fresh check with `/check` — there's a short per-user cooldown to keep things fair.
+By default, Dealio waits **30 minutes after each completed scan** (`POLL_INTERVAL_HOURS=0.5`), then checks again. Qualifying discounts are sent when detected; this is polling, so scan time and Steam/Discord outages can add delay. You can also use `/check` for a fresh check, subject to a short per-user cooldown.
 </details>
 
 <details>
@@ -231,3 +231,10 @@ Technical architecture is documented in [`docs/architecture.md`](docs/architectu
 ## 📄 License
 
 MIT — see [LICENSE](LICENSE)
+
+## Design preview
+
+Run `npm run preview:ui` to generate `.runtime/ui-preview.html` from the bot's
+production component builders and demo data. Switch between Turkish/English and
+desktop/narrow views. This local preview does not log in to Discord or send
+notifications. Final appearance and interactions still require a Discord check.

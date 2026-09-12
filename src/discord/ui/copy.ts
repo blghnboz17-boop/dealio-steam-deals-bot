@@ -2,7 +2,7 @@ import type { Language } from '../../domain/user-config.js';
 
 const copy = {
   tr: {
-    homeTitle: 'Dealio Kontrol Merkezi',
+    homeTitle: 'İndirim radarın',
     homeDescription: 'Steam wishlist indirimlerini, bildirimlerini ve mağaza ayarlarını tek yerden yönet.',
     homeWishlist: 'Wishlist’i Aç',
     homeCheck: 'Şimdi Kontrol Et',
@@ -34,7 +34,7 @@ const copy = {
     wishlistPriceUnknown: 'Fiyat bilgisi alınamadı',
     wishlistFree: 'Ücretsiz',
     wishlistThreshold: (percent: number, override: boolean) =>
-      `Bildirim eşiği: **%${percent}**${override ? ' · Oyuna özel' : ' · Global'}`,
+      `Bildirim eşiği: **%${percent}**${override ? ' · Oyuna özel' : ' · Genel ayar'}`,
     previous: 'Önceki',
     next: 'Sonraki',
     close: 'Kapat',
@@ -71,7 +71,7 @@ const copy = {
     sessionExpired: 'Bu panelin süresi doldu. Güncel panel için komutu yeniden çalıştır.',
   },
   en: {
-    homeTitle: 'Dealio Control Center',
+    homeTitle: 'Your sale radar',
     homeDescription: 'Manage Steam wishlist sales, notifications, and Store settings in one place.',
     homeWishlist: 'Open Wishlist',
     homeCheck: 'Check Now',

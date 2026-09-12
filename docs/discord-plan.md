@@ -257,7 +257,7 @@ Mevcut proje değişkenleri:
 
 ```env
 DATABASE_PATH=./data/wishlist.db
-POLL_INTERVAL_HOURS=6
+POLL_INTERVAL_HOURS=0.5
 ```
 
 Uygulama, zorunlu değerler eksikse yalnızca uyarı verip çalışmaya devam

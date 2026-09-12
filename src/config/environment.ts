@@ -10,7 +10,7 @@ export interface EnvironmentConfig {
 }
 
 const defaultDatabasePath = './data/wishlist.db';
-const defaultPollIntervalHours = 6;
+export const defaultPollIntervalHours = 0.5;
 const defaultNotificationRetryIntervalSeconds = 60;
 export const minPollIntervalHours = 0.25;
 export const maxPollIntervalHours = 24 * 7;

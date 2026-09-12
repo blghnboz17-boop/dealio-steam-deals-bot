@@ -210,6 +210,18 @@ export async function handleWishlist(
                   : messagesFor(result.language).wishlistThresholdSaved(item.name, percent),
               )],
             });
+          }).catch(async (error: unknown) => {
+            console.error('Discord wishlist threshold update failed', error);
+            await modal.followUp({
+              flags: dealioEphemeralV2Flags,
+              components: [buildNoticePanel(
+                result.language, 'warning',
+                result.language === 'tr' ? 'Güncelleme sonucu doğrulanamadı' : 'Update could not be confirmed',
+                result.language === 'tr'
+                  ? 'Güncel eşiği görmek için /wishlist ile listeyi yeniden aç. Hesap veya bölge değiştiyse eski panel artık kullanılamaz.'
+                  : 'Open /wishlist again to check the current threshold. Old panels cannot update a changed account or region.',
+              )],
+            }).catch((replyError: unknown) => console.error('Wishlist error notice failed', replyError));
           });
           await operations;
         } catch (error: unknown) {

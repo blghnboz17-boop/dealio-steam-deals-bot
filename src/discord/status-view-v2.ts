@@ -38,15 +38,15 @@ export function buildStatusV2Panel(
   const mode = options.mode ?? 'status';
   const disabled = options.disabled ?? false;
   const profileUrl = `https://steamcommunity.com/profiles/${config.steamId64}`;
-  const color = !config.enabled
-    ? dealioBrand.colors.muted
-    : config.dmDeliveryBlockedAt
-      ? dealioBrand.colors.danger
-      : checkState?.lastStatus === 'success'
-        ? dealioBrand.colors.success
-        : checkState?.lastStatus === 'failed' || checkState?.lastStatus === 'unavailable'
-          ? dealioBrand.colors.warning
-          : dealioBrand.colors.primary;
+  const incompleteCount = (checkState?.lastSuccessUnknownPriceCount ?? 0)
+    + (checkState?.lastSuccessFailedItemCount ?? 0);
+  const color = config.dmDeliveryBlockedAt
+    ? dealioBrand.colors.danger
+    : !config.enabled
+      ? dealioBrand.colors.muted
+      : checkState?.lastStatus === 'failed' || checkState?.lastStatus === 'unavailable' || incompleteCount > 0
+        ? dealioBrand.colors.warning
+        : dealioBrand.colors.primary;
   const prefix = mode === 'home' ? 'dealio' : 'status-v2';
   const container = new ContainerBuilder().setAccentColor(color);
 
@@ -59,50 +59,80 @@ export function buildStatusV2Panel(
       ),
     );
   }
+  const tr = language === 'tr';
+  const deliveryState = config.dmDeliveryBlockedAt
+    ? (tr ? 'DM teslimatı engellendi' : 'DM delivery blocked')
+    : config.enabled
+      ? (tr ? 'Takip açık' : 'Tracking active')
+      : (tr ? 'Takip duraklatıldı' : 'Tracking paused');
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`# ✨ ${mode === 'home' ? text.homeTitle : statusTitle(language)}`),
-    new TextDisplayBuilder().setContent(mode === 'home' ? text.homeDescription : statusDescription(language)),
+    new TextDisplayBuilder().setContent(
+      `-# DEALIO / ${mode === 'home' ? (tr ? 'GENEL BAKIŞ' : 'OVERVIEW') : (tr ? 'TERCİHLER' : 'PREFERENCES')}`,
+    ),
+    new TextDisplayBuilder().setContent(`# ${mode === 'home' ? text.homeTitle : statusTitle(language)}`),
+    new TextDisplayBuilder().setContent(
+      `${mode === 'home' ? text.homeDescription : statusDescription(language)}\n**${deliveryState}** · Discord DM`,
+    ),
   );
   container.addSeparatorComponents(
     new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
   );
-
+  const sales = displayCount(checkState?.lastSuccessOnSaleCount, '—');
+  const checked = displayCount(checkState?.lastSuccessCheckedCount, '—');
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent([
+      checkState?.lastSuccessOnSaleCount == null
+        ? `## ${tr ? 'İlk kontrol bekleniyor' : 'Waiting for the first check'}`
+        : `## ${sales} ${tr ? 'oyun indirimde' : 'games on sale'}`,
+      `**${checked}** ${tr ? 'işlenen oyun' : 'games processed'} · **${notificationQueue.pending + notificationQueue.retry}** ${tr ? 'bekleyen bildirim' : 'pending alerts'}`,
+      `-# ${tr ? 'Son başarılı kontrol' : 'Last successful check'}: ${displayTime(checkState?.lastSuccessCompletedAt, text.never)}`,
+    ].join('\n')),
+  );
   const accountContent = [
-    `## 👤 ${text.account}`,
+    `### ${text.account}`,
     `[${maskSteamId(config.steamId64)}](${profileUrl}) · **${storeCountryLabel(config.storeCountryCode, language)}**`,
-    `${language === 'tr' ? 'Dil' : 'Language'}: **${language === 'tr' ? 'Türkçe' : 'English'}** · ${language === 'tr' ? 'Minimum indirim' : 'Minimum discount'}: **${language === 'tr' ? `%${config.minimumDiscountPercent}` : `${config.minimumDiscountPercent}%`}**`,
+    `${tr ? 'Türkçe' : 'English'} · ${tr ? 'Minimum indirim' : 'Minimum discount'} **${tr ? `%${config.minimumDiscountPercent}` : `${config.minimumDiscountPercent}%`}** · **${result.gameDiscountOverrideCount}** ${tr ? 'oyuna özel kural' : 'game rules'}`,
   ].join('\n');
   if (options.avatarUrl) {
     container.addSectionComponents(
       new SectionBuilder()
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(accountContent))
-        .setThumbnailAccessory(
-          new ThumbnailBuilder().setURL(options.avatarUrl).setDescription('Dealio'),
-        ),
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(options.avatarUrl).setDescription('Dealio')),
     );
   } else {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(accountContent));
   }
-
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent([
-      `## 🎮 ${text.tracking}`,
-      `${language === 'tr' ? 'İşlenen oyun' : 'Games processed'}: **${displayCount(checkState?.lastSuccessCheckedCount, text.never)}** · ${language === 'tr' ? 'İndirimde' : 'On sale'}: **${displayCount(checkState?.lastSuccessOnSaleCount, text.never)}**`,
-      `${language === 'tr' ? 'Son başarılı kontrol' : 'Last successful check'}: ${displayTime(checkState?.lastSuccessCompletedAt, text.never)}`,
-      `${language === 'tr' ? 'Sonraki otomatik kontrol' : 'Next automatic check'}: ${displayTime(checkState?.nextScheduledAt, text.never)}`,
-    ].join('\n')),
-    new TextDisplayBuilder().setContent([
-      `## 🔔 ${text.notifications}`,
-      `**${config.enabled ? text.active : text.paused}** · ${config.dmDeliveryBlockedAt ? `🛑 ${text.dmBlocked}` : `✅ ${text.dmReady}`}`,
-      `${language === 'tr' ? 'Bekleyen' : 'Pending'}: **${notificationQueue.pending + notificationQueue.retry}** · ${language === 'tr' ? 'Gönderilen' : 'Sent'}: **${notificationQueue.sent}** · ${language === 'tr' ? 'Kalıcı hata' : 'Permanent failures'}: **${notificationQueue.terminalFailed}**`,
-    ].join('\n')),
-    new TextDisplayBuilder().setContent([
-      `## 🔄 ${text.lastCheck}`,
-      `${localizedCheckStatus(checkState?.lastStatus ?? null, language)}`,
-      `${language === 'tr' ? 'Tamamlanma' : 'Completed'}: ${displayTime(checkState?.lastCompletedAt, text.never)}`,
-      `${language === 'tr' ? 'Fiyat para birimi' : 'Price currency'}: **${result.latestPriceCurrencies.join(' / ') || text.never}** · ${language === 'tr' ? 'Oyuna özel kural' : 'Game rules'}: **${result.gameDiscountOverrideCount}**`,
+      `### ${tr ? 'Kontrol takvimi' : 'Check schedule'}`,
+      `${tr ? 'Sonraki otomatik kontrol' : 'Next automatic check'}: ${config.enabled ? displayTime(checkState?.nextScheduledAt, text.never) : (tr ? 'Takip duraklatıldı' : 'Tracking paused')}`,
+      `${localizedCheckStatus(checkState?.lastStatus ?? null, language)} · ${displayTime(checkState?.lastCompletedAt, text.never)}`,
+      `-# ${tr ? 'Fiyat para birimi' : 'Price currency'}: ${result.latestPriceCurrencies.join(' / ') || text.never}`,
     ].join('\n')),
   );
+  if (mode === 'status') {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent([
+      `### ${tr ? 'Bildirim özeti' : 'Delivery summary'}`,
+      `**${notificationQueue.sent}** ${tr ? 'gönderildi' : 'sent'} · **${notificationQueue.terminalFailed}** ${tr ? 'kalıcı hata' : 'permanent failures'}`,
+      tr
+        ? '-# Minimum indirim tüm oyunlara uygulanır. Wishlist ekranından oyuna özel eşik belirleyebilirsin.'
+        : '-# The minimum discount applies to all games. Set individual thresholds from your wishlist.',
+    ].join('\n')));
+  }
+  if (incompleteCount > 0) {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(
+      tr
+        ? `> ⚠️ Son başarılı kontrolde **${incompleteCount} oyunun** fiyatı doğrulanamadı. İndirim sayısı bu oyunları kapsamıyor.`
+        : `> ⚠️ Prices for **${incompleteCount} games** could not be verified in the last successful check. They are excluded from the sale count.`,
+    ));
+  }
+  if (checkState?.lastStatus === 'failed' || checkState?.lastStatus === 'unavailable') {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(
+      tr
+        ? '> ⚠️ Son kontrol tamamlanamadı. Yukarıdaki sayılar son başarılı kontrolden; güncel fiyatlar doğrulanmış değil.'
+        : '> ⚠️ The latest check did not complete. Counts are from the last successful check; current prices are unverified.',
+    ));
+  }
 
   if (config.dmDeliveryBlockedAt) {
     container
@@ -140,9 +170,11 @@ export function buildStatusV2Panel(
           .setLabel(config.enabled
             ? (language === 'tr' ? 'Bildirimleri Kapat' : 'Disable Notifications')
             : (language === 'tr' ? 'Bildirimleri Aç' : 'Enable Notifications'))
-          .setStyle(config.enabled ? ButtonStyle.Danger : ButtonStyle.Success)
+          .setStyle(config.enabled ? ButtonStyle.Secondary : ButtonStyle.Success)
           .setDisabled(disabled),
         new ButtonBuilder().setCustomId(`${prefix}:${sessionId}:minimum-discount`).setLabel(language === 'tr' ? 'Minimum İndirim' : 'Minimum Discount').setEmoji('🏷️').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
+      ),
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId(`${prefix}:${sessionId}:region`).setLabel(language === 'tr' ? 'Bölge' : 'Region').setEmoji('🌍').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
         new ButtonBuilder().setCustomId(`${prefix}:${sessionId}:language`).setLabel(language === 'tr' ? 'Dil' : 'Language').setEmoji('🌐').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
         new ButtonBuilder().setCustomId(`${prefix}:${sessionId}:test`).setLabel(language === 'tr' ? 'Test DM' : 'Test DM').setEmoji('✉️').setStyle(ButtonStyle.Secondary).setDisabled(disabled),

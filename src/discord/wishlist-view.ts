@@ -83,9 +83,9 @@ export function buildWishlistV2Page(
   const container = new ContainerBuilder()
     .setAccentColor(dealioBrand.colors.primary)
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`# 🎮 ${text.wishlistTitle}`),
+      new TextDisplayBuilder().setContent(`# ${text.wishlistTitle}`),
       new TextDisplayBuilder().setContent(text.wishlistSummary(
-        filtered.length,
+        items.length,
         snapshot.items.length + snapshot.failedItemCount,
         snapshot.items.filter((item) => item.onSale === true).length,
       )),
@@ -94,12 +94,30 @@ export function buildWishlistV2Page(
       new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
     );
 
+  const capturedAt = Math.floor(new Date(snapshot.capturedAt).getTime() / 1000);
+  const unknownCount = snapshot.items.filter((item) => item.price === null || item.onSale === null).length;
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent([
+    `-# ${storeCountryLabel(snapshot.storeCountryCode ?? 'TR', language)} · ${language === 'tr' ? 'Fiyat kontrolü' : 'Prices checked'}: ${Number.isSafeInteger(capturedAt) ? `<t:${capturedAt}:R>` : text.never}`,
+    ...(snapshot.failedItemCount + unknownCount > 0 ? [
+      language === 'tr'
+        ? `> ⚠️ **${snapshot.failedItemCount + unknownCount} oyunun** fiyatı doğrulanamadı. Bu oyunlar için indirim varsayılmadı.`
+        : `> ⚠️ Prices for **${snapshot.failedItemCount + unknownCount} games** could not be verified. No sale was assumed.`,
+    ] : []),
+  ].join('\n')));
+
   if (items.length === 0) {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`> ${text.wishlistEmptyFiltered}`),
+      new TextDisplayBuilder().setContent(`> ${snapshot.items.length === 0 && snapshot.failedItemCount === 0
+        ? (language === 'tr'
+          ? 'Wishlistin henüz boş. Steam’de istediğin oyunları listene ekle, ardından /wishlist ile tekrar aç.'
+          : 'Your wishlist is empty. Add games on Steam, then open /wishlist again.')
+        : text.wishlistEmptyFiltered}`),
     );
   } else {
-    for (const item of items) {
+    for (const [index, item] of items.entries()) {
+      if (index > 0) container.addSeparatorComponents(
+        new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+      );
       container.addSectionComponents(buildWishlistV2GameSection(item, snapshot, language));
     }
   }
@@ -158,7 +176,7 @@ export function buildWishlistV2Page(
       .setDisabled(disabled || pageIndex >= pageCount - 1);
     const close = new ButtonBuilder()
       .setCustomId(`wishlist-v2:${sessionId}:close`)
-      .setStyle(ButtonStyle.Danger)
+      .setStyle(ButtonStyle.Secondary)
       .setLabel(text.close)
       .setDisabled(disabled);
     container.addActionRowComponents(
@@ -199,10 +217,13 @@ function buildWishlistV2GameSection(
         : item.onSale && item.price.discountPercent > 0
           ? `~~${formatMinorPrice(item.price.initialMinor, item.price.currency, language)}~~ → **${formatMinorPrice(item.price.finalMinor, item.price.currency, language)}** · **${language === 'tr' ? `%${item.price.discountPercent}` : `${item.price.discountPercent}%`}**`
           : `**${formatMinorPrice(item.price.finalMinor, item.price.currency, language)}**`;
+  const savings = item.onSale && item.price?.currency && item.price.finalMinor < item.price.initialMinor
+    ? `\n${language === 'tr' ? 'Kazancın' : 'You save'} **${formatMinorPrice(item.price.initialMinor - item.price.finalMinor, item.price.currency, language)}**`
+    : '';
   return new SectionBuilder()
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `## [${sanitizeWishlistGameName(item.name)}](${storeUrl})\n${price}\n${text.wishlistThreshold(threshold, override !== undefined)}`,
+        `### [${sanitizeWishlistGameName(item.name)}](${storeUrl})\n${price}${savings}\n-# ${text.wishlistThreshold(threshold, override !== undefined)}`,
       ),
     )
     .setThumbnailAccessory(

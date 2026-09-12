@@ -17,7 +17,7 @@ Notify Discord users by direct message when games on their Steam wishlist go on 
 ## First Version Scope
 
 - One or more Discord users can configure a Steam wishlist.
-- Polling runs every six hours by default.
+- Polling waits thirty minutes after a completed scan by default (POLL_INTERVAL_HOURS=0.5).
 - Notify only when a game changes from not-on-sale to on-sale.
 - Avoid duplicate notifications for the same sale.
 

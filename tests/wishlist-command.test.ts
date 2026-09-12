@@ -259,6 +259,50 @@ describe('/wishlist command', () => {
     await handling;
   });
 
+  it('keeps pagination working after a stale threshold modal fails', async () => {
+    const collector = new FakeCollector();
+    const createMessageComponentCollector = vi.fn().mockReturnValue(collector);
+    const interaction = {
+      id: 'interaction-id', user: { id: 'invoking-user' }, locale: 'en-US',
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      editReply: vi.fn().mockResolvedValue({ createMessageComponentCollector }),
+    };
+    const modal = {
+      fields: { getTextInputValue: () => '65' },
+      deferUpdate: vi.fn().mockResolvedValue(undefined),
+      followUp: vi.fn().mockResolvedValue(undefined),
+    };
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const handling = handleWishlist(interaction as never, {
+      load: vi.fn().mockResolvedValue({
+        status: 'success', language: 'en', items, errors: [],
+        capturedAt: '2026-08-22T12:00:00.000Z',
+        configVersion: 1, configurationId: 'old-config',
+      }),
+    } as never, undefined, { setGame: vi.fn().mockResolvedValue(null) } as never);
+    try {
+      await vi.waitFor(() => expect(createMessageComponentCollector).toHaveBeenCalledOnce());
+      collector.emit('collect', {
+        customId: 'wishlist-v2:interaction-id:game', values: ['1'],
+        isStringSelectMenu: () => true, isButton: () => false,
+        showModal: vi.fn().mockResolvedValue(undefined),
+        awaitModalSubmit: vi.fn().mockResolvedValue(modal),
+      });
+      await vi.waitFor(() => expect(modal.followUp).toHaveBeenCalledOnce());
+      collector.emit('collect', {
+        customId: 'wishlist-v2:interaction-id:next',
+        isStringSelectMenu: () => false, isButton: () => true,
+        deferUpdate: vi.fn().mockResolvedValue(undefined),
+      });
+      await vi.waitFor(() => expect(interaction.editReply).toHaveBeenCalledTimes(2));
+      expect(componentText(interaction.editReply.mock.calls[1]?.[0])).toContain('Game 4');
+    } finally {
+      collector.stop('time');
+      await handling;
+      log.mockRestore();
+    }
+  });
+
   it('cancels an active game modal during shutdown without saving', async () => {
     const collector = new FakeCollector();
     const createMessageComponentCollector = vi.fn().mockReturnValue(collector);

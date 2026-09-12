@@ -1,3 +1,4 @@
+import { defaultPollIntervalHours } from '../config/environment.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -101,7 +102,7 @@ export function buildSetupConfirmationPanel(
         `## 🌐 ${messages.setupWizardLanguageField}`,
         `**${prepared.language === 'tr' ? 'Türkçe' : 'English'}**`,
         `## 🔄 ${messages.setupWizardFrequencyField}`,
-        `**${messages.setupWizardFrequency(options.pollIntervalHours ?? 6)}**`,
+        `**${messages.setupWizardFrequency(options.pollIntervalHours ?? defaultPollIntervalHours)}**`,
         `## 🔔 ${messages.setupWizardConsentField}`,
         `> ${messages.setupWizardConsentValue}`,
       ].join('\n')),
@@ -252,7 +253,7 @@ export function buildSetupConfirmationEmbed(
 ): APIEmbed {
   const messages = messagesFor(prepared.language);
   const profileUrl = `https://steamcommunity.com/profiles/${prepared.steamId64}`;
-  const hours = options.pollIntervalHours ?? 6;
+  const hours = options.pollIntervalHours ?? defaultPollIntervalHours;
   return withDealioBrand({
     color: dealioBrand.colors.accent,
     title: `🧭 ${messages.setupWizardConfirmTitle}`,

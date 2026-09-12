@@ -256,8 +256,8 @@ export class NotificationService {
 
       const message = error instanceof Error ? error.message : 'Unknown Discord error';
       const attemptCount = batch.attemptCount + 1;
-      const permanentlyBlocked = isPermanentDiscordError(error);
-      const terminal = permanentlyBlocked || attemptCount >= this.maxAttempts;
+      const permanentlyBlocked = isDiscordDmBlocked(error);
+      const terminal = isPermanentDiscordError(error) || attemptCount >= this.maxAttempts;
       const retryDelayMs = Math.min(
         this.retryBaseDelayMs * (2 ** Math.max(0, attemptCount - 1)),
         this.maxRetryDelayMs,
@@ -315,4 +315,10 @@ export function isPermanentDiscordError(error: unknown): boolean {
 
   const status = 'status' in error ? Number(error.status) : Number.NaN;
   return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
+/** Only an explicit recipient delivery error establishes a DM privacy block. */
+export function isDiscordDmBlocked(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error
+    && Number(error.code) === 50_007;
 }
