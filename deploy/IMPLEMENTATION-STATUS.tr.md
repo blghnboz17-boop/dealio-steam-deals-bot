@@ -1,7 +1,7 @@
 
 # Kişisel Steam asistanı: uygulama ve yayın durumu
 
-12 Eylül 2026. Bu dosya yayın kanıtı değildir.
+12 Eylül 2026. Bu dosya kontrollü geçiş kanıtını ve kalan yayın işlerini ayırır; genel açık beta kapılarının geçtiği anlamına gelmez.
 
 ## Uygulanan geliştirme
 - Şema 10: hedef fiyat, para birimi, susturma, kural sürümü, kalıcı hedef geçişi.
@@ -16,14 +16,14 @@
 
 ## Yerelde doğrulananlar
 - Temiz bağımlılık kurulumu; uygulama ve handoff tür kontrolleri; üretim derlemesi.
-- 646 otomatik test (49 dosya): eski testler ve yeni hedef, zamanlama, fiyat önbelleği, yedek, gizlilik senaryoları.
+- 648 otomatik test (50 dosya): eski testler ve yeni hedef, zamanlama, fiyat önbelleği, yedek, gizlilik senaryoları.
 - Azure Bicep şablonu resmi derleyiciyle hatasız derlendi; kaynak kurulmadı.
 - 20 Türkçe/İngilizce panel önizlemesi ve 16 sayfa/ekran kontrolünde taşma veya sayfa hatası yok.
 - Açık SQLite yedeği, izole geri okuma, bütünlük kontrolü ve bozuk dosya reddi.
 - Üretim bağımlılık taramasında bilinen açık bulunmadı.
 
 ## Henüz doğrulanmayan/yayımlanmayan
-- Ayrı test botu bağlandı ve sekiz komut kaydedildi. Gerçek /setup denemesinde hata panelinin geçersiz simgesi bulundu ve düzeltildi. Kullanıcı test uygulamasını sildi ve mevcut ana bota kontrollü geçiş istedi; kapsamlı masaüstü/mobil kabul testi tamamlanmadı.
+- Ayrı test botu bağlandı ve sekiz komut kaydedildi. Gerçek /setup denemesinde hata panelinin geçersiz simgesi bulundu ve düzeltildi. Kullanıcı test uygulamasını sildi ve mevcut ana bota kontrollü geçiş istedi; proje sahibi daha sonra ana bot için manuel kontrol listesinin çalışıyor göründüğünü bildirdi. Cihaz ve senaryo bazında ölçümlü kabul kaydı bulunmuyor.
 - Azure kredi türü/kalan tutarı ve yönetim yetkisi doğrulanamadı. Yeni kaynak oluşturulmadı.
 - Azure'da gerçek kira yarışı, dış alarm teslimi, uzak yedek ve aylık geri yükleme çalıştırılmadı.
 - SWA sayfaları yayımlanmadı; Discord uygulamasındaki eski yasal URL'ler değiştirilmedi.
@@ -63,3 +63,12 @@ Kaynaklar:
 2. Eski kod revizyonu 8025eeda9e7c1fe3d60acefeff0fa08521cabc6e, old-dist ve old-node_modules ile eşleşen wishlist-pre-deploy.db yedeğini birlikte geri getir. Yalnız eski kodu çalıştırma.
 3. Bu geçişin eklediği /etc/systemd/system/dealio.service.d/single-host.conf dosyasını kaldır; daemon-reload yap ve hizmeti başlat.
 4. Discord bağlantısını ve veritabanı bütünlüğünü tekrar doğrula. Eski sürümde dağıtık/uygulama kimliği kilidi bulunmadığından yerel botu çalıştırma.
+
+
+## Ana ekran yenilemesi ve beta tanımı
+- 12 Eylül 2026 16:33 UTC: 7f4e5868bc33f1abf1089e1512cd703e3451939d ana botta açıldı. Büyük oyun görseli/fiyat alanı ve üç kişisel kontrol bölümü eklendi.
+- Yerelde ve Azure'da 648 test geçti; bu revizyonun Node.js 22/24 GitHub kontrolleri başarılı.
+- Gerçek kayıtlı wishlist verileriyle panel üretimi: 30 oyun, 3 uygun oyun, 26 bileşen, 762 metin karakteri. Bunlar o doğrulama anının ölçümleridir.
+- Açılış sonrası phase=ready ve discordReady=true; kontrol edilen son günlüklerde hata yok.
+- Proje sahibi kontrol listesi sonrası “sanırım hepsi çalışıyor” geri bildirimini verdi. Bu, sınırlı beta için kullanıcı geri bildirimidir; bütün cihaz/zamanlı teslim senaryolarını geçti diye işaretlemez.
+- README'ler mevcut ürünü sınırlı beta olarak tanıtır. Herkese açık beta için yasal bağlantılar, uzak yedek, dış alarm, kredi ve dağıtık kilit doğrulaması açık kalır.

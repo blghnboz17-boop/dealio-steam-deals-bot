@@ -26,9 +26,9 @@ Steam responses are validated and timed out. Wishlist access uses Steam's `X-ERe
 
 `SetupService` separates read-only preparation from confirmation. The five-minute Discord Components V2 wizard resolves the identity, validates public wishlist access, suggests a Store region from the Discord locale, and exposes 24 common countries plus an alphabetical route to the complete country catalog. It displays the canonical account, editable Store region, language, polling frequency, and proactive-DM consent before writing anything. Confirmation records consent, creates a fresh pricing generation, persists a notification-free baseline, and sends one localized message whose owner-bound paginator keeps the banner visible while showing exactly one confirmed active discount at a time. A Discord 50007 recipient delivery error records a visible delivery block and disables automatic work; a transient failure leaves the setup active without becoming a false sale.
 
-The `/wishlist` command uses a separate read-only application service. It fetches a live Steam snapshot for the invoking user's configured SteamID64 and never updates check state, sale episodes, or notification records. Discord pagination operates only on that in-memory snapshot and renders up to three compact games per Components V2 panel. Owner-bound selection controls open modals that update only the selected game's minimum-discount override through the per-user coordinator; the snapshot itself is not refetched.
+The `/wishlist` command opens the assistant workflow from a persisted wishlist snapshot when one exists. It supports three-game pages, name search, a matching-rule filter, game details, notification timing, and delivery history. An explicit refresh uses the coordinated check path and can update persisted observations, sale state, and candidates; it is no longer a purely read-only live fetch. `AssistantService` serializes rule/preference mutations with other user operations and rejects stale configuration identities.
 
-The `/dealio` and `/status` dashboard read paths perform no Steam request. They combine the current user configuration, persisted `check_state` summary, current-account notification records, and game-override count. Their Components V2 controls open the shared wishlist, check, region, language, test-DM, notification, and threshold flows. Queue counts use canonical `notification_log` rows rather than batch parents/items, preventing batch membership from double-counting games.
+The `/dealio` and `/status` dashboard read paths perform no Steam request. They combine persisted configuration, check summaries, queue counts, and pricing context. `/dealio` additionally reads the saved assistant snapshot and current rules/preferences. Its home panel shows a large Steam game image, observed price, matching counts, and three contextual navigation sections for wishlist rules, alert timing, and history. Queue counts use canonical `notification_log` rows rather than batch parents/items.
 
 Database migration v5 adds nullable last-success wishlist metrics to `check_state` and a singleton persisted wishlist poll schedule. Failed or unavailable checks update the latest attempt without erasing the last successful metrics; changing Steam accounts clears those metrics. The scheduler mirrors its exact next automatic target to enabled users' `next_scheduled_at` values and resumes a future persisted target after restart.
 
@@ -51,12 +51,27 @@ Steam polling defaults to a 30-minute wait after each completed scan (POLL_INTER
 Discord-facing runtime messages use Components V2 with the required message flag and shared 40-component and 4,000-text-character validators. Main, status, wishlist, and check sessions live for ten minutes; setup lives for five minutes; the initial-DM paginator lives for fifteen minutes. Sessions are held only in memory, are bound to the invoking user, and disable their controls when they expire. A global component fallback returns a localized expiry panel when a button survives a restart. New sale batches contain at most five games, while previously persisted batches of up to ten remain renderable for backward-compatible delivery.
 
 
+## Personal assistant schema and delivery
+
+Migration v10 adds configuration-scoped game rules (inherit, percent, target), currency-bound target amounts, mute state, and rule revisions. Existing percentage overrides are migrated. Target crossings use durable rule-event identities; saving an already-matching rule establishes a baseline without an initial alert. A target replaces the global percentage threshold for that game.
+
+Wishlist snapshots support fast panel opening. Successful app-detail responses are cached for five minutes by game/country/language request; concurrent identical requests share work, and the original price-observation time survives cache hits. Failed requests are not cached as prices.
+
+Notification preferences support detection-time delivery, IANA-timezone quiet hours, and a daily digest. Pending candidates remain durable while delivery is deferred. The sender revalidates them through the coordinated check path before sending; an unavailable upstream can therefore delay queued delivery. Discord message IDs record accepted delivery, not whether a user read the message.
+
+Price observations are retained for 90 days; notification history displays 30 days. Cleanup preserves unresolved deliveries and the deduplication state of ongoing offers. Logging redacts credentials and interaction/webhook secrets. The dedicated seven-day journald policy is supplied as deployment configuration; it is not automatically activated by installing the application.
+
+## Production isolation and rollout status
+
+The current limited-beta deployment uses a pinned Linux machine identity and an application-ID process lock, in addition to the database lock. The application lock is shared across database paths under the same OS user. This is a single-host safeguard, not a distributed lease guarantee.
+
+Azure Blob leasing is implemented as the cloud production path: startup acquires a lease, renewal uncertainty disconnects Discord, and orderly shutdown releases it after disconnect. Remote backup, independent monitoring, and public-site infrastructure are prepared but not provisioned. The controlled VM rollout and rollback evidence are recorded in [`deploy/IMPLEMENTATION-STATUS.tr.md`](../deploy/IMPLEMENTATION-STATUS.tr.md).
+
 ## Local design review
 
 Run `npm run preview:ui` to build the bot and generate `.runtime/ui-preview.html`.
 The preview renders the production component builders with explicitly synthetic data.
-It includes Turkish and English home, wishlist, settings, notification, DM-blocked,
-partial-data, empty, and expired states. Browser rendering approximates Discord;
+It includes selected Turkish and English panels and synthetic states. The preview renderer may lag newer component structures. Browser rendering approximates Discord;
 validate final spacing and interactions in Discord before publishing.
 
 Panel operations on the home and settings screens acknowledge clicks immediately,

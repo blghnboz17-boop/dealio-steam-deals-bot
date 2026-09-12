@@ -1,241 +1,142 @@
-# 🎮 Dealio
+<p align="center">
+  <img src="docs/assets/dealio-onboarding-banner.png" alt="Dealio — koyu zemin üzerinde mavi fiyat etiketi ve kalp" width="960">
+</p>
 
-> 🌐 **Language / Dil:** [🇺🇸 English](README.md) · [🇹🇷 Türkçe](README.tr.md)
+<h1 align="center">Wishlist’in. Senin kuralların.</h1>
 
-**Steam istek listenizi izleyen bir Discord botu — bir oyun gerçekten indirime girdiği anda size özel mesaj gönderir; bölge, para birimi, indirim oranı ve fiyatın alındığı zaman mesajın içinde yazar, böylece Discord'dan çıkmadan karar verirsiniz.**
+<p align="center">
+  Discord içindeki kişisel Steam fiyat asistanın.<br>
+  Fiyatını seç. Bildirim zamanını belirle. Fırsatı bilgisiyle birlikte gör.
+</p>
 
-![Discord](https://img.shields.io/badge/Discord-Sunucuna%20ekle-5865F2?logo=discord&logoColor=white)
-![Steam](https://img.shields.io/badge/Steam-istek%20listesi%20takibi-000000?logo=steam&logoColor=white)
-![Diller](https://img.shields.io/badge/diller-T%C3%BCrk%C3%A7e%20%C2%B7%20English-informational)
-![Kurulum](https://img.shields.io/badge/kurulum-%C5%9Fifre%20gerektirmez-success)
-![Lisans](https://img.shields.io/badge/lisans-MIT-blue)
+<p align="center">
+  <strong>Sınırlı beta</strong> &nbsp;·&nbsp; Ücretsiz kullanım &nbsp;·&nbsp; Yalnızca Steam &nbsp;·&nbsp; Türkçe &amp; English
+</p>
 
----
-
-> ⚠️ **Uyarı:** Dealio bağımsız bir projedir; **Valve Corporation veya Discord Inc. ile bağlantılı değildir, onlar tarafından desteklenmez veya sponsor edilmez.** Yalnızca **herkese açık** Steam istek listesi verisini okur; Steam şifrenizi, çerezlerinizi veya giriş bilgilerinizi asla istemez. Fiyatlar doğrudan Steam'den gelir ve olduğu gibi gösterilir — satın almadan önce nihai fiyatı mutlaka Steam mağaza sayfasından doğrulayın.
-
----
-
-## 🚀 Nasıl Başlarım
-
-İndirme yok. Terminal yok. Steam girişi yok. Üç adım:
-
-### 1️⃣ Dealio'yu sunucuna ekle
-
-👉 **[Dealio'yu Discord'a Ekle](https://discord.com/oauth2/authorize?client_id=1540325119690412172&scope=bot+applications.commands&permissions=0)**
-
-### 2️⃣ `/setup` yaz
-
-Sadece senin görebileceğin özel bir sihirbaz açılır. İki şey sorar:
-
-| Alan | Ne yazacaksın |
-|---|---|
-| **Steam profili** | SteamID64'ün, profil linkin ya da sadece kullanıcı adın |
-| **Mağaza ülkesi** | Listeden seçilir — Dealio, Discord diline bakarak bir tahmin önceden işaretler |
-
-Profil alanına aşağıdakilerin hepsi yazılabilir:
-
-```text
-76561198012345678                                  ← SteamID64
-https://steamcommunity.com/profiles/765611980...   ← profil linki
-https://steamcommunity.com/id/kullaniciadi         ← özel isim linki
-kullaniciadi                                       ← sadece isim
-```
-
-### 3️⃣ İndirim DM'lerini aç
-
-Dealio istek listenin okunabildiğini doğrular, sana bir onay kartı gösterir ve **sen özel mesajları açıkça onaylayana kadar hiçbir şey kaydetmez.**
-
-Hepsi bu. Bundan sonra Dealio istek listeni arka planda izler.
+<p align="center">
+  <a href="https://discord.com/oauth2/authorize?client_id=1540325119690412172&amp;integration_type=0&amp;scope=bot%20applications.commands&amp;permissions=0"><strong>Dealio’yu Discord’da dene →</strong></a>
+  &nbsp;&nbsp; <a href="README.md">English</a>
+  &nbsp;&nbsp; <a href="#komutlar">Komutlar</a>
+  &nbsp;&nbsp; <a href="#beta-durumu">Beta durumu</a>
+</p>
 
 ---
 
-## ✅ Başlamadan Önce
+## Daha az kontrol. Daha çok seçim.
 
-Sadece iki şeyin doğru olması yeterli:
+Dealio, herkese açık Steam wishlist’ini takip eder ve kurallarına uyan fırsatları DM ile iletir. Oyun görsellerini incele, hedef fiyat belirle ve fiyatın ne zaman gözlemlendiğini sana özel Discord panelinde gör.
 
-| Gereksinim | Nasıl kontrol edilir |
-|---|---|
-| **Steam profilin herkese açık** | Steam → Profil → Profili Düzenle → Gizlilik Ayarları → **Oyun ayrıntıları**'nı *Herkese Açık* yap |
-| **Discord DM'lerin açık** | Sunucu ayarları → Gizlilik Ayarları → sunucu üyelerinden özel mesaja izin ver |
+| Senin fiyatın | Senin zamanın | Fiyatın geçmişi |
+| :--- | :--- | :--- |
+| Her oyun için hedef fiyat veya indirim eşiği belirle. Bildirim istemediğin oyunu sustur. | Tespit edilince bildirim al, sessiz saatler seç veya günlük özete geç. | Steam’in bölgesel para birimini, gözlemlenen fiyatları ve bildirimin neden geldiğini incele. |
 
-> Dealio yalnızca zaten herkese açık olanı okuyabilir. Steam şifreni, çerezini, oturumunu veya herhangi bir giriş bilgini asla istemez.
+### Dealio’da neler var?
 
----
+- **Kişisel ana ekran.** Öne çıkan oyun görseli, gözlemlenen fiyatlar, kurallarına uygun fırsatlar ve wishlist, bildirim zamanı, geçmiş bağlantıları.
+- **Kullanışlı wishlist.** Sayfa başına üç kompakt oyun kartı, isimle arama, uygun fırsatlar filtresi ve her oyun için detay ekranı.
+- **Sana ait kurallar.** Oyun genel indirim eşiğini kullanabilir; kendi yüzdesi veya Steam para biriminde hedef fiyatı olabilir. Susturma ayrıca uygulanır.
+- **Teslimat kaydı.** Bekleyen, iletilen, engellenen ve geçerliliğini kaybeden bildirimler; DM erişimini deneme seçeneği. “Discord’a iletildi”, “okundu” demek değildir.
+- **Gerçek gözlemlerden fiyat geçmişi.** Dealio’nun son 90 günlük kayıtları. Yeni oyunlarda veri az olabilir; bu, tüm zamanların en düşük fiyatları arşivi değildir.
+- **İki dil.** Kurulumdan bildirimlere kadar Türkçe ve İngilizce paneller.
 
-## ✨ Dealio'yu Farklı Kılan Ne
+## Discord’da başla
 
-- **Asla uydurma indirim üretmez.** Steam bilinmeyen bir fiyat döndürdüğünde, tek bir oyun için hata verdiğinde veya komple çöktüğünde Dealio bunu neyse o olarak kaydeder. Bir hata asla "indirimde!" mesajına dönüşmez.
-- **Senin bölgen, senin fiyatın.** Dealio ayarladığın Steam Mağaza ülkesini kullanır; gördüğün fiyat *senin* gerçekten ödeyeceğin fiyattır — kafanda çevirmen gereken bir Amerika rakamı değil.
-- **İlk çalıştırma sessizdir.** Dealio'yu kurmak sana 200 tane DM yağdırmaz. İstek listene ilk bakış sessiz bir başlangıç noktasıdır; uyarılar bundan sonraki gerçek değişikliklerle başlar.
-- **İndirim başına tek uyarı.** Kontrol başına değil. Bir oyun iki hafta indirimdeyse bunu bir kere duyarsın.
-- **Sınırı sen koyarsın.** Her şey için genel bir alt indirim sınırı, artı daha çok önemsediğin oyunlar için ayrı eşikler.
-- **Hiçbir şey kaybetmeden duraklat.** Bildirimleri kapat; istek listen, eşiklerin ve geçmişin olduğu gibi kalır.
-- **Onayın olmadan hiçbir şey olmaz.** Sen onaylayana kadar veri kaydedilmez, `/delete-data` ise istediğin an hepsini siler.
-- **Türkçe ve İngilizce.** Doğru biçimlendirilmiş yerel fiyatlar dahil, iki dilde tam arayüz.
+1. **[Dealio’yu sunucuna ekle](https://discord.com/oauth2/authorize?client_id=1540325119690412172&integration_type=0&scope=bot%20applications.commands&permissions=0).** Yönetici izni istenmez.
+2. **`/setup` yaz.** SteamID64 veya profil bağlantını gir; gerçek Steam Store ülkeni ve dilini doğrula, ardından indirim DM’lerini açıkça onayla.
+3. **`/dealio` aç.** Wishlist’ini incele, bir oyun seç ve istediğin fiyatı belirle.
 
----
+Steam wishlist’in herkese açık olmalı; Discord, bottan DM almana izin vermeli. Dealio Steam şifreni, çerezlerini veya giriş oturumunu istemez.
 
-## 💬 Komutlar
+## Bildirimler nasıl çalışır?
 
-| Komut | Ne yapar |
-|---|---|
-| `/dealio` | Ana kontrol panelini açar |
-| `/setup` | Tek seferlik kurulum sihirbazı (Steam profili + Mağaza ülkesi) |
-| `/status` | Hesabın, takip durumun, bildirim ayarların ve son kontrolün |
-| `/wishlist` | İstek listeni sayfa başına üç oyun gezdirir, oyun bazlı eşik ayarlatır |
-| `/check` | Sıradaki kontrolü beklemeden hemen şimdi kontrol eder |
-| `/region` | Steam Mağaza ülkeni değiştirir |
-| `/test-notification` | Uyarının nasıl göründüğünü görmen için örnek bir indirim mesajı yollar |
-| `/delete-data` | Dealio'nun senin hakkında bildiği her şeyi siler |
+**Kontroller 30 dakikalık düzende yapılır; Steam’den anlık olay akışı alınmaz.** Bir sonraki otomatik tarama, önceki tarama bittikten 30 dakika sonrasına planlanır. Steam veya Discord kesintileri gecikme yaratabilir.
 
-> Her panel sana özeldir ve kendiliğinden zaman aşımına uğrar. Butonlar yalnızca paneli açan kişiye cevap verir.
+| Adım | Ne olur? |
+| :--- | :--- |
+| Gözlemle | Seçtiğin ülke ve dil için Steam fiyatları alınır. Başarılı oyun fiyatı sorguları beş dakikalık ortak önbelleği kullanır; gerçek gözlem zamanı korunur. |
+| Karşılaştır | Oyunun hedef fiyatı veya indirim kuralı değerlendirilir. Alınamayan fiyat, fırsat olarak yorumlanmaz. |
+| Gerekirse beklet | Sessiz saatler, günlük özet veya teslimat tekrarları için uygun bildirimler kalıcı kuyrukta tutulur. |
+| Doğrula ve ilet | Gönderim öncesi bekleyen fırsatların fiyatı tekrar kontrol edilir. Bittiği doğrulanan teklif gönderilmez. |
 
----
+Kurulum başlangıç durumunu kaydeder ve ayrıca bir wishlist özeti gönderebilir. Zaten indirimdeki her oyun için ayrı yeni-indirim bildirimi oluşturmaz. Mevcut fiyatın zaten karşıladığı bir hedefi kaydetmek de başlangıç bildirimi üretmez.
 
-## 🔔 Uyarı Nasıl Görünür
+Fiyatlar Steam’in bildirdiği para biriminde kalır; tahmini kur dönüşümü yapılmaz. Hedef fiyat para birimine bağlıdır; ülke/para birimi değişince yeni hedef gerekebilir. Satın almadan önce Steam’deki ödeme fiyatını doğrula.
 
-Bir oyun eşiğini geçtiğinde şunları içeren bir DM alırsın:
+## Komutlar
 
-- 🎮 **Oyun adı**
-- 💸 **Eski fiyat → indirimli fiyat**, bölgenin para biriminde
-- 📉 **İndirim yüzdesi**
-- 🌍 **Fiyatın alındığı Mağaza bölgesi**
-- 🕐 **Fiyatın ne zaman gözlendiği**
-- 🔗 **Steam sayfasına doğrudan bağlantı**
+| Komut | İşlev |
+| :--- | :--- |
+| `/dealio` | Ana ekran: fırsatlar, takip ve kişisel kontroller |
+| `/setup` | Steam profilini bağla, tercihlerini belirle |
+| `/wishlist` | Oyun ara, hedef belirle, sustur ve fiyat gözlemlerini incele |
+| `/status` | Hesap, genel indirim eşiği ve bildirim durumu |
+| `/check` | Kısa bekleme sınırına tabi olarak kontrol iste |
+| `/region` | Steam Store ülkeni seç |
+| `/test-notification` | Kendine örnek bildirim gönder |
+| `/delete-data` | Onayından sonra aktif hesap verilerini sil |
 
-Aynı anda indirime giren birden fazla oyun, indirime göre sıralanmış **tek bir mesajda** gruplanır — beş ayrı DM olarak değil.
+Paneller sana özeldir; düğmeler paneli açan kullanıcıya bağlıdır. Süre dolunca veya bot yeniden başlayınca yeni bir komut açarak devam edebilirsin.
 
-**Fiyatlar asla dönüştürülmez.** Dealio, Steam'in senin bölgen için bildirdiği fiyatı, o bölgenin para biriminde aynen gösterir. Kur tahmini yapmaz.
+## Beta durumu
 
----
+**Mevcut aşama: Azure’daki mevcut sunucuda sınırlı beta.** Temel asistan çalışıyor. 12 Eylül 2026’da 648 otomatik test ve Node.js 22/24 GitHub kontrolleri geçti; proje sahibi manuel kontrol listesinin çalışıyor göründüğünü bildirdi. Bu geri bildirim, bütün cihazların ve uzun süreli teslimat senaryolarının belgelenmiş kabulü anlamına gelmez.
 
-## ⚙️ Nasıl Çalışır
+Herkese açık beta duyurusundan önce:
 
-```
-        Steam istek listen (herkese açık)
-                    │
-                    ▼
-        Dealio 30 dakikalık aralıklarla kontrol eder
-                    │
-                    ▼
-   ┌────────────────────────────────────┐
-   │  Bu gerçek, doğrulanmış bir indirim│
-   │  mi?                               │
-   │  ✅ evet → senin sınırını geçti mi?│
-   │  ❓ fiyat bilinmiyor → bekle, sorma│
-   │  ⚠️ Steam hatası → bekle, sorma    │
-   └────────────────┬───────────────────┘
-                    │  ikisine de evet
-                    ▼
-     Teslimat kuyruğuna alınır (yeniden başlatmadan sağ çıkar)
-                    │
-                    ▼
-              📬 Sana özel mesaj
-```
+- [ ] Erişilebilir gizlilik, koşullar ve yardım sayfalarını yayımla; Discord uygulamasındaki bağlantıları güncelle.
+- [ ] Ek kaynak açmadan önce Azure kredi kapsamını doğrula.
+- [ ] Uzak yedeği etkinleştir, geri yükleme provası yap ve bağımsız operasyon alarmını dene.
+- [ ] Dağıtık uygulama kilidini doğrula; masaüstü/mobil ve zamanlı bildirim kabulünü kaydet.
 
-Kontrol döngüsü ile teslimat döngüsü **ayrı** çalışır; böylece bir Discord aksaklığı Steam'in kontrol edilmesini asla durduramaz, bir Steam kesintisi de kuyruğa girmiş bir mesajı asla engelleyemez.
+Mevcut kurulumda belirli sunucuya bağlı başlangıç kontrolü, uygulama kilidi ve yerel geri dönüş yedeği var. Bulut kilidi, yedek, izleme ve site yayını için kod hazır; bu dış hizmetler **henüz kurulmadı**.
 
-Bir teslimat geçici olarak başarısız olursa Dealio aralıkları büyüterek yeniden dener ve beş denemeden sonra vazgeçer. DM'lerin kapalıysa bu kalıcı bir durumdur — denemeyi bırakır ve `/status` üzerinde sana bildirir.
+[Geçiş kanıtı ve kalan işler →](deploy/IMPLEMENTATION-STATUS.tr.md)
 
----
+## Verilerin ve kontrolün
 
-## 🔒 Verilerin
+Dealio hesap kimliklerini, tercihlerini, oyun kurallarını, gözlemlenen wishlist fiyatlarını ve teslimat kayıtlarını tutar. Normal Discord mesajlarının içeriğini veya Steam giriş bilgilerini toplamaz.
 
-**Dealio'nun sakladıkları:** Discord kullanıcı kimliğin, herkese açık SteamID64'ün, seçtiğin Mağaza ülkesi ve dil, bildirimlerin açık olup olmadığı, indirim eşiklerin, istek listendeki oyunlar ve gözlenen fiyatları, bildirimlerinin teslimat durumu.
+Bildirim geçmişi son **30 günü** gösterir; fiyat gözlemleri **90 gün** tutulur. Aktif teslimat ve devam eden tekliflerin tekrarını önleyen kayıtlar daha uzun kalabilir. `/delete-data` aktif hesap kayıtlarını siler; mevcut yedek kopyaları bu komutla yeniden yazılmaz.
 
-**Dealio'nun asla saklamadıkları:** Steam şifreleri, çerezler, giriş bilgileri, Discord mesajların, yazdığın kullanıcı adı veya yapıştırdığın ham profil linki.
+Politika kaynakları repoda bulunur: [gizlilik](docs/privacy-tr.html) · [koşullar](docs/terms-tr.html). Herkese erişilebilir politika bağlantıları hâlâ yayın ön koşuludur.
 
-**Her şeyi silmek:** `/delete-data` komutunu çalıştır ve onay kutusunu işaretle. Yapılandırmanı, istek listesi durumunu, indirim geçmişini ve bildirim kayıtlarını birlikte, SQLite'ın güvenli silme kipiyle kaldırır. Onayı kapatmak veya iptal etmek hiçbir şeyi değiştirmez.
-
-📄 Ayrıntılar: [Gizlilik Politikası](docs/privacy.html) · [Kullanım Koşulları](docs/terms.html)
-
----
-
-## ❓ Sıkça Sorulanlar
+## Sık sorulanlar
 
 <details>
-<summary><b>Kurdum ama hiç mesaj gelmedi, bozuk mu?</b></summary>
+<summary><strong>Hedef belirledim. Neden hemen DM gelmedi?</strong></summary>
 
-Muhtemelen değil. İstek listene ilk bakış **sessiz bir başlangıç noktasıdır** — Dealio zaten indirimde olanları sana mesaj atmadan kaydeder, böylece ilk gün boğulmazsın. Bundan sonra *değişen* bir şey olduğunda haber alırsın.
+Kural kaydı başlangıç durumunu belirler. Zaten uygun olan teklif panelde gösterilir; bildirim, daha sonraki uygun geçişi bekler. Oyunun kuralını, susturma durumunu ve bildirim zamanını kontrol et.
 
-Ayrıca `/status`'a bak — genel alt indirim sınırın yüksekse, altında kalan oyunlar elenir.
 </details>
 
 <details>
-<summary><b>Dealio istek listemi okuyamadığını söylüyor.</b></summary>
+<summary><strong>Kurulumumu silmeden bildirimleri durdurabilir miyim?</strong></summary>
 
-Steam profilindeki **Oyun ayrıntıları** ayarı *Herkese Açık* olmalı. Steam → Profil → Profili Düzenle → Gizlilik Ayarları. "Sadece arkadaşlar" yeterli değildir — Dealio senin Steam arkadaşın değildir ve olmayı da istemez.
+Evet. `/status` içindeki bildirim düğmesini kullan. Ayarların korunur. Otomatik bildirimler kapalıyken manuel `/check` çalışmaya devam eder.
+
 </details>
 
 <details>
-<summary><b>Gösterilen fiyat Steam'de gördüğümden farklı.</b></summary>
+<summary><strong>Aynı bildirim iki kez gelebilir mi?</strong></summary>
 
-`/status` ile hangi Mağaza ülkesinin ayarlı olduğuna bak. Yanlışsa `/region` ile düzelt. Bölge değiştirmek her şeyi sıfırlar — eski fiyatlar yenileriyle asla karşılaştırılmaz ve yeni bir sessiz başlangıç noktası oluşur.
+Kalıcı tekilleştirme aynı teklifin rutin olarak tekrar gönderilmesini önler. Discord mesajı kabul ettiği hâlde teyidi kaybolursa, yeniden deneme çift mesaj üretebilir. Tam olarak bir kez teslim garantisi verilmez.
+
 </details>
 
-<details>
-<summary><b>Aynı oyun iki kere geldi.</b></summary>
+## Geliştirme ve işletim
 
-Nadir ama mümkün. Discord mesajı kabul edip onay yolda kaybolursa Dealio mesajın ulaşıp ulaşmadığını bilemez ve tekrar deneyebilir. İki kere göndermeyi, uyarıyı tamamen kaybetmeye tercih ediyoruz — ve olamazmış gibi davranmak yerine bunu açıkça yazıyoruz.
-</details>
+TypeScript · discord.js Components V2 · SQLite · Azure VM
 
-<details>
-<summary><b>Kurulumumu kaybetmeden bildirimleri nasıl durdururum?</b></summary>
+- [Geliştirme rehberi](docs/development.md) — ayrı test kurulumu, ayarlar ve kontroller
+- [Mimari](docs/architecture.md) — fiyatlar, kurallar, teslimat ve veri
+- [Azure işletimi](deploy/azure/README.tr.md) — yayın ön koşulları ve kurtarma
+- [GitHub kontrolleri](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml) — güncel doğrulamalar
 
-`/status` üzerindeki bildirim düğmesini kullan. İstek listen, eşiklerin ve geçmişin olduğu gibi kalır. Bildirimler kapalıyken elle `/check` çalışmaya devam eder. İstediğin zaman geri açarsın.
-</details>
-
-<details>
-<summary><b>Komutlar sunucumda görünmüyor.</b></summary>
-
-Dealio'nun komutları global olarak kayıtlıdır ve Discord'un bunları her yere yayması bir saati bulabilir. Biraz sonra tekrar dene.
-</details>
-
-<details>
-<summary><b>İstek listem ne sıklıkla kontrol ediliyor?</b></summary>
-
-Dealio varsayılan olarak **her tamamlanan taramadan sonra 30 dakika bekler** (`POLL_INTERVAL_HOURS=0.5`) ve yeniden kontrol eder. Eşiği karşılayan indirim tespit edilince bildirim gönderilir. Tarama süresi ve Steam/Discord kesintileri gecikmeyi artırabilir; anlık teslim garantisi yoktur. `/check` ile kullanıcı başına kısa bekleme süresine tabi olarak hemen kontrol başlatabilirsin.
-</details>
-
-<details>
-<summary><b>Sadece büyük indirimlerde haber alabilir miyim?</b></summary>
-
-Evet. `/status` üzerinden genel bir alt sınır belirle, sonra `/wishlist` ile tek tek oyunlara kendi eşiklerini ver. Oyuna özel değer genel değerin yerine geçer.
-</details>
+İlk sürüm Steam wishlist’lerine odaklanır. Ödeme sistemi, ayrı web yönetim paneli, diğer mağazalar ve tahmini para birimi dönüşümü kapsam dışındadır.
 
 ---
 
-## 🗺️ Yol Haritası
-
-| Sırada | |
-|---|---|
-| 🎯 **Hedef fiyat** | "Şu fiyatın altına düşerse haber ver" |
-| 📊 **Tarihsel dip** | Bunun gerçekten şimdiye kadarki en iyi fiyat olup olmadığını gör |
-| 🏷️ **Fiyat değişim türü** | Gerçek indirim · kalıcı fiyat düşüşü · bölgesel değişim — net biçimde ayrılmış |
-| 💱 **Yaklaşık yerel maliyet** | Kur ve zaman damgası gösterilerek, Steam fiyatıyla asla karıştırılmadan |
-| 🔕 **Sessiz saatler & özetler** | Anlık yerine toplu uyarılar, senin belirlediğin saatlerde |
-| 👥 **Sunucu özetleri** | İsteğe bağlı, düşük gürültülü kanal özetleri |
-
-**Bilinçli olarak asla:** Steam şifreni veya çerezini istemek · sonuçlara yetkisiz anahtar satıcıları koymak · sponsorlu yerleşimi "en iyi fırsat" sıralamasına karıştırmak.
-
----
-
-## 👤 Yapımcı
-
-**[@blghnboz17-boop](https://github.com/blghnboz17-boop)** tarafından yapılmıştır
-
-Teknik mimari [`docs/architecture.md`](docs/architecture.md) dosyasında belgelenmiştir.
-
----
-
-## 📄 Lisans
-
-MIT — [LICENSE](LICENSE) dosyasına bakın
-
-## Tasarım önizlemesi
-
-`npm run preview:ui` komutu, botun gerçek arayüz bileşenlerini örnek verilerle
-`.runtime/ui-preview.html` dosyasına çıkarır. Türkçe/İngilizce ve dar ekran seçenekleri
-vardır. Bu yerel önizleme Discord'a bağlanmaz ve bildirim göndermez. Discord içindeki
-son görünüm ve etkileşim kontrolü ayrıca yapılmalıdır.
+<p align="center">
+  <a href="https://github.com/blghnboz17-boop">Bilgehan</a> tarafından geliştirildi · <a href="LICENSE">MIT lisansı</a> · Kaynak repo özeldir.<br>
+  <sub>Dealio bağımsız bir projedir; Valve veya Discord ile bağlantılı değildir.</sub>
+</p>
