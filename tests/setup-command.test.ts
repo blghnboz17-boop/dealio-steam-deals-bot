@@ -326,7 +326,7 @@ describe('guided setup command', () => {
       await handling;
 
       // Then: the rejection reaches the setup error/reporting boundary.
-      expect(errorLog).toHaveBeenCalledWith('Discord setup wizard failed', updateError);
+      expect(errorLog).toHaveBeenCalledWith('Discord setup wizard failed', expect.stringContaining(updateError.message));
       expect(interaction.editReply).toHaveBeenCalledTimes(3);
     } finally {
       errorLog.mockRestore();
@@ -393,7 +393,7 @@ describe('guided setup command', () => {
       expect(errorLog).toHaveBeenCalledTimes(1);
       expect(errorLog).toHaveBeenCalledWith(
         'Discord setup wizard failed',
-        acknowledgementError,
+        expect.stringContaining(acknowledgementError.message),
       );
     } finally {
       releaseEarlierOperation();

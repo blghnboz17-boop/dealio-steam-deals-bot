@@ -1,3 +1,5 @@
+import type { AssistantService } from './assistant-service.js';
+import type { AssistantRepository } from '../persistence/assistant-repository.js';
 import {
   SteamWishlistError,
   type SteamWishlistErrorCode,
@@ -51,20 +53,25 @@ export class WishlistViewService {
     private readonly now: () => Date = () => new Date(),
     private readonly thresholdReader?: Pick<DiscountThresholdRepository, 'findGameOverrides'>,
     private readonly coordinator = new UserOperationCoordinator(),
+    public readonly assistant?: AssistantRepository,
+    public readonly assistantService?: AssistantService,
+    private readonly refreshForUser?: (user:string)=>Promise<{items:WishlistItem[];errors:WishlistItemError[]}>,
   ) {}
 
   public async load(
     discordUserId: string,
     fallbackLanguage: Language,
+    refresh = false,
   ): Promise<WishlistViewResult> {
     return this.coordinator.runExclusive(discordUserId, () =>
-      this.loadExclusive(discordUserId, fallbackLanguage),
+      this.loadExclusive(discordUserId, fallbackLanguage, refresh),
     );
   }
 
   private async loadExclusive(
     discordUserId: string,
     fallbackLanguage: Language,
+    refresh = false,
   ): Promise<WishlistViewResult> {
     const config = this.configReader.findByDiscordUserId(discordUserId);
     if (!config) {
@@ -72,11 +79,12 @@ export class WishlistViewService {
     }
 
     try {
-      const result = await this.wishlistReader.getWishlistWithErrors(
+      const cached = refresh ? null : this.assistant?.snapshot(config);
+      const result = cached ?? await (this.refreshForUser ? this.refreshForUser(discordUserId) : this.wishlistReader.getWishlistWithErrors(
         config.steamId64,
         config.storeCountryCode,
         config.language,
-      );
+      ));
       if (result.items.length === 0 && result.errors.length > 0) {
         return {
           status: 'unavailable',
@@ -84,12 +92,13 @@ export class WishlistViewService {
           errorCode: result.errors[0]?.code ?? 'STEAM_UPSTREAM_ERROR',
         };
       }
+      if (!cached) this.assistant?.saveSnapshot(config, result, this.now().toISOString());
       return {
         status: 'success',
         language: config.language,
         items: result.items,
         errors: result.errors,
-        capturedAt: this.now().toISOString(),
+        capturedAt: cached?.capturedAt ?? this.now().toISOString(),
         configVersion: config.configVersion,
         configurationId: config.configurationId,
         storeCountryCode: config.storeCountryCode,

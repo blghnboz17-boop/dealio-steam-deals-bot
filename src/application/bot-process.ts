@@ -1,3 +1,4 @@
+import { safeLogger } from './safe-logger.js';
 import {
   existsSync,
   mkdirSync,
@@ -96,7 +97,7 @@ const defaultDependencies: BotProcessDependencies = {
   process: systemProcess,
   fileSystem: systemFileSystem,
   clock: systemClock,
-  logger: console,
+  logger: safeLogger,
   now: () => new Date(),
   loadEnvironment,
   startBot,

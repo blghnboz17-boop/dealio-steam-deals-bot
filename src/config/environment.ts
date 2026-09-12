@@ -7,6 +7,8 @@ export interface EnvironmentConfig {
   readonly notificationRetryIntervalSeconds: number;
   readonly steamWebApiKey?: string;
   readonly dealioBannerUrl?: string;
+  readonly azureLeaseContainerUrl?: string;
+  readonly production?: boolean;
 }
 
 const defaultDatabasePath = './data/wishlist.db';
@@ -101,7 +103,13 @@ export function loadEnvironment(
       )
     : defaultNotificationRetryIntervalSeconds;
 
+  if (environment.DEALIO_PRODUCTION === 'true' && !environment.AZURE_LEASE_CONTAINER_URL)
+    throw new Error('Production requires AZURE_LEASE_CONTAINER_URL and a provisioned application lock blob');
+  if (environment.DEALIO_PRODUCTION !== 'true' && environment.DISCORD_CLIENT_ID === (environment.PRODUCTION_DISCORD_CLIENT_ID ?? '1540325119690412172'))
+    throw new Error('Development must use a separate Discord application');
   return {
+    ...(environment.AZURE_LEASE_CONTAINER_URL ? {azureLeaseContainerUrl:environment.AZURE_LEASE_CONTAINER_URL}:{}),
+    ...(environment.DEALIO_PRODUCTION === 'true' ? {production:true}:{}),
     discordToken: requiredValue(environment, 'DISCORD_TOKEN'),
     discordClientId,
     ...(discordGuildId ? { discordGuildId } : {}),

@@ -1,3 +1,7 @@
+import type { DeliveryReceipt } from '../domain/wishlist-state.js';
+import { AssistantRepository } from './assistant-repository.js';
+import type { UserConfig } from '../domain/user-config.js';
+import type { SteamWishlistResult } from '../domain/steam.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Language } from '../domain/user-config.js';
 import type {
@@ -23,7 +27,10 @@ export class WishlistStateRepository {
   private readonly observationRepository: WishlistObservationRepository;
   private readonly queueRepository: NotificationQueueRepository;
 
+  public readonly assistant: AssistantRepository;
+
   public constructor(database: DatabaseSync) {
+    this.assistant = new AssistantRepository(database);
     this.batchRepository = new NotificationBatchRepository(database);
     this.observationRepository = new WishlistObservationRepository(database);
     this.queueRepository = new NotificationQueueRepository(database);
@@ -106,8 +113,8 @@ export class WishlistStateRepository {
     return this.batchRepository.claimNotificationBatch(batch, attemptedAt);
   }
 
-  public markNotificationBatchSent(batch: DurableNotificationBatch): void {
-    this.batchRepository.markNotificationBatchSent(batch);
+  public markNotificationBatchSent(batch: DurableNotificationBatch, receipt?: DeliveryReceipt): void {
+    this.batchRepository.markNotificationBatchSent(batch, receipt);
   }
 
   public markNotificationBatchFailed(

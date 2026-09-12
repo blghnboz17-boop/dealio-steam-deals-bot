@@ -128,7 +128,7 @@ describe('database migration', () => {
         saleEpisodeId: state?.saleEpisodeId,
       });
       expect((database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version)
-        .toBe(9);
+        .toBe(10);
       expect(database.prepare(
         `SELECT name FROM sqlite_master
          WHERE type = 'table' AND name IN ('notification_batch', 'notification_batch_item')
@@ -247,7 +247,7 @@ describe('database migration', () => {
         ).toEqual({ attempt_count: 0 });
         expect(
           (database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-          ).toBe(9);
+          ).toBe(10);
       } finally {
         database.close();
       }
@@ -264,6 +264,12 @@ describe('database migration', () => {
       const current = createDatabase(databasePath);
       current.exec('PRAGMA foreign_keys = OFF');
       current.exec(`
+        DROP TABLE game_rule; DROP TABLE notification_preference; DROP TABLE wishlist_snapshot; DROP TABLE price_observation;
+        ALTER TABLE wishlist_item_state DROP COLUMN rule_event_id;
+        ALTER TABLE notification_log DROP COLUMN rule_revision;
+        ALTER TABLE notification_log DROP COLUMN reason;
+        ALTER TABLE notification_log DROP COLUMN discord_message_id;
+        ALTER TABLE notification_log DROP COLUMN delivered_at;
         DROP INDEX user_config_configuration_id_idx;
         ALTER TABLE user_config DROP COLUMN configuration_id;
         ALTER TABLE user_config DROP COLUMN store_country_code;
@@ -305,7 +311,7 @@ describe('database migration', () => {
       try {
         expect(
           (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-        ).toBe(9);
+        ).toBe(10);
         expect(migrated.prepare(
           `SELECT last_success_completed_at, last_success_checked_count,
                   last_success_on_sale_count, last_success_free_count,

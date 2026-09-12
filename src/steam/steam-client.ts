@@ -31,6 +31,8 @@ export interface SteamClientOptions {
   readonly retryBaseDelayMs?: number;
   readonly maxRetryDelayMs?: number;
   readonly lifecycleSignal?: AbortSignal;
+  readonly cacheTtlMs?: number;
+  readonly now?: () => number;
 }
 
 const wishlistEndpoint = 'https://api.steampowered.com/IWishlistService/GetWishlist/v1/';
@@ -123,6 +125,10 @@ async function runWithConcurrency<T>(
 }
 
 export class SteamClient {
+  private readonly cache = new Map<string, {value: ReturnType<typeof parseAppDetailsResponse>; observedAt: string; expiresAt:number}>();
+  private readonly inflight = new Map<string, Promise<{value: ReturnType<typeof parseAppDetailsResponse>; observedAt:string}>>();
+  private readonly cacheTtlMs: number;
+  private readonly now: () => number;
   private readonly fetchImpl: SteamFetch;
   private readonly timeoutMs: number;
   private readonly maxConcurrency: number;
@@ -133,6 +139,8 @@ export class SteamClient {
   private readonly lifecycleSignal?: AbortSignal;
 
   public constructor(options: SteamClientOptions = {}) {
+    this.cacheTtlMs = options.cacheTtlMs ?? 300_000;
+    this.now = options.now ?? Date.now;
     this.fetchImpl = options.fetchImpl ?? defaultFetch;
     this.timeoutMs = options.timeoutMs ?? defaultTimeoutMs;
     this.maxConcurrency = options.maxConcurrency ?? defaultMaxConcurrency;
@@ -142,6 +150,7 @@ export class SteamClient {
     this.maxRetryDelayMs = options.maxRetryDelayMs ?? defaultMaxRetryDelayMs;
     this.lifecycleSignal = options.lifecycleSignal;
 
+    if (!Number.isSafeInteger(this.cacheTtlMs) || this.cacheTtlMs < 0) throw new Error('Steam cache TTL must be a non-negative integer');
     if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs <= 0) {
       throw new Error('Steam timeout must be a positive safe integer');
     }
@@ -208,11 +217,12 @@ export class SteamClient {
           appDetailsUrl.searchParams.set('cc', storeCountryCode);
           appDetailsUrl.searchParams.set('l', language === 'tr' ? 'turkish' : 'english');
 
-          const appDetailsPayload = await this.requestJson(appDetailsUrl.toString());
-          const appDetails = parseAppDetailsResponse(appDetailsPayload, entry.appId);
+          const cached = await this.appDetails(appDetailsUrl.toString(), entry.appId);
+          const appDetails = cached.value;
 
           return {
             appId: entry.appId,
+            priceObservedAt: cached.observedAt,
             name: appDetails.name,
             priority: entry.priority,
             dateAdded: entry.dateAdded,
@@ -240,6 +250,29 @@ export class SteamClient {
       items: results.filter((item): item is WishlistItem => item !== null),
       errors,
     };
+  }
+
+
+  public clearPriceCache(): void { this.cache.clear(); }
+
+  private async appDetails(key: string, appId: number): Promise<{value: ReturnType<typeof parseAppDetailsResponse>; observedAt:string}> {
+    if (this.lifecycleSignal?.aborted) throw cancelledError();
+    const cached = this.cache.get(key);
+    if (cached && cached.expiresAt > this.now()) return cached;
+    const running = this.inflight.get(key);
+    if (running) return running;
+    const request = (async () => {
+      const value = parseAppDetailsResponse(await this.requestJson(key), appId);
+      const observedAt = new Date(this.now()).toISOString();
+      // Unpriced/unavailable products are not reusable successful prices.
+      if (value.price !== null && value.price.currency !== null) {
+        if (this.cache.size >= 10000) this.cache.delete(this.cache.keys().next().value!);
+        this.cache.set(key, {value,observedAt,expiresAt:this.now()+this.cacheTtlMs});
+      }
+      return {value,observedAt};
+    })();
+    this.inflight.set(key,request);
+    try { return await request; } finally { this.inflight.delete(key); }
   }
 
   private async getWishlistEntries(

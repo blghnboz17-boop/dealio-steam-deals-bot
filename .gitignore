@@ -26,3 +26,5 @@ coverage/
 *.pid
 NUL
 caddy.exe
+!.env.test.example
+.runtime-test-results.txt

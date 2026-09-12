@@ -1,0 +1,11 @@
+{
+  "commit": "",
+  "testBotDesktop": {"passed": false, "evidence": ""},
+  "testBotMobile": {"passed": false, "evidence": ""},
+  "restoreRehearsal": {"passed": false, "evidence": ""},
+  "independentAlarm": {"passed": false, "evidence": ""},
+  "cleanInstall": {"passed": false, "evidence": ""},
+  "azureCreditVerified": {"passed": false, "evidence": ""},
+  "termsUrl": "",
+  "privacyUrl": ""
+}

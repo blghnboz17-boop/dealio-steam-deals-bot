@@ -1,3 +1,4 @@
+import { migrateAssistant } from './assistant-schema.js';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -84,6 +85,7 @@ export function createDatabase(databasePath: string): DatabaseSync {
     migrateConfigurationIdentity(database);
     migratePricingContext(database);
     migrateDmConsentAndDelivery(database);
+    migrateAssistant(database);
     return database;
   } catch (error: unknown) {
     try {

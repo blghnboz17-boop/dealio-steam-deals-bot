@@ -422,6 +422,10 @@ export class UserConfigRepository {
     ).run(discordUserId, discordUserId);
 
     if (preserveGameThresholds) {
+      this.database.prepare(`INSERT INTO game_rule(discord_user_id,config_version,app_id,mode,percent,target_minor,currency,muted,revision,eligible,initialized,event_id,updated_at)
+        SELECT discord_user_id,?,app_id,mode,percent,target_minor,currency,muted,revision+1,0,0,NULL,updated_at
+        FROM game_rule WHERE discord_user_id=? AND config_version=?`)
+        .run(previousConfigVersion+1,discordUserId,previousConfigVersion);
       this.database.prepare(
         `INSERT INTO game_discount_threshold
            (discord_user_id, config_version, app_id, minimum_discount_percent, updated_at)

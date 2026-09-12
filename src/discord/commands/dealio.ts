@@ -1,3 +1,6 @@
+import { matchesRule } from '../assistant-view.js';
+import { handleAssistant } from './assistant.js';
+import { safeLogger } from '../../application/safe-logger.js';
 import {
   ChatInputCommandInteraction,
   MessageFlags,
@@ -61,8 +64,15 @@ export async function handleDealio(
     avatarUrl = undefined;
   }
   const bannerUrl = services.setupPresentation?.bannerUrl;
+  const featured = () => {
+    const assistant=services.wishlistViewService?.assistantService, config=assistant?.config(interaction.user.id);
+    if(!assistant||!config)return {};
+    const items=assistant.repository.snapshot(config)?.items??[];
+    const matching=items.filter(item=>matchesRule(item,assistant.repository.rule(config,item.appId)??undefined,config.minimumDiscountPercent));
+    return {featuredDeal:matching[0],eligibleDealCount:matching.length};
+  };
   const firstPanel = current.status === 'ready'
-    ? buildStatusV2Panel(current, interaction.id, { mode: 'home', bannerUrl, avatarUrl })
+    ? buildStatusV2Panel(current, interaction.id, { mode: 'home', bannerUrl, avatarUrl, ...featured() })
     : buildNoticePanel(
         current.language,
         current.status === 'not-configured' ? 'warning' : 'danger',
@@ -96,7 +106,7 @@ export async function handleDealio(
       && component.customId.startsWith(`dealio:${interaction.id}:`),
   });
   const operations = new PanelOperationQueue(async (error) => {
-    console.error('Discord panel update failed', error);
+    safeLogger.error('Discord panel update failed', error);
     await interaction.followUp({
       flags: dealioEphemeralV2Flags,
       components: [buildNoticePanel(
@@ -111,13 +121,19 @@ export async function handleDealio(
 
   collector.on('collect', (component) => {
     const action = component.customId.slice(`dealio:${interaction.id}:`.length);
+    if ((action === 'history' || action === 'rhythm') && services.wishlistViewService?.assistantService) {
+      void handleAssistant(component as unknown as ChatInputCommandInteraction,services.wishlistViewService?.assistantService,
+        services.wishlistViewService,services.lifecycleSignal,action)
+        .catch(error=>safeLogger.error('Assistant navigation failed',error));
+      return;
+    }
     if (action === 'setup') {
       void handleSetup(
         component as unknown as ChatInputCommandInteraction,
         services.setupService,
         services.lifecycleSignal,
         services.setupPresentation,
-      ).catch((error: unknown) => console.error('Dealio home setup navigation failed', error));
+      ).catch((error: unknown) => safeLogger.error('Dealio home setup navigation failed', error));
       return;
     }
     if (action === 'wishlist') {
@@ -126,7 +142,7 @@ export async function handleDealio(
         services.wishlistViewService,
         services.lifecycleSignal,
         services.discountThresholdService,
-      ).catch((error: unknown) => console.error('Dealio home wishlist navigation failed', error));
+      ).catch((error: unknown) => safeLogger.error('Dealio home wishlist navigation failed', error));
       return;
     }
     if (action === 'check') {
@@ -142,7 +158,7 @@ export async function handleDealio(
           testNotificationService: services.testNotificationService,
           lifecycleSignal: services.lifecycleSignal,
         },
-      ).catch((error: unknown) => console.error('Dealio home check navigation failed', error));
+      ).catch((error: unknown) => safeLogger.error('Dealio home check navigation failed', error));
       return;
     }
     if (action === 'settings' || action === 'region') {
@@ -153,7 +169,7 @@ export async function handleDealio(
         services.lifecycleSignal,
         services.discountThresholdService,
         services.testNotificationService,
-      ).catch((error: unknown) => console.error('Dealio home settings navigation failed', error));
+      ).catch((error: unknown) => safeLogger.error('Dealio home settings navigation failed', error));
       return;
     }
     if (action === 'test') {
@@ -161,7 +177,7 @@ export async function handleDealio(
         component as unknown as ChatInputCommandInteraction,
         services.userConfigurationService,
         services.testNotificationService,
-      ).catch((error: unknown) => console.error('Dealio home test navigation failed', error));
+      ).catch((error: unknown) => safeLogger.error('Dealio home test navigation failed', error));
       return;
     }
     if (action === 'refresh') {
@@ -169,7 +185,7 @@ export async function handleDealio(
       void operations.enqueue(acknowledgement, async () => {
         current = services.statusService.getDashboard(interaction.user.id, fallbackLanguage);
         const refreshed = current.status === 'ready'
-          ? buildStatusV2Panel(current, interaction.id, { mode: 'home', bannerUrl, avatarUrl })
+          ? buildStatusV2Panel(current, interaction.id, { mode: 'home', bannerUrl, avatarUrl, ...featured() })
           : buildNoticePanel(
               current.language,
               current.status === 'not-configured' ? 'warning' : 'danger',
@@ -197,9 +213,9 @@ export async function handleDealio(
     if (current.status === 'ready') {
       await interaction.editReply({
         components: [buildStatusV2Panel(current, interaction.id, {
-          mode: 'home', bannerUrl, avatarUrl, disabled: true,
+          mode: 'home', bannerUrl, avatarUrl, ...featured(), disabled: true,
         })],
-      }).catch((error: unknown) => console.error('Dealio home cleanup failed', error));
+      }).catch((error: unknown) => safeLogger.error('Dealio home cleanup failed', error));
     } else {
       await interaction.editReply({
         components: [buildNoticePanel(
@@ -209,7 +225,7 @@ export async function handleDealio(
             ? 'Devam etmek için /dealio komutuyla yeni bir panel aç.'
             : 'Open a fresh panel with /dealio to continue.',
         )],
-      }).catch((error: unknown) => console.error('Dealio welcome cleanup failed', error));
+      }).catch((error: unknown) => safeLogger.error('Dealio welcome cleanup failed', error));
     }
   } finally {
     closeUiSession();

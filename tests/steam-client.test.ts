@@ -116,7 +116,8 @@ describe('SteamClient', () => {
     const client = new SteamClient({ fetchImpl: fetchMock });
     const items = await client.getWishlist('76561198000000000', 'TR', 'tr');
 
-    expect(items).toEqual([
+    expect(items.every(item => !Number.isNaN(Date.parse(item.priceObservedAt!)))).toBe(true);
+    expect(items.map(({priceObservedAt, ...item}) => item)).toEqual([
       {
         appId: 10,
         name: 'Birinci Oyun',

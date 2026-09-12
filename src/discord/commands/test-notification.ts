@@ -1,3 +1,4 @@
+import { safeLogger } from '../../application/safe-logger.js';
 import {
   ChatInputCommandInteraction,
   MessageFlags,
@@ -45,7 +46,7 @@ export async function handleTestNotification(
       title = uiCopy(language).testCooldownTitle;
       description = messages.testNotificationCooldown(error.retryAfterSeconds);
     } else {
-      console.error('Discord test notification delivery failed', error);
+      safeLogger.error('Discord test notification delivery failed', error);
       kind = 'danger';
       title = uiCopy(language).testFailedTitle;
       description = messages.testNotificationFailed;

@@ -1,3 +1,5 @@
+import { redactSecrets } from './safe-logger.js';
+import { deliveryAllowed } from '../domain/notification-preference.js';
 import type { Language } from '../domain/user-config.js';
 import type { StoreCountryCode } from '../domain/store-country.js';
 import type {
@@ -9,6 +11,9 @@ import { UserConfigRepository } from '../persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../persistence/wishlist-state-repository.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
 
+export type { DeliveryReceipt } from '../domain/wishlist-state.js';
+import type { DeliveryReceipt } from '../domain/wishlist-state.js';
+
 export interface NotificationSender {
   plan<T extends SaleNotification>(
     notifications: readonly T[],
@@ -19,10 +24,11 @@ export interface NotificationSender {
     batch: NotificationBatch<SaleNotification>,
     language: Language,
     options?: NotificationSendOptions,
-  ): Promise<void>;
+  ): Promise<DeliveryReceipt | void>;
 }
 
 export interface SaleNotification {
+  readonly reason?: string;
   readonly discordUserId: string;
   readonly appId: number;
   readonly saleEpisodeId: string;
@@ -37,6 +43,7 @@ export interface SaleNotification {
 
 export interface NotificationSendOptions {
   readonly test?: boolean;
+  readonly digest?: boolean;
 }
 
 export class NotificationDeliveryCancelledError extends Error {
@@ -63,6 +70,7 @@ export interface NotificationServiceOptions {
   readonly retryBaseDelayMs?: number;
   readonly maxRetryDelayMs?: number;
   readonly lifecycleSignal?: AbortSignal;
+  readonly revalidate?: (user: string) => Promise<boolean>;
 }
 
 const defaultSendingTimeoutMs = 15 * 60 * 1000;
@@ -78,6 +86,7 @@ export class NotificationService {
   private readonly retryBaseDelayMs: number;
   private readonly maxRetryDelayMs: number;
   private readonly lifecycleSignal?: AbortSignal;
+  private readonly revalidate?: (user: string) => Promise<boolean>;
 
   public constructor(
     private readonly userConfigRepository: UserConfigRepository,
@@ -92,6 +101,7 @@ export class NotificationService {
     this.retryBaseDelayMs = options.retryBaseDelayMs ?? defaultRetryBaseDelayMs;
     this.maxRetryDelayMs = options.maxRetryDelayMs ?? defaultMaxRetryDelayMs;
     this.lifecycleSignal = options.lifecycleSignal;
+    this.revalidate = options.revalidate;
 
     if (!Number.isSafeInteger(this.sendingTimeoutMs) || this.sendingTimeoutMs <= 0) {
       throw new Error('Notification sending timeout must be a positive safe integer');
@@ -130,6 +140,17 @@ export class NotificationService {
       return { candidateCount: 0, sentCount: 0, failedCount: 0 };
     }
 
+    const assistant = this.wishlistStateRepository.assistant;
+    const preference = assistant.preference(discordUserId);
+    if (!deliveryAllowed(preference, this.now())) return {candidateCount:0,sentCount:0,failedCount:0};
+    const pending = assistant.db.prepare(`SELECT 1 FROM notification_log WHERE discord_user_id=? AND config_version=?
+      AND status IN ('candidate','failed','sending') LIMIT 1`).get(discordUserId,config.configVersion);
+    if (pending && this.revalidate && !await this.revalidate(discordUserId))
+      return {candidateCount:0,sentCount:0,failedCount:0};
+    // A removed/replaced account must never receive an old queued message.
+    const fresh = this.userConfigRepository.findByDiscordUserId(discordUserId);
+    if (!fresh?.enabled || fresh.configurationId !== config.configurationId || this.lifecycleSignal?.aborted)
+      return {candidateCount:0,sentCount:0,failedCount:0};
     const staleBefore = new Date(this.now().getTime() - this.sendingTimeoutMs).toISOString();
     this.wishlistStateRepository.recoverStaleSending(config, staleBefore);
     this.wishlistStateRepository.expireInactiveNotifications(config);
@@ -237,6 +258,7 @@ export class NotificationService {
       }
     }
 
+    if (sentCount > 0 && failedCount === 0) assistant.markDigest(discordUserId, this.now());
     return {
       candidateCount,
       sentCount,
@@ -247,14 +269,17 @@ export class NotificationService {
   private async deliverClaimedBatch(
     batch: DurableNotificationBatch,
   ): Promise<BatchDeliveryOutcome> {
+    let receipt: DeliveryReceipt | void;
     try {
-      await this.sender.send(batch, batch.language);
+      const user=batch.notifications[0].discordUserId;
+      const digest=this.wishlistStateRepository.assistant.preference(user).mode==='digest';
+      receipt = digest ? await this.sender.send(batch,batch.language,{digest:true}) : await this.sender.send(batch,batch.language);
     } catch (error: unknown) {
       if (error instanceof NotificationDeliveryCancelledError) {
         return { sentCount: 0, failedCount: 0, cancelled: true };
       }
 
-      const message = error instanceof Error ? error.message : 'Unknown Discord error';
+      const message = isDiscordDmBlocked(error) ? 'DISCORD_DM_BLOCKED' : redactSecrets(error instanceof Error ? error.message : 'Unknown Discord error');
       const attemptCount = batch.attemptCount + 1;
       const permanentlyBlocked = isDiscordDmBlocked(error);
       const terminal = isPermanentDiscordError(error) || attemptCount >= this.maxAttempts;
@@ -286,7 +311,7 @@ export class NotificationService {
     }
 
     try {
-      this.wishlistStateRepository.markNotificationBatchSent(batch);
+      this.wishlistStateRepository.markNotificationBatchSent(batch, receipt || undefined);
       return {
         sentCount: batch.notifications.length,
         failedCount: 0,

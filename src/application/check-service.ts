@@ -220,13 +220,14 @@ export class CheckService {
         ...steamResult.errors.map((error) => error.appId),
       ];
       const notificationCandidates = this.wishlistStateRepository.runInImmediateTransaction(() => {
+        this.wishlistStateRepository.assistant.saveSnapshot(config, steamResult, completedAt);
         const candidates: NotificationCandidate[] = [];
         for (const item of knownItems) {
           const saleKey = item.onSale ? createSaleKey(item.price!) : null;
           const observation = this.wishlistStateRepository.recordObservation(config, {
             item,
             saleKey,
-            observedAt: completedAt,
+            observedAt: item.priceObservedAt ?? completedAt,
           }, { baseline: runOptions.baseline });
           if (observation.notificationCandidate) {
             candidates.push(observation.notificationCandidate);

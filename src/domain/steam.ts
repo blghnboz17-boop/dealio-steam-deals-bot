@@ -33,6 +33,7 @@ export interface SalePrice {
 }
 
 export interface WishlistItem {
+  readonly priceObservedAt?: string;
   readonly appId: number;
   readonly name: string;
   readonly priority: number | null;

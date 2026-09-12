@@ -51,7 +51,7 @@ describe('/delete-data modal operation lifecycle', () => {
       await handling;
 
       expect(handlerSettled).toBe(true);
-      expect(errorLog).toHaveBeenCalledWith('Discord delete-data cancel failed', rejection);
+      expect(errorLog).toHaveBeenCalledWith('Discord delete-data cancel failed', expect.stringContaining(rejection.message));
     } finally {
       acknowledgement.resolve();
       errorLog.mockRestore();
@@ -101,7 +101,7 @@ describe('/delete-data modal operation lifecycle', () => {
       await handling;
 
       expect(handlerSettled).toBe(true);
-      expect(errorLog).toHaveBeenCalledWith('Discord delete-data acknowledgement failed', rejection);
+      expect(errorLog).toHaveBeenCalledWith('Discord delete-data acknowledgement failed', expect.stringContaining(rejection.message));
     } finally {
       acknowledgement.resolve();
       errorLog.mockRestore();

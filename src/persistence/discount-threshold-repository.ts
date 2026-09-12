@@ -52,9 +52,9 @@ export class DiscountThresholdRepository {
   public countGameOverrides(scope: ThresholdScope): number {
     const row = this.database.prepare(
       `SELECT COUNT(*) AS count
-       FROM game_discount_threshold
-       WHERE discord_user_id = ? AND config_version = ?`,
-    ).get(scope.discordUserId, scope.configVersion) as { count: SQLOutputValue };
+       FROM (SELECT app_id FROM game_discount_threshold WHERE discord_user_id=? AND config_version=?
+         UNION SELECT app_id FROM game_rule WHERE discord_user_id=? AND config_version=? AND (mode!='inherit' OR muted=1))`,
+    ).get(scope.discordUserId, scope.configVersion, scope.discordUserId, scope.configVersion) as { count: SQLOutputValue };
     if (typeof row.count !== 'number' || !Number.isSafeInteger(row.count) || row.count < 0) {
       throw new Error('Invalid game discount threshold count');
     }
