@@ -67,9 +67,12 @@ export async function handleDealio(
   const featured = () => {
     const assistant=services.wishlistViewService?.assistantService, config=assistant?.config(interaction.user.id);
     if(!assistant||!config)return {};
-    const items=assistant.repository.snapshot(config)?.items??[];
+    const snapshot=assistant.repository.snapshot(config);
+    const items=snapshot?.items??[];
     const matching=items.filter(item=>matchesRule(item,assistant.repository.rule(config,item.appId)??undefined,config.minimumDiscountPercent));
-    return {featuredDeal:matching[0],eligibleDealCount:matching.length};
+    return {featuredDeal:matching[0],heroGame:matching[0]??items.find(item=>item.price?.currency),
+      eligibleDealCount:snapshot?matching.length:undefined,trackedGameCount:snapshot?items.length:undefined,
+      capturedAt:snapshot?.capturedAt,notificationPreference:assistant.repository.preference(config.discordUserId)};
   };
   const firstPanel = current.status === 'ready'
     ? buildStatusV2Panel(current, interaction.id, { mode: 'home', bannerUrl, avatarUrl, ...featured() })

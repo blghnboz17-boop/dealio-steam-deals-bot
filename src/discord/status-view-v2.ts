@@ -1,3 +1,5 @@
+import { buildHomePanel } from './home-view.js';
+import type { NotificationPreference } from '../domain/notification-preference.js';
 import type { WishlistItem } from '../domain/steam.js';
 import { formatMinorPrice, sanitizeGameName } from './notification-messages.js';
 import {
@@ -25,6 +27,10 @@ type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
 
 export interface StatusV2Options {
   readonly featuredDeal?: WishlistItem;
+  readonly heroGame?: WishlistItem;
+  readonly trackedGameCount?: number;
+  readonly capturedAt?: string;
+  readonly notificationPreference?: NotificationPreference;
   readonly eligibleDealCount?: number;
   readonly mode?: 'home' | 'status';
   readonly bannerUrl?: string;
@@ -32,7 +38,7 @@ export interface StatusV2Options {
   readonly disabled?: boolean;
 }
 
-export function buildStatusV2Panel(
+function buildPreferencesPanel(
   result: ReadyStatus,
   sessionId: string,
   options: StatusV2Options = {},
@@ -238,4 +244,15 @@ function localizedCheckStatus(status: CheckStatus | null, language: Language): s
   if (status === 'unavailable') return '⚠️ Steam unavailable';
   if (status === 'failed') return '🛑 Failed';
   return '⏳ No completed check yet';
+}
+
+
+export function buildStatusV2Panel(
+  result: ReadyStatus,
+  sessionId: string,
+  options: StatusV2Options = {},
+): ContainerBuilder {
+  return options.mode === 'home'
+    ? buildHomePanel(result, sessionId, options)
+    : buildPreferencesPanel(result, sessionId, options);
 }
