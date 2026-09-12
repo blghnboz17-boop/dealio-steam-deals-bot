@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import {
   closeSync,
   existsSync,
@@ -80,6 +81,28 @@ export class ProcessLock {
     }
 
     return new ProcessLock(lockPath, descriptor, token, fileSystem);
+  }
+
+  public static acquireForApplication(
+    databasePath: string,
+    applicationId: string,
+    lockDirectory = join(homedir(), '.local', 'state', 'dealio'),
+  ): Pick<ProcessLock, 'release'> {
+    if (!/^\d+$/.test(applicationId)) throw new ProcessLockError('Invalid application ID');
+    const applicationLock = ProcessLock.acquire(join(lockDirectory, applicationId));
+    let databaseLock: ProcessLock;
+    try {
+      databaseLock = ProcessLock.acquire(databasePath);
+    } catch (error: unknown) {
+      applicationLock.release();
+      throw error;
+    }
+    return {
+      release: () => {
+        databaseLock.release();
+        applicationLock.release();
+      },
+    };
   }
 
   public release(): void {

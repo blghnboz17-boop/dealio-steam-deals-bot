@@ -95,3 +95,25 @@ describe('loadEnvironment', () => {
     })).toThrow('Environment variable NOTIFICATION_RETRY_INTERVAL_SECONDS must be a whole number');
   });
 });
+
+
+describe('production host boundary', () => {
+  const production = { ...validEnvironment, DEALIO_PRODUCTION: 'true' };
+  const machineId = '1234567890abcdef1234567890abcdef';
+  it('requires explicit production isolation', () => {
+    expect(() => loadEnvironment(production)).toThrow('Production requires');
+  });
+  it('allows only the pinned machine for a single-host rollout', () => {
+    const config = { ...production, DEALIO_SINGLE_HOST_MACHINE_ID: machineId };
+    expect(loadEnvironment(config, () => machineId).production).toBe(true);
+    expect(() => loadEnvironment(config, () => 'abcdef1234567890abcdef1234567890')).toThrow('pinned machine');
+    expect(() => loadEnvironment(config, () => { throw new Error('machine identity unavailable'); }))
+      .toThrow('machine identity unavailable');
+  });
+  it('retains cloud lease configuration and blocks the production app in development', () => {
+    expect(loadEnvironment({ ...production, AZURE_LEASE_CONTAINER_URL: 'https://example.blob.core.windows.net/locks' }))
+      .toMatchObject({ production: true, azureLeaseContainerUrl: 'https://example.blob.core.windows.net/locks' });
+    expect(() => loadEnvironment({ ...validEnvironment, DISCORD_CLIENT_ID: '1540325119690412172' }))
+      .toThrow('Development must use a separate Discord application');
+  });
+});

@@ -593,7 +593,7 @@ function buildSetupErrorPanel(
       button: {
         customId: `setup:${sessionId}:start`,
         label: messagesFor(language).setupWizardStart,
-        emoji: '↻',
+        emoji: '🔄',
       },
     },
   );

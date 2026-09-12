@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 export interface EnvironmentConfig {
   readonly discordToken: string;
   readonly discordClientId: string;
@@ -59,6 +61,7 @@ function boundedInteger(
 
 export function loadEnvironment(
   environment: NodeJS.ProcessEnv = process.env,
+  readMachineId: () => string = () => readFileSync('/etc/machine-id', 'utf8').trim(),
 ): EnvironmentConfig {
   const discordClientId = requiredValue(environment, 'DISCORD_CLIENT_ID');
   const discordGuildId = environment.DISCORD_GUILD_ID?.trim() || undefined;
@@ -103,8 +106,17 @@ export function loadEnvironment(
       )
     : defaultNotificationRetryIntervalSeconds;
 
-  if (environment.DEALIO_PRODUCTION === 'true' && !environment.AZURE_LEASE_CONTAINER_URL)
-    throw new Error('Production requires AZURE_LEASE_CONTAINER_URL and a provisioned application lock blob');
+  if (environment.DEALIO_PRODUCTION === 'true' && !environment.AZURE_LEASE_CONTAINER_URL) {
+    // Explicit single-host rollout while cloud resources await credit verification.
+    // Copying this configuration to a different machine must not start a gateway.
+    const expectedMachineId = environment.DEALIO_SINGLE_HOST_MACHINE_ID?.trim();
+    if (!expectedMachineId || !/^[a-f0-9]{32}$/.test(expectedMachineId)) {
+      throw new Error('Production requires AZURE_LEASE_CONTAINER_URL or an explicit DEALIO_SINGLE_HOST_MACHINE_ID');
+    }
+    if (readMachineId() !== expectedMachineId) {
+      throw new Error('Single-host production is restricted to its pinned machine');
+    }
+  }
   if (environment.DEALIO_PRODUCTION !== 'true' && environment.DISCORD_CLIENT_ID === (environment.PRODUCTION_DISCORD_CLIENT_ID ?? '1540325119690412172'))
     throw new Error('Development must use a separate Discord application');
   return {

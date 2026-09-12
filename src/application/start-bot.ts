@@ -60,7 +60,9 @@ export async function startBot(
     throw new BotStartupCancelledError();
   }
 
-  const processLock = ProcessLock.acquire(environment.databasePath);
+  const processLock = environment.production
+    ? ProcessLock.acquireForApplication(environment.databasePath, environment.discordClientId)
+    : ProcessLock.acquire(environment.databasePath);
   let health: RuntimeHealth | undefined;
   try {
     health = options.health ?? (options.healthPath ? new RuntimeHealth(options.healthPath) : undefined);
