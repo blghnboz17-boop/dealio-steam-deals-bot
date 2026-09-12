@@ -1,4 +1,49 @@
-# WSL/Linux servisi
+# Botu çalıştırma: Azure üretim, WSL geliştirme
+
+## Azure'daki çalışan botu güncelleme
+
+Üretim botu Azure sunucusunda çalışır. Windows CMD veya PowerShell'de önce:
+
+```bash
+ssh dealiobot@20.240.162.55
+```
+
+Sunucuya bağlandıktan sonra:
+
+```bash
+cd /home/dealiobot/steam-wishlist-discord-bot
+git pull --ff-only
+sudo systemctl stop dealio
+npm ci
+npm ci --prefix .opencode
+npm run typecheck
+npm run typecheck:handoff
+npm test
+npm run build
+sudo systemctl start dealio
+sudo systemctl status dealio --no-pager
+```
+
+Derleme veya test başarısızsa yeni sürümü başlatmadan önce hatayı giderin.
+Tarama aralığı sunucudaki `.env` dosyasında `POLL_INTERVAL_HOURS=0.5` olmalıdır.
+WSL'deki yerel `.env` değişikliği sunucuya kendiliğinden aktarılmaz.
+
+**Aynı Discord bot token'ıyla Azure ve WSL kopyalarını birlikte çalıştırmayın.**
+İki kopya aynı etkileşimi yanıtlamaya çalışır; panellerin bellekteki oturumları
+paylaşılmadığı için yeni panel bile yanlışlıkla süresi dolmuş görünebilir.
+Veritabanı kilidi yalnızca aynı makine/veritabanını korur, ayrı sunucuları korumaz.
+
+## İsteğe bağlı yerel WSL servisi
+
+Üretim botu Azure'da çalışırken yerel servis kapalı ve devre dışı tutulur:
+
+```bash
+sudo systemctl disable --now dealio
+```
+
+Aşağıdaki yerel servisi ancak ayrı bir test bot token'ıyla veya Azure kopyasını
+bilerek durdurduktan sonra açın. Azure'daki mevcut servis dosyasını bu yerel
+şablonla değiştirmeyin.
 
 Bu servis Bilgehan'ın Ubuntu-24.04 kurulumuna göre ayarlandı. Başka bir makinede
 `dealio.service` içindeki kullanıcı, grup, proje klasörü ve Node yolunu uyarlayın.
