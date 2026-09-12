@@ -1,3 +1,4 @@
+import { AssistantRepository } from './assistant-repository.js';
 // allow: SIZE_OK — Observation transitions, notification eligibility, and candidate creation form one atomic SQLite state machine.
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
@@ -108,6 +109,7 @@ export class WishlistObservationRepository {
              sale_episode_id = NULL,
              sale_started_at = NULL,
              sale_key = NULL,
+              rule_event_id = NULL,
               last_seen_at = ?,
               observation_status = 'missing'
          WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
@@ -121,6 +123,8 @@ export class WishlistObservationRepository {
         ...uniqueAppIds,
       );
 
+    this.database.prepare(`UPDATE game_rule SET initialized=0,eligible=0,event_id=NULL
+      WHERE discord_user_id=? AND config_version=? ${exclusion}`).run(scope.discordUserId,scope.configVersion,...uniqueAppIds);
     return Number(result.changes);
   }
 
@@ -157,6 +161,8 @@ export class WishlistObservationRepository {
     options: RecordObservationOptions = {},
   ): ObservationResult {
     const { item, saleKey, observedAt } = observation;
+    const assistant = new AssistantRepository(this.database);
+    const rule = assistant.rule(scope, item.appId);
     const price = item.price;
     let notificationCandidate: NotificationCandidate | null = null;
 
@@ -237,6 +243,7 @@ export class WishlistObservationRepository {
 
       if (
         !options.baseline &&
+        !rule?.muted && rule?.mode !== 'target' &&
         notificationEligible &&
         item.onSale === true &&
         saleEpisodeId !== null &&
@@ -321,6 +328,7 @@ export class WishlistObservationRepository {
         }
       }
 
+      notificationCandidate = assistant.observe(scope, item, observedAt, options.baseline) ?? notificationCandidate;
       if (ownsTransaction) {
         this.database.exec('COMMIT');
       }

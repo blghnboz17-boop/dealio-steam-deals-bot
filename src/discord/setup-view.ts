@@ -48,6 +48,7 @@ export function buildSetupWelcomePanel(
   const container = new ContainerBuilder().setAccentColor(dealioBrand.colors.primary);
   addSetupVisual(container, options);
   container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(language==='tr'?'-# 01 PROFİL → 02 BÖLGE VE DİL → 03 BİLDİRİM ONAYI':'-# 01 PROFILE → 02 REGION & LANGUAGE → 03 ALERT CONSENT'),
     new TextDisplayBuilder().setContent(`# ✨ ${messages.setupWizardTitle}`),
     new TextDisplayBuilder().setContent(showHow
       ? `${messages.setupWizardDescription}\n\n> 🛡️ ${messages.setupWizardHowDescription}`
@@ -92,6 +93,7 @@ export function buildSetupConfirmationPanel(
   const container = new ContainerBuilder()
     .setAccentColor(dealioBrand.colors.accent)
     .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(prepared.language==='tr'?'-# ADIM 2–3 / TERCİHLERİN VE ONAYIN':'-# STEPS 2–3 / YOUR PREFERENCES & CONSENT'),
       new TextDisplayBuilder().setContent(`# 🧭 ${messages.setupWizardConfirmTitle}`),
       new TextDisplayBuilder().setContent(messages.setupWizardConfirmDescription),
       new TextDisplayBuilder().setContent([
@@ -110,6 +112,8 @@ export function buildSetupConfirmationPanel(
     .addActionRowComponents(
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId(`setup:${sessionId}:confirm`).setLabel(messages.setupWizardEnable).setEmoji('🔔').setStyle(ButtonStyle.Success).setDisabled(disabled),
+      ),
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId(`setup:${sessionId}:region`).setLabel(messages.setupWizardChangeRegion).setEmoji('🌍').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
         new ButtonBuilder().setCustomId(`setup:${sessionId}:language`).setLabel(prepared.language === 'tr' ? 'English' : 'Türkçe').setEmoji('🌐').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
         new ButtonBuilder().setCustomId(`setup:${sessionId}:cancel`).setLabel(messages.setupWizardCancel).setStyle(ButtonStyle.Danger).setDisabled(disabled),

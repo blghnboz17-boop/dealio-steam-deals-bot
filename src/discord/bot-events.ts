@@ -1,3 +1,4 @@
+import { safeLogger } from '../application/safe-logger.js';
 import { Events, MessageFlags, type Client } from 'discord.js';
 import type { ApplicationTaskTracker } from '../application/application-task-tracker.js';
 import type { CheckService } from '../application/check-service.js';
@@ -75,7 +76,7 @@ export function registerBotEvents(options: BotEventOptions): void {
         try {
           await handleStoreCountryAutocomplete(interaction);
         } catch (error: unknown) {
-          console.error('Discord store-country autocomplete failed', error);
+          safeLogger.error('Discord store-country autocomplete failed', error);
           if (!interaction.responded) {
             await interaction.respond([]).catch(() => undefined);
           }
@@ -117,7 +118,7 @@ export function registerBotEvents(options: BotEventOptions): void {
       try {
         await handleInteraction(interaction, services, lifecycleSignal);
       } catch (error: unknown) {
-        console.error('Discord interaction failed', error);
+        safeLogger.error('Discord interaction failed', error);
 
         try {
           const language = services.userConfigurationService.get(interaction.user.id)?.language
@@ -142,7 +143,7 @@ export function registerBotEvents(options: BotEventOptions): void {
             });
           }
         } catch (replyError: unknown) {
-          console.error('Discord interaction error reply failed', replyError);
+          safeLogger.error('Discord interaction error reply failed', replyError);
         }
       }
     });
@@ -240,6 +241,7 @@ async function handleInteraction(
 
 function isDealioComponent(customId: string): boolean {
   return [
+    'assistant:',
     'dealio:',
     'status-v2:',
     'wishlist-v2:',

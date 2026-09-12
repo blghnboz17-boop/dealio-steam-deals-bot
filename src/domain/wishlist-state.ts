@@ -23,6 +23,7 @@ export interface WishlistItemState {
 }
 
 export interface NotificationCandidate {
+  readonly reason?: string;
   readonly discordUserId: string;
   readonly steamId64: string;
   readonly configVersion: number;
@@ -54,3 +55,5 @@ export interface WishlistObservation {
   readonly saleKey: string | null;
   readonly observedAt: string;
 }
+
+export interface DeliveryReceipt { readonly messageId: string; readonly channelId: string; readonly deliveredAt: string }

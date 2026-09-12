@@ -1,3 +1,5 @@
+import type { WishlistItem } from '../domain/steam.js';
+import { formatMinorPrice, sanitizeGameName } from './notification-messages.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -22,6 +24,8 @@ import { uiCopy } from './ui/copy.js';
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
 
 export interface StatusV2Options {
+  readonly featuredDeal?: WishlistItem;
+  readonly eligibleDealCount?: number;
   readonly mode?: 'home' | 'status';
   readonly bannerUrl?: string;
   readonly avatarUrl?: string;
@@ -88,6 +92,12 @@ export function buildStatusV2Panel(
       `-# ${tr ? 'Son başarılı kontrol' : 'Last successful check'}: ${displayTime(checkState?.lastSuccessCompletedAt, text.never)}`,
     ].join('\n')),
   );
+  if(mode==='home' && options.featuredDeal?.price?.currency){
+    const item=options.featuredDeal;
+    container.addSectionComponents(new SectionBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(
+      `### ${tr?'Kurallarına uygun':'Matches your rules'} · ${options.eligibleDealCount??1}\n[${sanitizeGameName(item.name).slice(0,100)}](https://store.steampowered.com/app/${item.appId})\n**${formatMinorPrice(item.price!.finalMinor,item.price!.currency!,language)}** · −${item.price!.discountPercent}%`))
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL(`https://cdn.akamai.steamstatic.com/steam/apps/${item.appId}/header.jpg`).setDescription(item.name.slice(0,100))));
+  }
   const accountContent = [
     `### ${text.account}`,
     `[${maskSteamId(config.steamId64)}](${profileUrl}) · **${storeCountryLabel(config.storeCountryCode, language)}**`,
@@ -148,6 +158,9 @@ export function buildStatusV2Panel(
     new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small),
   );
   if (mode === 'home') {
+    container.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`${prefix}:${sessionId}:history`).setLabel(tr?'Bildirim Geçmişi':'Alert History').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
+      new ButtonBuilder().setCustomId(`${prefix}:${sessionId}:rhythm`).setLabel(tr?'Bildirim Ritmi':'Alert Timing').setStyle(ButtonStyle.Secondary).setDisabled(disabled)));
     container.addActionRowComponents(
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId(`${prefix}:${sessionId}:wishlist`).setLabel(text.homeWishlist).setEmoji('🎮').setStyle(ButtonStyle.Primary).setDisabled(disabled),

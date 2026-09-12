@@ -34,6 +34,7 @@ export interface WishlistItemStateRow {
 }
 
 export interface NotificationLogRow {
+  reason: SQLOutputValue;
   discord_user_id: SQLOutputValue;
   steam_id64: SQLOutputValue;
   config_version: SQLOutputValue;
@@ -133,6 +134,7 @@ export function toState(row: WishlistItemStateRow): WishlistItemState {
 
 export function toNotificationCandidate(row: NotificationLogRow): NotificationCandidate {
   return {
+    ...(row.reason && row.reason !== 'discount' ? {reason:textValue(row.reason,'reason')}:{}),
     discordUserId: textValue(row.discord_user_id, 'discord_user_id'),
     steamId64: textValue(row.steam_id64, 'steam_id64'),
     configVersion: integerValue(row.config_version, 'config_version'),
@@ -168,4 +170,5 @@ export const notificationColumns = `
   notification.final_price_minor AS final_price_minor,
   notification.discount_percent AS discount_percent,
   notification.attempt_count AS attempt_count,
-  notification.created_at AS created_at`;
+  notification.created_at AS created_at,
+  notification.reason AS reason`;

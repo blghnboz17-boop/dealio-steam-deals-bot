@@ -166,7 +166,7 @@ describe('Dealio Components V2 UI', () => {
     expect(serialized).toContain(mode === 'home' ? 'İndirim radarın' : 'Dealio Durum ve Ayarlar');
     expect(serialized).toContain('İlk kontrol bekleniyor');
     const rows = panel.toJSON().components.filter((component) => component.type === 1);
-    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [3, 3] : [2, 3]);
+    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [2, 3, 3] : [2, 3]);
     expect(serialized).not.toContain('↻');
   });
 

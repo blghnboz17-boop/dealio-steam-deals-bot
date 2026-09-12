@@ -1,3 +1,4 @@
+import { safeLogger } from './safe-logger.js';
 import type { Client } from 'discord.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { WishlistScheduler } from './scheduler.js';
@@ -16,6 +17,7 @@ export class BotRuntime {
   private readonly processLock: Pick<ProcessLock, 'release'>;
   private readonly additionalSchedulers: readonly Stoppable[];
   private readonly cancelActiveWork: () => void;
+  private readonly afterDisconnect: () => Promise<void>;
   private readonly health?: Pick<RuntimeHealth, 'markStopping' | 'markStopped' | 'markFailed'>;
   private stopPromise: Promise<void> | null = null;
 
@@ -30,16 +32,18 @@ export class BotRuntime {
       readonly processLock?: Pick<ProcessLock, 'release'>;
       readonly additionalSchedulers?: readonly Stoppable[];
       readonly cancelActiveWork?: () => void;
+      readonly afterDisconnect?: () => Promise<void>;
       readonly health?: Pick<RuntimeHealth, 'markStopping' | 'markStopped' | 'markFailed'>;
     } = {},
   ) {
     this.shutdownTimeoutMs = options.shutdownTimeoutMs ?? 30_000;
-    this.logger = options.logger ?? console;
+    this.logger = options.logger ?? safeLogger;
     this.taskTracker = options.taskTracker ?? { stop: async () => undefined };
     this.processLock = options.processLock ?? { release: () => undefined };
     this.additionalSchedulers = options.additionalSchedulers ?? [];
     this.cancelActiveWork = options.cancelActiveWork ?? (() => undefined);
     this.health = options.health;
+    this.afterDisconnect = options.afterDisconnect ?? (async()=>undefined);
 
     if (!Number.isSafeInteger(this.shutdownTimeoutMs) || this.shutdownTimeoutMs <= 0) {
       throw new Error('Shutdown timeout must be a positive safe integer');
@@ -103,6 +107,7 @@ export class BotRuntime {
       errors.push(clientResult[0].reason);
     }
 
+    try { await this.afterDisconnect(); } catch(error) { errors.push(error); }
     let databaseClosed = false;
     try {
       this.database.close();

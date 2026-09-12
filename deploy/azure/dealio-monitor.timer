@@ -1,0 +1,7 @@
+[Unit]
+Description=Dealio monitor schedule
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+[Install]
+WantedBy=timers.target

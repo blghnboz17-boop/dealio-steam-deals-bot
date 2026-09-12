@@ -1,0 +1,13 @@
+[Unit]
+Description=Dealio restore
+After=network-online.target
+[Service]
+Type=oneshot
+User=dealiobot
+WorkingDirectory=/home/dealiobot/steam-wishlist-discord-bot
+ExecStart=/usr/bin/node scripts/backup.mjs --restore-test
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=180
+LogNamespace=dealio

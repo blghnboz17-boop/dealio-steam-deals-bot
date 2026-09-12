@@ -1,3 +1,5 @@
+import { handleAssistant } from './assistant.js';
+import { safeLogger } from '../../application/safe-logger.js';
 import {
   ChatInputCommandInteraction,
   LabelBuilder,
@@ -33,6 +35,7 @@ export async function handleWishlist(
   lifecycleSignal?: AbortSignal,
   thresholdService?: DiscountThresholdService,
 ): Promise<void> {
+  if (service.assistantService) return handleAssistant(interaction, service.assistantService, service, lifecycleSignal);
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await service.load(
     interaction.user.id,
@@ -111,7 +114,7 @@ export async function handleWishlist(
         const page = buildWishlistV2Page(snapshot, result.language, pageIndex, interaction.id, view);
         pageIndex = page.pageIndex;
         await interaction.editReply({ components: [...page.components] });
-      }).catch((error: unknown) => console.error('Discord wishlist view update failed', error));
+      }).catch((error: unknown) => safeLogger.error('Discord wishlist view update failed', error));
       return;
     }
 
@@ -122,7 +125,7 @@ export async function handleWishlist(
         const acknowledgement = component.deferUpdate();
         operations = operations.then(() => acknowledgement)
           .then(() => undefined)
-          .catch((error: unknown) => console.error('Discord wishlist fallback acknowledgement failed', error));
+          .catch((error: unknown) => safeLogger.error('Discord wishlist fallback acknowledgement failed', error));
         return;
       }
       const modalCustomId = wishlistThresholdModalId(
@@ -211,7 +214,7 @@ export async function handleWishlist(
               )],
             });
           }).catch(async (error: unknown) => {
-            console.error('Discord wishlist threshold update failed', error);
+            safeLogger.error('Discord wishlist threshold update failed', error);
             await modal.followUp({
               flags: dealioEphemeralV2Flags,
               components: [buildNoticePanel(
@@ -221,12 +224,12 @@ export async function handleWishlist(
                   ? 'Güncel eşiği görmek için /wishlist ile listeyi yeniden aç. Hesap veya bölge değiştiyse eski panel artık kullanılamaz.'
                   : 'Open /wishlist again to check the current threshold. Old panels cannot update a changed account or region.',
               )],
-            }).catch((replyError: unknown) => console.error('Wishlist error notice failed', replyError));
+            }).catch((replyError: unknown) => safeLogger.error('Wishlist error notice failed', replyError));
           });
           await operations;
         } catch (error: unknown) {
           if (!modalAbortController.signal.aborted) {
-            console.error('Discord wishlist modal failed', error);
+            safeLogger.error('Discord wishlist modal failed', error);
           }
         }
       })();
@@ -239,7 +242,7 @@ export async function handleWishlist(
       const acknowledgement = component.deferUpdate();
       operations = operations.then(() => acknowledgement)
         .then(() => undefined)
-        .catch((error: unknown) => console.error('Discord wishlist fallback acknowledgement failed', error));
+        .catch((error: unknown) => safeLogger.error('Discord wishlist fallback acknowledgement failed', error));
       return;
     }
     if (action === 'close') {
@@ -264,7 +267,7 @@ export async function handleWishlist(
           : current.pageIndex;
       const next = buildWishlistV2Page(snapshot, result.language, pageIndex, interaction.id, view);
       await interaction.editReply({ components: [...next.components] });
-    }).catch((error: unknown) => console.error('Discord wishlist component update failed', error));
+    }).catch((error: unknown) => safeLogger.error('Discord wishlist component update failed', error));
   });
 
   const endReason = new Promise<string>((resolve) => {
@@ -285,7 +288,7 @@ export async function handleWishlist(
         snapshot, result.language, pageIndex, interaction.id, view, 'disabled',
       );
       await interaction.editReply({ components: [...expired.components] }).catch((error: unknown) => {
-        console.error('Discord wishlist component cleanup failed', error);
+        safeLogger.error('Discord wishlist component cleanup failed', error);
       });
     }
   } finally {

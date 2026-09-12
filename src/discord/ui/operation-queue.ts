@@ -1,3 +1,4 @@
+import { safeLogger } from '../../application/safe-logger.js';
 /** Serializes panel updates while observing Discord acknowledgements immediately. */
 export class PanelOperationQueue {
   private pending = Promise.resolve();
@@ -18,7 +19,7 @@ export class PanelOperationQueue {
       try {
         await this.onError(error);
       } catch (reportError: unknown) {
-        console.error('Discord panel error notice failed', reportError);
+        safeLogger.error('Discord panel error notice failed', reportError);
       }
     });
     return this.pending;

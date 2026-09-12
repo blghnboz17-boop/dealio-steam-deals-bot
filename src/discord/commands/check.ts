@@ -1,3 +1,4 @@
+import { safeLogger } from '../../application/safe-logger.js';
 import {
   ChatInputCommandInteraction,
   MessageFlags,
@@ -107,7 +108,7 @@ export async function handleCheck(
         navigation.wishlistViewService,
         navigation.lifecycleSignal,
         navigation.discountThresholdService,
-      ).catch((error: unknown) => console.error('Dealio check wishlist navigation failed', error));
+      ).catch((error: unknown) => safeLogger.error('Dealio check wishlist navigation failed', error));
       return;
     }
     if (action === 'status') {
@@ -118,7 +119,7 @@ export async function handleCheck(
         navigation.lifecycleSignal,
         navigation.discountThresholdService,
         navigation.testNotificationService,
-      ).catch((error: unknown) => console.error('Dealio check status navigation failed', error));
+      ).catch((error: unknown) => safeLogger.error('Dealio check status navigation failed', error));
       return;
     }
     void component.deferUpdate();
@@ -129,7 +130,7 @@ export async function handleCheck(
     await new Promise<void>((resolve) => collector.once('end', () => resolve()));
     await interaction.editReply({
       components: [buildCheckPanel(currentLanguage, presentation, interaction.id, true)],
-    }).catch((error: unknown) => console.error('Dealio check panel cleanup failed', error));
+    }).catch((error: unknown) => safeLogger.error('Dealio check panel cleanup failed', error));
   } finally {
     closeUiSession();
     navigation.lifecycleSignal?.removeEventListener('abort', stopForShutdown);

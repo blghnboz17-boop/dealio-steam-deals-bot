@@ -1,3 +1,4 @@
+import { safeLogger } from './safe-logger.js';
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -53,7 +54,7 @@ export class RuntimeHealth {
 
     this.clock = options.clock ?? systemClock;
     this.now = options.now ?? (() => new Date());
-    this.logger = options.logger ?? console;
+    this.logger = options.logger ?? safeLogger;
     this.temporaryPath = `${healthPath}.${process.pid}.tmp`;
     const startedAt = this.now().toISOString();
     this.document = {

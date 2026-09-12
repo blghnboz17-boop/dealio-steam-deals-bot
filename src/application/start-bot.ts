@@ -1,3 +1,8 @@
+import { dirname, join } from 'node:path';
+import { SteamWishlistError } from '../domain/steam.js';
+import { AzureApplicationLease } from './azure-lease.js';
+import { AssistantService } from './assistant-service.js';
+import { safeLogger } from './safe-logger.js';
 import 'dotenv/config';
 import { writeFileSync } from 'node:fs';
 import { loadEnvironment, type EnvironmentConfig } from '../config/environment.js';
@@ -55,7 +60,9 @@ export async function startBot(
     throw new BotStartupCancelledError();
   }
 
-  const processLock = ProcessLock.acquire(environment.databasePath);
+  const processLock = environment.production
+    ? ProcessLock.acquireForApplication(environment.databasePath, environment.discordClientId)
+    : ProcessLock.acquire(environment.databasePath);
   let health: RuntimeHealth | undefined;
   try {
     health = options.health ?? (options.healthPath ? new RuntimeHealth(options.healthPath) : undefined);
@@ -75,6 +82,7 @@ export async function startBot(
   }
 
   let runtime: BotRuntime | null = null;
+  let cloudLease: AzureApplicationLease | null = null;
   let handleStartupAbort: (() => void) | null = null;
   try {
     const userConfigRepository = new UserConfigRepository(database);
@@ -140,17 +148,32 @@ export async function startBot(
       notificationSender,
       {
         coordinator: userOperationCoordinator,
+        revalidate: async (user) => {
+          const result = await checkService.checkWithinUserOperation(user, 'automatic', {bypassCooldown:true});
+          return result.status === 'success';
+        },
         lifecycleSignal: applicationAbortController.signal,
       },
     );
     const testNotificationService = new TestNotificationService(notificationSender);
+    const assistantService = new AssistantService(wishlistStateRepository.assistant,userConfigRepository,userOperationCoordinator,
+      config=>testNotificationService.send(config.discordUserId,config.language,config.storeCountryCode));
     const wishlistViewService = new WishlistViewService(
       userConfigRepository,
       steamClient,
       undefined,
       discountThresholdRepository,
       userOperationCoordinator,
+      wishlistStateRepository.assistant,
+      assistantService,
+      async user=>{
+        const result=await checkService.checkWithinUserOperation(user,'manual',{bypassCooldown:true});
+        if(result.status!=='success') throw new SteamWishlistError('STEAM_UPSTREAM_ERROR','Wishlist refresh failed');
+        return {items:[...result.wishlistItems],errors:[...result.failedItems]};
+      },
     );
+    const retentionTimer=setInterval(()=>{try{wishlistStateRepository.assistant.cleanup();}catch(error){safeLogger.error('Retention cleanup failed',error);}},3600000);
+    retentionTimer.unref();
     const scheduler = new WishlistScheduler({
       intervalHours: environment.pollIntervalHours,
       userConfigRepository,
@@ -165,8 +188,11 @@ export async function startBot(
     });
     runtime = new BotRuntime(scheduler, client, database, {
       taskTracker,
+      afterDisconnect: async()=>{await cloudLease?.stop();},
       processLock,
-      additionalSchedulers: [notificationRetryScheduler],
+      additionalSchedulers: [notificationRetryScheduler,{
+        stop: async () => { clearInterval(retentionTimer); },
+      }],
       cancelActiveWork: () => applicationAbortController.abort(),
       health,
     });
@@ -176,7 +202,7 @@ export async function startBot(
     }
     handleStartupAbort = () => {
       void startedRuntime.stop().catch((error: unknown) => {
-        console.error('Bot shutdown during startup failed', error);
+        safeLogger.error('Bot shutdown during startup failed', error);
       });
     };
     options.signal?.addEventListener('abort', handleStartupAbort, { once: true });
@@ -204,10 +230,21 @@ export async function startBot(
       health,
     });
 
+    if(environment.azureLeaseContainerUrl) cloudLease = await AzureApplicationLease.forApplication(
+      environment.azureLeaseContainerUrl,environment.discordClientId,()=>{
+        applicationAbortController.abort();
+        void client.destroy();
+        health?.markFailed();
+        // Finish cooperative cleanup, then let systemd's on-failure policy recover.
+        process.exitCode=1;
+        if(options.nodePidPath) writeFileSync(join(dirname(options.nodePidPath),'shutdown.request'),String(process.pid));
+        else void startedRuntime.stop().catch(error=>safeLogger.error('Shutdown after lease loss failed',error));
+      });
     await registerCommands(environment, options.signal);
     if (options.signal?.aborted) {
       throw new BotStartupCancelledError();
     }
+    if(applicationAbortController.signal.aborted)throw new BotStartupCancelledError();
     const loginPromise = client.login(environment.discordToken);
     if (options.signal) {
       const startupSignal = options.signal;
@@ -239,11 +276,12 @@ export async function startBot(
     if (runtime) {
       await runtime.stop();
     } else {
+      await cloudLease?.stop();
       database.close();
       try {
         processLock.release();
       } catch (releaseError: unknown) {
-        console.error('Could not release process lock after startup failure', releaseError);
+        safeLogger.error('Could not release process lock after startup failure', releaseError);
       }
     }
     if (options.signal?.aborted) {

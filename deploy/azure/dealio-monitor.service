@@ -1,0 +1,13 @@
+[Unit]
+Description=Dealio monitor
+After=network-online.target
+[Service]
+Type=oneshot
+User=dealiobot
+WorkingDirectory=/home/dealiobot/steam-wishlist-discord-bot
+ExecStart=/usr/bin/node scripts/monitor.mjs 
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=180
+LogNamespace=dealio

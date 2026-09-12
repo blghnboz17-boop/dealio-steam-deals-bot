@@ -129,8 +129,8 @@ export class NotificationQueueRepository {
                      AND state.steam_id64 = notification.steam_id64
                      AND state.config_version = notification.config_version
                       AND state.app_id = notification.app_id
-                      AND state.on_sale = 1
-                      AND state.sale_episode_id = notification.sale_episode_id
+                      AND (state.on_sale = 1 OR state.rule_event_id IS NOT NULL)
+                      AND (state.rule_event_id = notification.sale_episode_id OR (notification.reason = 'discount' AND state.sale_episode_id = notification.sale_episode_id))
                   )
                   AND NOT EXISTS (
                     SELECT 1 FROM wishlist_item_state AS deferred_state
@@ -139,7 +139,7 @@ export class NotificationQueueRepository {
                       AND deferred_state.config_version = notification.config_version
                       AND deferred_state.app_id = notification.app_id
                       AND (
-                        deferred_state.on_sale = 1
+                        (deferred_state.on_sale = 1 OR deferred_state.rule_event_id IS NOT NULL)
                         OR deferred_state.observation_status IN ('unknown', 'error')
                       )
                   )
@@ -175,8 +175,8 @@ export class NotificationQueueRepository {
                    AND state.steam_id64 = notification.steam_id64
                    AND state.config_version = notification.config_version
                     AND state.app_id = notification.app_id
-                    AND state.on_sale = 1
-                    AND state.sale_episode_id = notification.sale_episode_id
+                    AND (state.on_sale = 1 OR state.rule_event_id IS NOT NULL)
+                    AND (state.rule_event_id = notification.sale_episode_id OR (notification.reason = 'discount' AND state.sale_episode_id = notification.sale_episode_id))
                 )
                 AND NOT EXISTS (
                   SELECT 1 FROM wishlist_item_state AS deferred_state
@@ -185,7 +185,7 @@ export class NotificationQueueRepository {
                     AND deferred_state.config_version = notification.config_version
                     AND deferred_state.app_id = notification.app_id
                     AND (
-                      deferred_state.on_sale = 1
+                      (deferred_state.on_sale = 1 OR deferred_state.rule_event_id IS NOT NULL)
                       OR deferred_state.observation_status IN ('unknown', 'error')
                     )
                 )`,
@@ -226,8 +226,8 @@ export class NotificationQueueRepository {
                  AND state.steam_id64 = notification.steam_id64
                  AND state.config_version = notification.config_version
                 AND state.app_id = notification.app_id
-                AND state.on_sale = 1
-                AND state.sale_episode_id = notification.sale_episode_id
+                AND (state.on_sale = 1 OR state.rule_event_id IS NOT NULL)
+                AND (state.rule_event_id = notification.sale_episode_id OR (notification.reason = 'discount' AND state.sale_episode_id = notification.sale_episode_id))
               )
               AND NOT EXISTS (
                 SELECT 1 FROM wishlist_item_state AS deferred_state
@@ -236,7 +236,7 @@ export class NotificationQueueRepository {
                   AND deferred_state.config_version = notification.config_version
                   AND deferred_state.app_id = notification.app_id
                   AND (
-                    deferred_state.on_sale = 1
+                    (deferred_state.on_sale = 1 OR deferred_state.rule_event_id IS NOT NULL)
                     OR deferred_state.observation_status IN ('unknown', 'error')
                   )
               )`,
@@ -265,7 +265,7 @@ export class NotificationQueueRepository {
           AND state.steam_id64 = notification.steam_id64
           AND state.config_version = notification.config_version
           AND state.app_id = notification.app_id
-          AND state.sale_episode_id = notification.sale_episode_id
+          AND (state.rule_event_id = notification.sale_episode_id OR (notification.reason = 'discount' AND state.sale_episode_id = notification.sale_episode_id))
          WHERE notification.discord_user_id = ?
            AND notification.steam_id64 = ?
            AND notification.config_version = ?
@@ -273,7 +273,7 @@ export class NotificationQueueRepository {
               notification.status = 'candidate'
               OR (notification.status = 'failed' AND notification.next_attempt_at <= ?)
             )
-             AND state.on_sale = 1
+             AND (state.on_sale = 1 OR state.rule_event_id IS NOT NULL)
              AND state.observation_status = 'known'
             AND NOT EXISTS (
               SELECT 1 FROM notification_batch_item AS item

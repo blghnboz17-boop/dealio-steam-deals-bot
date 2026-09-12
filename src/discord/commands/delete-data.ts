@@ -1,3 +1,4 @@
+import { safeLogger } from '../../application/safe-logger.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -84,7 +85,7 @@ export async function handleDeleteData(
         )],
       }).then(
         () => undefined,
-        (error: unknown) => console.error('Discord delete-data cancel failed', error),
+        (error: unknown) => safeLogger.error('Discord delete-data cancel failed', error),
       );
       activeOperations.add(operation);
       collector.stop('cancelled');
@@ -96,7 +97,7 @@ export async function handleDeleteData(
         setupService,
         lifecycleSignal,
         setupPresentation,
-      ).catch((error: unknown) => console.error('Dealio setup after deletion failed', error));
+      ).catch((error: unknown) => safeLogger.error('Dealio setup after deletion failed', error));
       activeOperations.add(operation);
       collector.stop('setup');
       return;
@@ -104,7 +105,7 @@ export async function handleDeleteData(
     if (action !== 'confirm') {
       const operation = component.deferUpdate().then(
         () => undefined,
-        (error: unknown) => console.error('Discord delete-data acknowledgement failed', error),
+        (error: unknown) => safeLogger.error('Discord delete-data acknowledgement failed', error),
       );
       activeOperations.add(operation);
       return;
@@ -154,7 +155,7 @@ export async function handleDeleteData(
       if (!setupService) {
         collector.stop('completed');
       }
-    })().catch((error: unknown) => console.error('Discord delete-data flow failed', error));
+    })().catch((error: unknown) => safeLogger.error('Discord delete-data flow failed', error));
     activeOperations.add(operation);
   });
 

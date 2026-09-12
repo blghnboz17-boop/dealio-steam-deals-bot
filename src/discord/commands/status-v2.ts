@@ -1,3 +1,4 @@
+import { safeLogger } from '../../application/safe-logger.js';
 import {
   LabelBuilder,
   MessageFlags,
@@ -90,7 +91,7 @@ export async function handleStatusV2(
   let controlsRemoved = false;
   let sessionActive = true;
   const operations = new PanelOperationQueue(async (error) => {
-    console.error('Discord panel update failed', error);
+    safeLogger.error('Discord panel update failed', error);
     await interaction.followUp({
       flags: dealioEphemeralV2Flags,
       components: [buildNoticePanel(
@@ -191,7 +192,7 @@ export async function handleStatusV2(
           await userConfigurationService.setLanguage(interaction.user.id, language);
         }
         await refresh();
-      })().catch((error: unknown) => console.error('Discord status language update failed', error));
+      })().catch((error: unknown) => safeLogger.error('Discord status language update failed', error));
       return;
     }
     if (action === 'minimum-discount' && thresholdService) {
@@ -225,7 +226,7 @@ export async function handleStatusV2(
         await modal.deferUpdate();
         await thresholdService.setGlobal(interaction.user.id, value, configurationId);
         await refresh();
-      })().catch((error: unknown) => console.error('Discord status threshold update failed', error));
+      })().catch((error: unknown) => safeLogger.error('Discord status threshold update failed', error));
       return;
     }
     if (action === 'test' && testNotificationService) {
@@ -285,7 +286,7 @@ export async function handleStatusV2(
     if (!controlsRemoved) {
       await interaction.editReply({
         components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, disabled: true })],
-      }).catch((error: unknown) => console.error('Discord status V2 cleanup failed', error));
+      }).catch((error: unknown) => safeLogger.error('Discord status V2 cleanup failed', error));
     }
   } finally {
     sessionActive = false;

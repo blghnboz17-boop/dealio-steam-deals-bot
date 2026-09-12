@@ -38,7 +38,9 @@ export function buildSaleNotificationPanel(
     .setAccentColor(options.test ? dealioBrand.colors.accent : dealioBrand.colors.success)
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `# ${options.test ? '🧪 ' : ''}${options.test ? messages.testNotificationTitle : saleTitle(language, notifications.length)}`,
+        `# ${options.test ? '🧪 ' : ''}${options.test ? messages.testNotificationTitle : options.digest ? (language==='tr'?'Günlük wishlist özetin':'Your daily wishlist digest')
+          : notifications.some(n=>n.reason?.startsWith('target:')) ? (language==='tr'?'Beklediğin fiyat geldi':'Your price target was reached')
+          : saleTitle(language, notifications.length)}`,
       ),
       new TextDisplayBuilder().setContent(
         options.test ? messages.testNotificationDescription : saleDescription(language, notifications.length),
@@ -59,7 +61,8 @@ export function buildSaleNotificationPanel(
       notification.normalPriceMinor - notification.finalPriceMinor, notification.currency, language,
     );
     const details = [
-      `**${finalPrice}** · ${discount} · ~~${normalPrice}~~`,
+      notification.discountPercent>0 ? `**${finalPrice}** · ${discount} · ~~${normalPrice}~~` : `**${finalPrice}**`,
+      ...(notification.reason?.startsWith('target:') ? [language==='tr'?'Hedef fiyatına ulaştı.':'Your target price was reached.']:[]),
       `${language === 'tr' ? 'Kazancın' : 'You save'} **${savings}**`,
       `-# ${storeCountryLabel(notification.storeCountryCode, language)}`,
     ].join('\n');

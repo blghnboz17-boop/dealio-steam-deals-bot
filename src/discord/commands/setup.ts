@@ -1,3 +1,4 @@
+import { safeLogger } from '../../application/safe-logger.js';
 import {
   LabelBuilder,
   MessageFlags,
@@ -123,13 +124,13 @@ export async function handleSetup(
     regionSelectionSource,
   });
   const reportWizardFailure = async (error: unknown): Promise<void> => {
-    console.error('Discord setup wizard failed', error);
+    safeLogger.error('Discord setup wizard failed', error);
     try {
       await interaction.editReply({
         components: [buildSetupErrorPanel(error, language, interaction.id)],
       });
     } catch (_replyError: unknown) {
-      console.error('Discord setup wizard error response failed.');
+      safeLogger.error('Discord setup wizard error response failed.');
     }
   };
   collector.on('collect', (component) => {
@@ -248,7 +249,7 @@ export async function handleSetup(
             });
           }
         }
-      })().catch((error: unknown) => console.error('Discord setup country selection failed', error));
+      })().catch((error: unknown) => safeLogger.error('Discord setup country selection failed', error));
       concurrentOperations.add(countrySelectionOperation);
       void countrySelectionOperation.then(
         () => concurrentOperations.delete(countrySelectionOperation),
@@ -346,7 +347,7 @@ export async function handleSetup(
           )],
         });
       })().catch(async (error: unknown) => {
-        console.error('Discord setup modal failed', error);
+        safeLogger.error('Discord setup modal failed', error);
         if (!sessionActive) {
           return;
         }
@@ -373,7 +374,7 @@ export async function handleSetup(
           components: [buildCountryRangePanel(language, interaction.id)],
         });
       })().catch(async (error: unknown) => {
-        console.error('Discord setup region picker failed', error);
+        safeLogger.error('Discord setup region picker failed', error);
         if (sessionActive) {
           await interaction.editReply({
             components: [buildSetupErrorPanel(error, language, interaction.id)],
@@ -592,7 +593,7 @@ function buildSetupErrorPanel(
       button: {
         customId: `setup:${sessionId}:start`,
         label: messagesFor(language).setupWizardStart,
-        emoji: '↻',
+        emoji: '🔄',
       },
     },
   );

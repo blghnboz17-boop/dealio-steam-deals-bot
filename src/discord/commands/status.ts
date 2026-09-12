@@ -1,3 +1,4 @@
+import { safeLogger } from '../../application/safe-logger.js';
 import {
   ButtonStyle,
   ActionRowBuilder,
@@ -363,7 +364,7 @@ export async function handleStatus(
               ),
             });
           }).catch(async (error: unknown) => {
-            console.error('Discord status region update failed', error);
+            safeLogger.error('Discord status region update failed', error);
             await interaction.editReply({
               content: messagesFor(currentResult.language).statusRegionSaveFailed,
               embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
@@ -377,7 +378,7 @@ export async function handleStatus(
           await operations;
         } catch (error: unknown) {
           if (!modalAbortController.signal.aborted) {
-            console.error('Discord status region modal failed', error);
+            safeLogger.error('Discord status region modal failed', error);
           }
         }
       })();
@@ -471,7 +472,7 @@ export async function handleStatus(
               ),
             });
           }).catch(async (error: unknown) => {
-            console.error('Discord status minimum discount update failed', error);
+            safeLogger.error('Discord status minimum discount update failed', error);
             try {
               await interaction.editReply({
                 content: messagesFor(currentResult.language).discountThresholdSaveFailed,
@@ -483,7 +484,7 @@ export async function handleStatus(
           await operations;
         } catch (error: unknown) {
           if (!modalAbortController.signal.aborted) {
-            console.error('Discord status modal failed', error);
+            safeLogger.error('Discord status modal failed', error);
           }
         }
       })();
@@ -505,7 +506,7 @@ export async function handleStatus(
           action === 'enable',
         );
       } catch (error: unknown) {
-        console.error('Discord status notification toggle failed', error);
+        safeLogger.error('Discord status notification toggle failed', error);
         await interaction.editReply({
           content: messagesFor(currentResult.language).statusToggleFailed,
           embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
@@ -554,7 +555,7 @@ export async function handleStatus(
         ),
       });
     }).catch((error: unknown) => {
-      console.error('Discord status component update failed', error);
+      safeLogger.error('Discord status component update failed', error);
     });
   });
 
@@ -585,7 +586,7 @@ export async function handleStatus(
           ),
         });
       } catch (error: unknown) {
-        console.error('Discord status component cleanup failed', error);
+        safeLogger.error('Discord status component cleanup failed', error);
       }
     }
   } finally {

@@ -47,7 +47,7 @@ describe('DiscordNotificationSender', () => {
     const post = vi
       .fn()
       .mockResolvedValueOnce({ id: '123456789012345678' })
-      .mockResolvedValueOnce({ id: 'message' });
+      .mockResolvedValueOnce({ id: '223456789012345678' });
     const client = { rest: { post } } as never;
     const sender = new DiscordNotificationSender(client);
 
@@ -73,7 +73,7 @@ describe('DiscordNotificationSender', () => {
     const post = vi
       .fn()
       .mockResolvedValueOnce({ id: '123456789012345678' })
-      .mockResolvedValueOnce({ id: 'message' });
+      .mockResolvedValueOnce({ id: '223456789012345678' });
     const sender = new DiscordNotificationSender({ rest: { post } } as never);
 
     await sender.send(batch, 'tr', { test: true });
@@ -141,7 +141,7 @@ describe('DiscordNotificationSender', () => {
     const post = vi
       .fn()
       .mockResolvedValueOnce({ id: '123456789012345678' })
-      .mockResolvedValueOnce({ id: 'message' });
+      .mockResolvedValueOnce({ id: '223456789012345678' });
     const sender = new DiscordNotificationSender({ rest: { post } } as never);
     const second = {
       ...candidate,

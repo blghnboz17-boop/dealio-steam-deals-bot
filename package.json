@@ -16,9 +16,16 @@
     "typecheck:handoff": "npm run typecheck --prefix .opencode",
     "test": "vitest run --passWithNoTests",
     "test:handoff": "vitest run --passWithNoTests",
-    "preview:ui": "npm run build && node scripts/preview-ui.mjs"
+    "preview:ui": "npm run build && node scripts/preview-ui.mjs",
+    "backup": "node scripts/backup.mjs",
+    "restore:test": "node scripts/backup.mjs --restore-test",
+    "monitor:preview": "node scripts/monitor.mjs --preview",
+    "release:check": "node scripts/release-gate.mjs"
   },
   "dependencies": {
+    "@azure/identity": "^4.13.2",
+    "@azure/monitor-ingestion": "^1.2.0",
+    "@azure/storage-blob": "^12.33.0",
     "discord.js": "^14.27.0",
     "dotenv": "^16.5.0"
   },

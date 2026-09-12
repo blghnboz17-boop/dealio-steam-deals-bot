@@ -1,3 +1,4 @@
+import { safeLogger } from './safe-logger.js';
 import type { CheckResult } from './check-service.js';
 import type { UserConfig } from '../domain/user-config.js';
 import type { UserConfigRepository } from '../persistence/user-config-repository.js';
@@ -33,7 +34,7 @@ const systemClock: SchedulerClock = {
 
 const consoleLogger: SchedulerLogger = {
   info: (message) => console.log(`${new Date().toISOString()} [scheduler] ${message}`),
-  error: (message) => console.error(`${new Date().toISOString()} [scheduler] ${message}`),
+  error: (message) => safeLogger.error(`${new Date().toISOString()} [scheduler] ${message}`),
 };
 const schedulePersistenceRetryMs = 60_000;
 

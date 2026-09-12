@@ -1,3 +1,4 @@
+import type { DeliveryReceipt } from '../domain/wishlist-state.js';
 // SIZE_OK: Durable batch SQL and transactions form one atomic state machine.
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
@@ -47,9 +48,9 @@ export class NotificationBatchRepository {
                     AND state.steam_id64 = notification.steam_id64
                     AND state.config_version = notification.config_version
                     AND state.app_id = notification.app_id
-                    AND state.on_sale = 1
+                    AND (state.on_sale = 1 OR state.rule_event_id IS NOT NULL)
                     AND state.observation_status = 'known'
-                    AND state.sale_episode_id = notification.sale_episode_id
+                    AND (state.rule_event_id = notification.sale_episode_id OR (notification.reason = 'discount' AND state.sale_episode_id = notification.sale_episode_id))
                 )
             )
          ORDER BY first_created_at ASC, first_app_id ASC,
@@ -143,9 +144,9 @@ export class NotificationBatchRepository {
                    AND state.steam_id64 = notification.steam_id64
                    AND state.config_version = notification.config_version
                     AND state.app_id = notification.app_id
-                    AND state.on_sale = 1
+                    AND (state.on_sale = 1 OR state.rule_event_id IS NOT NULL)
                     AND state.observation_status = 'known'
-                    AND state.sale_episode_id = notification.sale_episode_id
+                    AND (state.rule_event_id = notification.sale_episode_id OR (notification.reason = 'discount' AND state.sale_episode_id = notification.sale_episode_id))
                )`,
           )
           .run(
@@ -222,9 +223,9 @@ export class NotificationBatchRepository {
                  AND state.steam_id64 = notification.steam_id64
                  AND state.config_version = notification.config_version
                   AND state.app_id = notification.app_id
-                  AND state.on_sale = 1
+                  AND (state.on_sale = 1 OR state.rule_event_id IS NOT NULL)
                   AND state.observation_status = 'known'
-                  AND state.sale_episode_id = notification.sale_episode_id
+                  AND (state.rule_event_id = notification.sale_episode_id OR (notification.reason = 'discount' AND state.sale_episode_id = notification.sale_episode_id))
              )`,
         )
         .run(attemptedAt, batch.batchId);
@@ -243,8 +244,8 @@ export class NotificationBatchRepository {
     }
   }
 
-  public markNotificationBatchSent(batch: DurableNotificationBatch): void {
-    this.updateBatchOutcome(batch, 'sent', null, null, false);
+  public markNotificationBatchSent(batch: DurableNotificationBatch, receipt?: DeliveryReceipt): void {
+    this.updateBatchOutcome(batch, 'sent', null, null, false, receipt);
   }
 
   public markNotificationBatchFailed(
@@ -336,6 +337,7 @@ export class NotificationBatchRepository {
     nextAttemptAt: string | null,
     errorMessage: string | null,
     incrementAttempts: boolean,
+    receipt?: DeliveryReceipt,
   ): void {
     this.database.exec('BEGIN IMMEDIATE');
 
@@ -346,7 +348,7 @@ export class NotificationBatchRepository {
            SET status = ?,
                attempt_count = attempt_count + ?,
                next_attempt_at = ?,
-               last_error = ?
+               last_error = ?, discord_message_id=COALESCE(?,discord_message_id), delivered_at=COALESCE(?,delivered_at)
            WHERE status = 'sending'
              AND EXISTS (
                SELECT 1 FROM notification_batch_item AS item
@@ -362,6 +364,8 @@ export class NotificationBatchRepository {
           incrementAttempts ? 1 : 0,
           nextAttemptAt,
           errorMessage,
+          receipt?.messageId ?? null,
+          receipt?.deliveredAt ?? null,
           batch.batchId,
         );
       const parent = this.database

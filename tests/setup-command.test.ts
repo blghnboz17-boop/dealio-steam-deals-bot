@@ -326,7 +326,7 @@ describe('guided setup command', () => {
       await handling;
 
       // Then: the rejection reaches the setup error/reporting boundary.
-      expect(errorLog).toHaveBeenCalledWith('Discord setup wizard failed', updateError);
+      expect(errorLog).toHaveBeenCalledWith('Discord setup wizard failed', expect.stringContaining(updateError.message));
       expect(interaction.editReply).toHaveBeenCalledTimes(3);
     } finally {
       errorLog.mockRestore();
@@ -393,7 +393,7 @@ describe('guided setup command', () => {
       expect(errorLog).toHaveBeenCalledTimes(1);
       expect(errorLog).toHaveBeenCalledWith(
         'Discord setup wizard failed',
-        acknowledgementError,
+        expect.stringContaining(acknowledgementError.message),
       );
     } finally {
       releaseEarlierOperation();
@@ -594,3 +594,36 @@ function setupService() {
     configure: vi.fn(),
   };
 }
+
+
+it('shows a usable retry panel when Steam profile preparation fails', async () => {
+  const collector = new SetupCollectorFake();
+  const interaction = setupInteraction(collector, 'tr');
+  const service = {
+    hasExistingConfiguration: vi.fn().mockReturnValue(false),
+    prepare: vi.fn().mockRejectedValue(new Error('Steam unavailable')),
+    confirm: vi.fn(), configure: vi.fn(),
+  };
+  const modal = {
+    customId: 'setup-modal:setup-session:discord-user:1',
+    user: { id: 'discord-user' },
+    deferUpdate: vi.fn().mockResolvedValue(undefined),
+    fields: {
+      getTextInputValue: vi.fn().mockReturnValue('76561198000000000'),
+      getStringSelectValues: vi.fn().mockReturnValue(['TR']),
+    },
+  };
+  const handling = handleSetup(interaction as never, service as never);
+  await vi.waitFor(() => expect(interaction.editReply).toHaveBeenCalledOnce());
+  collector.emit('collect', setupStartComponent(modal));
+  await vi.waitFor(() => {
+    const payload = JSON.stringify(interaction.editReply.mock.calls.at(-1)?.[0]);
+    expect(payload).toContain('Kurulum tamamlanamadı');
+    expect(payload).toContain('setup:setup-session:start');
+    expect(payload).toContain('🔄');
+    expect(payload).not.toContain('↻');
+  });
+  expect(service.confirm).not.toHaveBeenCalled();
+  collector.emit('end', [], 'time');
+  await handling;
+});

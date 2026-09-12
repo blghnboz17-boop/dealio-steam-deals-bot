@@ -1,3 +1,4 @@
+import { safeLogger } from './safe-logger.js';
 import type { UserConfig } from '../domain/user-config.js';
 import type { UserConfigRepository } from '../persistence/user-config-repository.js';
 import type { NotificationDeliveryResult } from './notification-service.js';
@@ -39,7 +40,7 @@ const systemClock: NotificationRetryClock = {
 
 const consoleLogger: NotificationRetryLogger = {
   info: (message) => console.log(`${new Date().toISOString()} [notification-retry] ${message}`),
-  error: (message) => console.error(`${new Date().toISOString()} [notification-retry] ${message}`),
+  error: (message) => safeLogger.error(`${new Date().toISOString()} [notification-retry] ${message}`),
 };
 
 const emptySummary: NotificationRetryRunSummary = {

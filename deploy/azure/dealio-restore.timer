@@ -1,0 +1,7 @@
+[Unit]
+Description=Dealio restore schedule
+[Timer]
+OnCalendar=*-*-01 04:15:00
+Persistent=true
+[Install]
+WantedBy=timers.target

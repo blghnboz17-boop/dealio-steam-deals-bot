@@ -1,3 +1,4 @@
+import { safeLogger } from '../application/safe-logger.js';
 import { randomUUID } from 'node:crypto';
 import {
   Events,
@@ -16,6 +17,7 @@ import type {
 import {
   NotificationDeliveryCancelledError,
   type NotificationSendOptions,
+  type DeliveryReceipt,
   type NotificationSender,
   type SaleNotification,
 } from '../application/notification-service.js';
@@ -71,7 +73,7 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
       return;
     }
     void this.handleInitialSummaryPageInteraction(interaction, action).catch((error: unknown) => {
-      console.error('Dealio initial-summary pagination failed', error);
+      safeLogger.error('Dealio initial-summary pagination failed', error);
     });
   };
 
@@ -126,22 +128,22 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
     batch: NotificationBatch<SaleNotification>,
     language: Language,
     options: NotificationSendOptions = {},
-  ): Promise<void> {
+  ): Promise<DeliveryReceipt> {
     const recipientId = batch.notifications[0].discordUserId;
     if (batch.notifications.some((notification) => notification.discordUserId !== recipientId)) {
       throw new Error('Notification batch must contain exactly one Discord recipient');
     }
 
-    await this.runWithDeadline((signal) => this.deliver(batch, language, options, signal));
+    return this.runWithDeadline((signal) => this.deliver(batch, language, options, signal));
   }
 
   public async sendInitialSummary(summary: InitialWishlistSummary): Promise<void> {
     await this.runWithDeadline((signal) => this.deliverInitialSummary(summary, signal));
   }
 
-  private async runWithDeadline(
-    operation: (signal: AbortSignal) => Promise<void>,
-  ): Promise<void> {
+  private async runWithDeadline<T>(
+    operation: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
     if (this.lifecycleSignal?.aborted) {
       throw new NotificationDeliveryCancelledError('Notification delivery cancelled');
     }
@@ -165,7 +167,7 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
     });
 
     try {
-      await Promise.race([
+      return await Promise.race([
         operation(controller.signal),
         abortPromise,
       ]);
@@ -180,7 +182,7 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
     language: Language,
     options: NotificationSendOptions,
     signal: AbortSignal,
-  ): Promise<void> {
+  ): Promise<DeliveryReceipt> {
     const recipientId = batch.notifications[0].discordUserId;
     const channel = await this.client.rest.post(Routes.userChannels(), {
       body: { recipient_id: recipientId },
@@ -190,14 +192,16 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
       throw new Error('Discord returned an invalid DM channel');
     }
 
-    await this.client.rest.post(Routes.channelMessages(channel.id), {
+    const delivered = await this.client.rest.post(Routes.channelMessages(channel.id), {
       body: {
         flags: MessageFlags.IsComponentsV2,
         components: [buildSaleNotificationPanel(batch.notifications, language, options).toJSON()],
         allowed_mentions: { parse: [] },
       },
       signal,
-    });
+    }) as {id?: unknown};
+    if (typeof delivered?.id !== 'string' || !/^\d+$/.test(delivered.id)) throw new Error('Discord returned an invalid delivery receipt');
+    return {messageId:delivered.id,channelId:channel.id,deliveredAt:new Date().toISOString()};
   }
 
   private async deliverInitialSummary(
@@ -331,7 +335,7 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
       });
     } catch (error: unknown) {
       if (!this.lifecycleSignal?.aborted) {
-        console.error('Dealio initial-summary pagination expiry failed', error);
+        safeLogger.error('Dealio initial-summary pagination expiry failed', error);
       }
     }
   }

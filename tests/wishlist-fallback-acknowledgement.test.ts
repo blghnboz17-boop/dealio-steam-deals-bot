@@ -102,7 +102,7 @@ describe('/wishlist fallback acknowledgements', () => {
         expect(unhandledReasons).toEqual([]);
         expect(errorLog).toHaveBeenCalledWith(
           'Discord wishlist fallback acknowledgement failed',
-          acknowledgementError,
+          expect.stringContaining(acknowledgementError.message),
         );
       } finally {
         rejectAcknowledgement(acknowledgementError);
