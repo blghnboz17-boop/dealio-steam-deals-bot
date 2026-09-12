@@ -28,7 +28,7 @@
 - Azure'da gerçek kira yarışı, dış alarm teslimi, uzak yedek ve aylık geri yükleme çalıştırılmadı.
 - SWA sayfaları yayımlanmadı; Discord uygulamasındaki eski yasal URL'ler değiştirilmedi.
 - SteamWatch ile aynı oyun/bölge üzerinde canlı adım ve okunabilirlik karşılaştırması yapılmadı.
-- Kullanıcı isteğiyle mevcut Azure VM üzerinde kontrollü geçiş hazırlanıyor. Önizleme gerçek Discord kabul testinin yerine geçmez.
+- Kullanıcı isteğiyle mevcut Azure VM üzerinde kontrollü geçiş 12 Eylül 2026 16:25 UTC tarihinde tamamlandı. Sürüm b78bc7d; şema 10; Discord bağlantısı hazır. Önizleme gerçek Discord kabul testinin yerine geçmez.
 
 SteamWatch'ın haber/Workshop/mağaza komutları bu sürümün kapsamına alınmadı. Dealio'nun seçilen farkı kişisel fiyat kuralları, saat dilimine göre bildirim kontrolü ve açıklanabilir teslimat geçmişidir. Ölçülmemiş hız veya “rakipsiz” iddiası yoktur.
 
@@ -46,3 +46,20 @@ Kaynaklar:
 - /etc/machine-id eşleşmesi zorunlu; yapılandırma başka makineye taşınırsa başlangıç reddedilir. Aynı işletim sistemi kullanıcısında uygulama kimliği kilidi farklı veritabanıyla ikinci başlangıcı da reddeder.
 - Bu mod dağıtık Azure Blob kiralamasının yerini tutmaz; makine klonlama ve farklı işletim sistemi kullanıcıları için dağıtık kilit güvencesi vermez. Azure kira yolu ve genel yayın kapıları korunur.
 - Kontrollü geçişte tutarlı yerel VM yedeği, izole göç/geri okuma ve otomatik testler uygulanır. Uzak yedek, bağımsız alarm, yasal sayfa yayını ve kredi doğrulaması tamamlanmış sayılmaz.
+
+
+## Kontrollü geçiş kanıtı — 12 Eylül 2026
+- GitHub PR #1 ana dala birleştirildi; yayımlanan kod b78bc7d617a82790d0ba85196180ace201578a15.
+- Azure üzerinde temiz bağımlılık kurulumu, uygulama/handoff tür kontrolleri, derleme ve 646 test geçti.
+- Eski şema 9 veritabanının izole kopyası şema 10'a geçirildi; bütünlük ve yabancı anahtar denetimleri geçti.
+- Canlı hizmet durdurulduktan sonra tutarlı geri dönüş veritabanı alındı; eski derleme ve bağımlılıklar VM'de saklandı. Yedeğe .env dahil edilmedi.
+- Yeni hizmet phase=ready, discordReady=true; sekiz komut doğrulandı. Bir kayıtlı kullanıcı korundu.
+- Farklı veritabanı yolu kullanılarak ikinci üretim başlangıcı denendi; uygulama kilidi Discord'a bağlanmadan reddetti, ikinci veritabanı oluşmadı.
+- Yereldeki ana proje main ile güncellendi ve derlendi; yerel üretim ve silinen test botunun hizmetleri kapalı.
+- Geri dönüş dosyaları: /home/dealiobot/dealio-backups/20260912-personal-assistant/. Bunlar aynı VM'dedir; uzak felaket kurtarma yedeği sayılmaz.
+
+### Bu geçişten geri dönüş
+1. dealio hizmetini durdur; mevcut veritabanı ve varsa WAL/SHM dosyalarını ayrı bir konuma koru. Başarılı açılıştan sonra yeni kullanıcı işlemleri oluşmuş olabileceği için bu işlemlerin kaybını değerlendir.
+2. Eski kod revizyonu 8025eeda9e7c1fe3d60acefeff0fa08521cabc6e, old-dist ve old-node_modules ile eşleşen wishlist-pre-deploy.db yedeğini birlikte geri getir. Yalnız eski kodu çalıştırma.
+3. Bu geçişin eklediği /etc/systemd/system/dealio.service.d/single-host.conf dosyasını kaldır; daemon-reload yap ve hizmeti başlat.
+4. Discord bağlantısını ve veritabanı bütünlüğünü tekrar doğrula. Eski sürümde dağıtık/uygulama kimliği kilidi bulunmadığından yerel botu çalıştırma.
