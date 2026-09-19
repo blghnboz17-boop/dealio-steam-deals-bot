@@ -134,7 +134,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
               const [start,end]=raw.split('-');
               p={mode:'quiet',timezone,quietStart:parseClock(start),quietEnd:parseClock(end??''),digestMinute:null};
             }else p={mode:'digest',timezone,quietStart:null,quietEnd:null,digestMinute:parseClock(raw)};
-            await service.preference(user,config.configurationId,p);
+            await service.preference(user,config.configurationId,p,config.configVersion);
             view.screen='rhythm';view.notice=tr?'Bildirim ritmin kaydedildi.':'Alert timing saved.';
           }else if(selected){
             const raw=submit.fields.getTextInputValue('value').trim();
@@ -148,7 +148,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
               if(!/^\d{1,3}$/.test(raw)||Number(raw)>100)throw new Error('Invalid percent');
               rule={mode:'percent',percent:Number(raw),targetMinor:null,currency:null,muted:existing?.muted??false};
             }
-            await service.rule(user,config.configurationId,selected.appId,rule);
+            await service.rule(user,config.configurationId,selected.appId,rule,config.configVersion);
             view.notice=tr?'Kural kaydedildi. Şu anda uygun fiyat varsa burada gösterilir; başlangıç DM’i gönderilmez.':'Rule saved. A currently matching price is shown here without an initial DM.';
           }
           await render();
@@ -159,7 +159,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
     void operations.enqueue(acknowledge(),async()=>{
       view.notice=undefined;
       if(action==='retry'){
-        await service.retryDm(user,config.configurationId);
+        await service.retryDm(user,config.configurationId,config.configVersion);
         view.notice=tr?'Deneme DM’i Discord’a iletildi. Takip kapalıysa /dealio ayarlarından bildirimleri açabilirsin.':'Test DM delivered to Discord. If tracking is paused, enable alerts in /dealio settings.';
       }
       else if(action==='game'&&component.isStringSelectMenu()){view.selectedAppId=Number(component.values[0]);view.screen='detail';}
@@ -174,11 +174,11 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
         view.screen=action as AssistantView['screen'];view.page=0;
         if(action==='wishlist'&&!loaded){if(loadTask)await render();else await startLoad(false);return;}
       }
-      else if(action==='instant')await service.preference(user,config.configurationId,{mode:'instant',timezone:null,quietStart:null,quietEnd:null,digestMinute:null});
+      else if(action==='instant')await service.preference(user,config.configurationId,{mode:'instant',timezone:null,quietStart:null,quietEnd:null,digestMinute:null},config.configVersion);
       else if((action==='inherit'||action==='mute')&&view.selectedAppId){
         const existing=service.repository.rule(config,view.selectedAppId)??{mode:'inherit',percent:null,targetMinor:null,currency:null,muted:false,revision:0};
         const rule=action==='mute'?{...existing,muted:!existing.muted}:{mode:'inherit' as const,percent:null,targetMinor:null,currency:null,muted:existing.muted};
-        await service.rule(user,config.configurationId,view.selectedAppId,rule);
+        await service.rule(user,config.configurationId,view.selectedAppId,rule,config.configVersion);
       }
       await render();
     });

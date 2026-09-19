@@ -24,6 +24,104 @@ function walkComponents(value: unknown): Array<Record<string, unknown>> {
   return [component, ...[...children, ...accessory].flatMap(walkComponents)];
 }
 
+async function summaryPaginationFixture() {
+  let listener: ((interaction: unknown) => void) | undefined;
+  const post = vi.fn().mockResolvedValueOnce({ id: '123' }).mockResolvedValue({ id: '456' });
+  const patch = vi.fn().mockResolvedValue({});
+  const lifecycle = new AbortController();
+  const sender = new DiscordNotificationSender({
+    rest: { post, patch }, on: (_event: unknown, callback: typeof listener) => { listener = callback; }, off: vi.fn(),
+  } as never, { lifecycleSignal: lifecycle.signal });
+  await sender.sendInitialSummary({
+    discordUserId: 'owner', steamId64: '76561198000000000', language: 'en', storeCountryCode: 'US',
+    totalGameCount: 3, failedItemCount: 0, minimumDiscountPercent: 0, capturedAt: new Date().toISOString(),
+    sales: [1, 2, 3].map(appId => ({ appId, gameName: `Game ${appId}`, currency: 'USD',
+      normalPriceMinor: 2000, finalPriceMinor: 1000, discountPercent: 50 })),
+  });
+  const customId = walkComponents(post.mock.calls[1]?.[1]?.body.components)
+    .find(c => typeof c.custom_id === 'string' && c.custom_id.endsWith(':next'))?.custom_id;
+  const click = (editReply = vi.fn().mockResolvedValue(undefined), deferUpdate = vi.fn().mockResolvedValue(undefined)) => {
+    const interaction = { isButton: () => true, customId, message: { id: '456' }, channelId: '123',
+      user: { id: 'owner' }, locale: 'en-US', editReply, update: editReply, deferUpdate };
+    listener?.(interaction);
+    return interaction;
+  };
+  return { click, lifecycle, patch };
+}
+
+describe('initial-summary pagination ordering', () => {
+  it('does not skip a page when the previous edit failed', async () => {
+    const f = await summaryPaginationFixture();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      f.click(vi.fn().mockRejectedValue(new Error('edit failed')));
+      await vi.waitFor(() => expect(errors).toHaveBeenCalled());
+      const second = f.click();
+      await vi.waitFor(() => expect(second.editReply).toHaveBeenCalledOnce());
+      expect(componentText(second.editReply.mock.calls[0])).toContain('Game 2');
+      expect(componentText(second.editReply.mock.calls[0])).not.toContain('Game 3');
+    } finally { f.lifecycle.abort(); errors.mockRestore(); }
+  });
+
+  it('acknowledges another click immediately while serializing page edits', async () => {
+    const f = await summaryPaginationFixture();
+    const gate = Promise.withResolvers<void>();
+    try {
+      const first = f.click(vi.fn().mockReturnValue(gate.promise));
+      await vi.waitFor(() => expect(first.editReply).toHaveBeenCalledOnce());
+      const second = f.click();
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(second.deferUpdate).toHaveBeenCalledOnce();
+      expect(second.editReply).not.toHaveBeenCalled();
+      gate.resolve();
+      await vi.waitFor(() => expect(second.editReply).toHaveBeenCalledOnce());
+      expect(componentText(first.editReply.mock.calls[0])).toContain('Game 2');
+      expect(componentText(second.editReply.mock.calls[0])).toContain('Game 3');
+    } finally { gate.resolve(); f.lifecycle.abort(); }
+  });
+
+  it('observes a queued acknowledgement failure without advancing the page', async () => {
+    const f = await summaryPaginationFixture();
+    const gate = Promise.withResolvers<void>();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      f.click(vi.fn().mockReturnValue(gate.promise));
+      await new Promise<void>(resolve => setImmediate(resolve));
+      const failed = f.click(vi.fn(), vi.fn().mockRejectedValue(new Error('ack failed')));
+      await new Promise<void>(resolve => setImmediate(resolve));
+      gate.resolve();
+      await vi.waitFor(() => expect(errors).toHaveBeenCalled());
+      expect(failed.editReply).not.toHaveBeenCalled();
+      const next = f.click();
+      await vi.waitFor(() => expect(next.editReply).toHaveBeenCalledOnce());
+      expect(componentText(next.editReply.mock.calls[0])).toContain('Game 3');
+    } finally { gate.resolve(); f.lifecycle.abort(); errors.mockRestore(); }
+  });
+
+  it('expires after the in-flight edit and drops later queued page changes', async () => {
+    vi.useFakeTimers();
+    const f = await summaryPaginationFixture();
+    const gate = Promise.withResolvers<void>();
+    try {
+      const first = f.click(vi.fn().mockReturnValue(gate.promise));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(first.editReply).toHaveBeenCalledOnce();
+      const second = f.click();
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000);
+      expect(f.patch).not.toHaveBeenCalled();
+      gate.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(second.deferUpdate).toHaveBeenCalledOnce();
+      expect(second.editReply).not.toHaveBeenCalled();
+      expect(f.patch).toHaveBeenCalledOnce();
+      const expired = f.patch.mock.calls[0]?.[1]?.body.components;
+      expect(componentText(expired)).toContain('Game 2');
+      const pagination = walkComponents(expired).filter(c => typeof c.custom_id === 'string');
+      expect(pagination.every(c => c.disabled === true)).toBe(true);
+    } finally { gate.resolve(); f.lifecycle.abort(); vi.useRealTimers(); }
+  });
+});
+
 const candidate: NotificationCandidate = {
   discordUserId: 'discord-user',
   steamId64: '76561198000000000',
@@ -321,7 +419,8 @@ describe('DiscordNotificationSender', () => {
       channelId: '123456789012345678',
       user: { id: 'discord-user' },
       locale: 'tr',
-      update,
+      editReply: update,
+      deferUpdate: vi.fn().mockResolvedValue(undefined),
       reply: vi.fn().mockResolvedValue(undefined),
     });
 

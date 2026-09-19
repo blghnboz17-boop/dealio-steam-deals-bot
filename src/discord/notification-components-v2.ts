@@ -25,6 +25,13 @@ import { messagesFor } from './messages.js';
 import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, componentsV2TextLength, dealioFooter } from './ui/components-v2.js';
 
+function donationRow(language: Language): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://buymeacoffee.com/dealio')
+      .setEmoji('☕').setLabel(language === 'tr' ? 'Bağış yap' : 'Donate'),
+  );
+}
+
 export function buildSaleNotificationPanel(
   notifications: readonly SaleNotification[],
   language: Language,
@@ -79,7 +86,8 @@ export function buildSaleNotificationPanel(
   }
   container
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(dealioFooter(language)));
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(dealioFooter(language)))
+    .addActionRowComponents(donationRow(language));
   // Legacy durable batches retain all their games and their delivery identity.
   // Shorten only titles when necessary to fit Discord's combined text budget.
   let excess = componentsV2TextLength([container]) - 4000;
@@ -133,7 +141,7 @@ export function buildInitialWishlistV2Page(
   }
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(`# ✅ ${messages.initialSummaryTitle}`),
-    new TextDisplayBuilder().setContent(messages.initialSummaryDescription(summary.sales.length)),
+    new TextDisplayBuilder().setContent(messages.initialSummaryDescription(summary.sales.length, summary.failedItemCount)),
     new TextDisplayBuilder().setContent([
       `**${messages.initialSummaryAccount}:** [${maskSteamId(summary.steamId64)}](${profileUrl})`,
       `**${messages.initialSummaryRegion}:** ${storeCountryLabel(summary.storeCountryCode, summary.language)}`,
@@ -157,7 +165,8 @@ export function buildInitialWishlistV2Page(
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(initialSaleText(sale, summary)));
   } else {
     container.addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`> ✅ ${messages.initialSummaryNoSales}`),
+      new TextDisplayBuilder().setContent(summary.failedItemCount > 0
+        ? `> ⚠️ ${messages.initialSummaryIncomplete}` : `> ✅ ${messages.initialSummaryNoSales}`),
     );
   }
 
@@ -172,7 +181,8 @@ export function buildInitialWishlistV2Page(
   }
   container
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(dealioFooter(summary.language)));
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(dealioFooter(summary.language)))
+    .addActionRowComponents(donationRow(summary.language));
   assertComponentsV2Limit([container]);
   return { components: [container], pageIndex, totalPages };
 }

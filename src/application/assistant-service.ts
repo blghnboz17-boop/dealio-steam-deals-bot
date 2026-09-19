@@ -9,10 +9,10 @@ export class AssistantService {
     private readonly coordinator: UserOperationCoordinator,
     private readonly sendTest?: (config:UserConfig)=>Promise<void>) {}
   config(user:string) { return this.users.findByDiscordUserId(user); }
-  async rule(user:string,identity:string,appId:number,rule:Omit<GameRule,'revision'>):Promise<void> {
+  async rule(user:string,identity:string,appId:number,rule:Omit<GameRule,'revision'>,version:number):Promise<void> {
     await this.coordinator.runExclusive(user,()=>{
       const config=this.config(user);
-      if(!config || config.configurationId!==identity) throw new Error('Account changed. Reopen /wishlist.');
+      if(!config || config.configurationId!==identity || config.configVersion!==version) throw new Error('Account changed. Reopen /wishlist.');
       const snapshot=this.repository.snapshot(config);
       const item=snapshot?.items.find(i=>i.appId===appId);
       if(!item) throw new Error('Game is no longer in the saved wishlist.');
@@ -21,16 +21,17 @@ export class AssistantService {
       this.repository.saveRule(config,appId,rule);
     });
   }
-  async retryDm(user:string,identity:string):Promise<void>{
+  async retryDm(user:string,identity:string,version:number):Promise<void>{
     await this.coordinator.runExclusive(user,async()=>{
       const config=this.config(user);
-      if(!config||config.configurationId!==identity||!this.sendTest)throw new Error('Account changed');
+      if(!config||config.configurationId!==identity||config.configVersion!==version||!this.sendTest)throw new Error('Account changed');
       await this.sendTest(config);
     });
   }
-  async preference(user:string,identity:string,p:NotificationPreference):Promise<void> {
+  async preference(user:string,identity:string,p:NotificationPreference,version:number):Promise<void> {
     await this.coordinator.runExclusive(user,()=>{
-      if(this.config(user)?.configurationId!==identity) throw new Error('Account changed. Reopen /dealio.');
+      const config=this.config(user);
+      if(!config||config.configurationId!==identity||config.configVersion!==version) throw new Error('Account changed. Reopen /dealio.');
       this.repository.savePreference(user,p);
     });
   }

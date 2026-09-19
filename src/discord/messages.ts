@@ -39,7 +39,8 @@ interface MessageCatalog {
   readonly setupWizardAlreadyCompletedDescription: string;
   readonly setupWizardFrequency: (hours: number) => string;
   readonly initialSummaryTitle: string;
-  readonly initialSummaryDescription: (saleCount: number) => string;
+  readonly initialSummaryDescription: (saleCount: number, incompleteCount?: number) => string;
+  readonly initialSummaryIncomplete: string;
   readonly initialSummaryNoSales: string;
   readonly initialSummaryAccount: string;
   readonly initialSummaryRegion: string;
@@ -228,9 +229,11 @@ const catalog: Record<Language, MessageCatalog> = {
       ? `Her ${Math.round(hours * 60)} dakikada bir`
       : `Her ${hours} saatte bir`,
     initialSummaryTitle: 'Dealio hazır — indirim nöbetin başladı',
-    initialSummaryDescription: (saleCount) => saleCount > 0
+    initialSummaryDescription: (saleCount, incompleteCount = 0) => saleCount > 0
       ? `Wishlistinde şu anda indirimde olan ${saleCount} oyun aşağıda. Bunlar başlangıç kaydıdır; indirimden çıkıp yeniden indirime girmeden tekrar bildirilmez.`
+      : incompleteCount > 0 ? 'Doğrulanabilen fiyatlarda indirim bulunamadı. Bazı fiyatlar doğrulanamadı; sonraki kontrolde yeniden denenecek.'
       : 'Wishlistinde şu anda indirimde oyun yok. Bir oyun gerçek bir indirime girdiğinde Dealio sana haber verecek.',
+    initialSummaryIncomplete: 'Bazı fiyatlar doğrulanamadı. Listenin tamamında indirim olmadığını henüz söyleyemiyoruz.',
     initialSummaryNoSales: 'İlk tarama tamamlandı. Şu anda indirimde oyun bulunmuyor.',
     initialSummaryAccount: 'Steam hesabı',
     initialSummaryRegion: 'Mağaza bölgesi',
@@ -420,9 +423,11 @@ const catalog: Record<Language, MessageCatalog> = {
       ? `Every ${Math.round(hours * 60)} minutes`
       : hours === 1 ? 'Every hour' : `Every ${hours} hours`,
     initialSummaryTitle: 'Dealio is ready — your sale watch has started',
-    initialSummaryDescription: (saleCount) => saleCount > 0
+    initialSummaryDescription: (saleCount, incompleteCount = 0) => saleCount > 0
       ? `${saleCount} games on your wishlist are currently discounted below. This is your starting snapshot; they will not alert again until they leave the sale and go on sale again.`
+      : incompleteCount > 0 ? 'No discounts were found among verified prices. Some prices could not be verified and will be retried on the next check.'
       : 'There are no discounted games on your wishlist right now. Dealio will notify you when a real sale begins.',
+    initialSummaryIncomplete: 'Some prices could not be verified. We cannot yet say the entire wishlist has no discounts.',
     initialSummaryNoSales: 'The first scan is complete. No games are currently discounted.',
     initialSummaryAccount: 'Steam account',
     initialSummaryRegion: 'Store region',

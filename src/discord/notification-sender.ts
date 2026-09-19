@@ -40,6 +40,8 @@ import {
   dealioEphemeralV2Flags,
 } from './ui/components-v2.js';
 import { dealioUiSessions } from './ui/session-manager.js';
+import { PanelOperationQueue } from './ui/operation-queue.js';
+import { measureDiscordOperation } from './interaction-timing.js';
 
 const maximumEmbedsPerMessage = 5;
 const maximumEmbedTextPerMessage = 6_000;
@@ -52,6 +54,7 @@ interface InitialSummaryPaginationSession {
   readonly expiresAt: number;
   readonly timeout: NodeJS.Timeout;
   readonly closeUiSession: () => void;
+  readonly operations: PanelOperationQueue;
   pageIndex: number;
 }
 
@@ -253,6 +256,9 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
         expiresAt: Date.now() + initialSummarySessionLifetimeMs,
         timeout,
         closeUiSession,
+        operations: new PanelOperationQueue(error => {
+          safeLogger.error('Dealio initial-summary pagination failed', error);
+        }),
         pageIndex: 0,
       });
     }
@@ -297,17 +303,22 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
       return;
     }
 
-    const requestedPage = session.pageIndex + (action.action === 'next' ? 1 : -1);
-    const page = buildInitialWishlistV2Page(
-      session.summary,
-      this.currentInitialSummaryPresentation(),
-      action.sessionId,
-      requestedPage,
-    );
-    session.pageIndex = page.pageIndex;
-    await interaction.update({
-      components: [...page.components],
-      allowedMentions: { parse: [] },
+    const acknowledgement = measureDiscordOperation(interaction, 'initial-summary.button-ack', () => interaction.deferUpdate());
+    await session.operations.enqueue(acknowledgement, async () => {
+      if (this.initialSummarySessions.get(action.sessionId) !== session
+        || session.expiresAt <= Date.now() || this.lifecycleSignal?.aborted) return;
+      const requestedPage = session.pageIndex + (action.action === 'next' ? 1 : -1);
+      const page = buildInitialWishlistV2Page(
+        session.summary,
+        this.currentInitialSummaryPresentation(),
+        action.sessionId,
+        requestedPage,
+      );
+      await measureDiscordOperation(interaction, 'initial-summary.render', () => interaction.editReply({
+        components: [...page.components],
+        allowedMentions: { parse: [] },
+      }));
+      session.pageIndex = page.pageIndex;
     });
   }
 
@@ -319,6 +330,8 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
     this.initialSummarySessions.delete(sessionId);
     clearTimeout(session.timeout);
     session.closeUiSession();
+    // A pending successful edit must finish before the final disabled page is sent.
+    await session.operations.drain();
     const page = buildInitialWishlistV2Page(
       session.summary,
       this.currentInitialSummaryPresentation(),

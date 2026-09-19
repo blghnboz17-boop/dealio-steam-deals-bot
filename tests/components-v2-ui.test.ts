@@ -15,7 +15,7 @@ import {
   countComponentsV2,
   dealioEphemeralV2Flags,
 } from '../src/discord/ui/components-v2.js';
-import { buildSaleNotificationPanel } from '../src/discord/notification-components-v2.js';
+import { buildInitialWishlistV2Page, buildSaleNotificationPanel } from '../src/discord/notification-components-v2.js';
 import { DiscordNotificationSender } from '../src/discord/notification-sender.js';
 import { dealioUiSessions } from '../src/discord/ui/session-manager.js';
 
@@ -52,6 +52,30 @@ function notification(index: number) {
 }
 
 describe('Dealio Components V2 UI', () => {
+  it.each(['tr','en'] as const)('does not claim no sales when the initial scan is incomplete in %s', language => {
+    const page=buildInitialWishlistV2Page({discordUserId:'u',steamId64:'76561198000000000',language,
+      storeCountryCode:'TR',minimumDiscountPercent:0,totalGameCount:2,failedItemCount:1,
+      capturedAt:'2026-09-19T00:00:00Z',sales:[]},{},'session',0);
+    const text=JSON.stringify(page.components[0].toJSON());
+    expect(text).toContain(language==='tr'?'Bazı fiyatlar doğrulanamadı':'Some prices could not be verified');
+    expect(text).not.toContain(language==='tr'?'şu anda indirimde oyun yok':'no discounted games');
+    expect(text).not.toContain(language==='tr'?'Şu anda indirimde oyun bulunmuyor':'No games are currently discounted');
+  });
+  it.each(['tr','en'] as const)('includes one optional donation link in sale and initial wishlist DMs in %s', language => {
+    const sale=buildSaleNotificationPanel([notification(1),notification(2)],language).toJSON();
+    const summary={discordUserId:'u',steamId64:'76561198000000000',language,storeCountryCode:'TR' as const,
+      minimumDiscountPercent:0,totalGameCount:0,failedItemCount:0,capturedAt:'2026-09-19T00:00:00Z',sales:[]};
+    const initial=buildInitialWishlistV2Page(summary,{},'session',0,true).components[0].toJSON();
+    for(const panel of [sale,initial]) {
+      const buttons=panel.components.filter(c=>c.type===1).flatMap(row=>row.components);
+      const donation=buttons.filter(b=>'url' in b&&b.url==='https://buymeacoffee.com/dealio');
+      expect(donation).toHaveLength(1);
+      expect(donation[0]).toMatchObject({style:5,label:language==='tr'?'Bağış yap':'Donate',emoji:{name:'☕'}});
+      expect(donation[0]).not.toHaveProperty('custom_id');
+      expect(donation[0].disabled).not.toBe(true);
+      expect(countComponentsV2([panel])).toBeLessThanOrEqual(40);
+    }
+  });
   it('distinguishes active, foreign, and genuinely expired panels without timing guesses', () => {
     const close = dealioUiSessions.open('session-test', 'owner', ['dealio', 'country'], 60_000);
     expect(dealioUiSessions.resolve('dealio:session-test:wishlist', 'owner')).toBe('active-owner');

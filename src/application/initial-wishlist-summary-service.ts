@@ -99,7 +99,7 @@ export class InitialWishlistSummaryService {
         language: result.language,
         storeCountryCode: result.storeCountryCode,
         totalGameCount: result.wishlistItems.length + result.failedItems.length,
-        failedItemCount: result.failedItems.length,
+        failedItemCount: result.failedItems.length + result.unknownPriceCount,
         minimumDiscountPercent: result.minimumDiscountPercent,
         capturedAt: result.capturedAt,
         sales,

@@ -163,6 +163,8 @@ describe('InitialWishlistSummaryService', () => {
     });
     expect(services.sender.sendInitialSummary).toHaveBeenCalledWith(expect.objectContaining({
       sales: [expect.objectContaining({ appId: 10, discountPercent: 50 })],
+      totalGameCount: 4,
+      failedItemCount: 2,
     }));
     expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
       .toMatchObject({ onSale: true, observationStatus: 'known' });

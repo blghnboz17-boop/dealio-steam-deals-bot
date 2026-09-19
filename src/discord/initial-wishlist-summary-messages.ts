@@ -108,7 +108,7 @@ export function buildInitialWishlistHeroEmbed(
   return withDealioBrand({
     color: dealioBrand.colors.success,
     title: `✅ ${messages.initialSummaryTitle}`,
-    description: messages.initialSummaryDescription(summary.sales.length),
+    description: messages.initialSummaryDescription(summary.sales.length, summary.failedItemCount),
     fields: [{
       name: messages.initialSummaryAccount,
       value: `[${summary.steamId64.slice(0, 5)}••••••••${summary.steamId64.slice(-4)}](${profileUrl})`,
