@@ -63,6 +63,15 @@ export class WishlistViewService {
     fallbackLanguage: Language,
     refresh = false,
   ): Promise<WishlistViewResult> {
+    if (!refresh && this.assistant) {
+      // These SQLite reads are synchronous: read one committed configuration and
+      // its matching snapshot without waiting for unrelated network work.
+      const config = this.configReader.findByDiscordUserId(discordUserId);
+      const cached = config ? this.assistant.snapshot(config) : null;
+      if (config && cached) {
+        return this.toViewResult(config, cached, cached.capturedAt);
+      }
+    }
     return this.coordinator.runExclusive(discordUserId, () =>
       this.loadExclusive(discordUserId, fallbackLanguage, refresh),
     );
@@ -93,21 +102,7 @@ export class WishlistViewService {
         };
       }
       if (!cached) this.assistant?.saveSnapshot(config, result, this.now().toISOString());
-      return {
-        status: 'success',
-        language: config.language,
-        items: result.items,
-        errors: result.errors,
-        capturedAt: cached?.capturedAt ?? this.now().toISOString(),
-        configVersion: config.configVersion,
-        configurationId: config.configurationId,
-        storeCountryCode: config.storeCountryCode,
-        globalMinimumDiscountPercent: config.minimumDiscountPercent,
-        gameMinimumDiscountOverrides: this.thresholdReader?.findGameOverrides(
-          config,
-          result.items.map((item) => item.appId),
-        ) ?? new Map(),
-      };
+      return this.toViewResult(config, result, cached?.capturedAt ?? this.now().toISOString());
     } catch (error: unknown) {
       if (error instanceof SteamWishlistError) {
         return {
@@ -119,5 +114,26 @@ export class WishlistViewService {
 
       throw error;
     }
+  }
+
+  private toViewResult(
+    config: UserConfig,
+    result: { readonly items: readonly WishlistItem[]; readonly errors: readonly WishlistItemError[] },
+    capturedAt: string,
+  ): WishlistViewResult {
+    if (result.items.length === 0 && result.errors.length > 0) {
+      return { status: 'unavailable', language: config.language,
+        errorCode: result.errors[0]?.code ?? 'STEAM_UPSTREAM_ERROR' };
+    }
+    return {
+      status: 'success', language: config.language,
+      items: result.items, errors: result.errors, capturedAt,
+      configVersion: config.configVersion, configurationId: config.configurationId,
+      storeCountryCode: config.storeCountryCode,
+      globalMinimumDiscountPercent: config.minimumDiscountPercent,
+      gameMinimumDiscountOverrides: this.thresholdReader?.findGameOverrides(
+        config, result.items.map(item => item.appId),
+      ) ?? new Map(),
+    };
   }
 }

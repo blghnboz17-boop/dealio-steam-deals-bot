@@ -23,6 +23,91 @@ const item: WishlistItem = {
 };
 
 describe('WishlistViewService', () => {
+  it.each([2, 50])('opens a cached %i-game wishlist while background work holds the user queue', async (count) => {
+    const database = createDatabase(':memory:');
+    const users = new UserConfigRepository(database);
+    const state = new WishlistStateRepository(database);
+    const coordinator = new UserOperationCoordinator();
+    const config = users.upsert('invoking-user', '76561198000000000', 'en', 'US', '2026-09-19T12:00:00Z');
+    const items = Array.from({ length: count }, (_, index) => ({ ...item, appId: index + 1 }));
+    state.assistant.saveSnapshot(config, { items, errors: [] }, '2026-09-19T12:01:00Z');
+    const reader = { getWishlistWithErrors: vi.fn() };
+    const service = new WishlistViewService(users, reader, undefined, undefined, coordinator, state.assistant);
+    const gate = Promise.withResolvers<void>();
+    const entered = Promise.withResolvers<void>();
+    const background = coordinator.runExclusive(config.discordUserId, async () => {
+      entered.resolve();
+      await gate.promise;
+    });
+    let resolvedWhileBusy = false;
+    try {
+      await entered.promise;
+      const loading = service.load(config.discordUserId, 'tr').then(result => {
+        resolvedWhileBusy = true;
+        return result;
+      });
+      await new Promise<void>(resolve => setImmediate(resolve));
+      const openedBeforeBackgroundFinished = resolvedWhileBusy;
+      gate.resolve();
+      const result = await loading;
+      expect(openedBeforeBackgroundFinished).toBe(true);
+      expect(result).toMatchObject({ status: 'success', items, capturedAt: '2026-09-19T12:01:00Z' });
+      expect(reader.getWishlistWithErrors).not.toHaveBeenCalled();
+    } finally {
+      gate.resolve();
+      await background;
+      database.close();
+    }
+  });
+
+  it('still queues an explicit refresh and fetches fresh prices instead of returning the snapshot', async () => {
+    const database = createDatabase(':memory:');
+    const users = new UserConfigRepository(database);
+    const state = new WishlistStateRepository(database);
+    const coordinator = new UserOperationCoordinator();
+    const config = users.upsert('invoking-user', '76561198000000000', 'en', 'US', '2026-09-19T12:00:00Z');
+    state.assistant.saveSnapshot(config, { items: [item], errors: [] }, '2026-09-19T12:01:00Z');
+    const fresh = { ...item, name: 'Fresh observation' };
+    const reader = { getWishlistWithErrors: vi.fn().mockResolvedValue({ items: [fresh], errors: [] }) };
+    const service = new WishlistViewService(users, reader, undefined, undefined, coordinator, state.assistant);
+    const gate = Promise.withResolvers<void>();
+    const background = coordinator.runExclusive(config.discordUserId, () => gate.promise);
+    try {
+      const loading = service.load(config.discordUserId, 'tr', true);
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(reader.getWishlistWithErrors).not.toHaveBeenCalled();
+      gate.resolve();
+      await expect(loading).resolves.toMatchObject({ status: 'success', items: [fresh] });
+      expect(reader.getWishlistWithErrors).toHaveBeenCalledOnce();
+    } finally {
+      gate.resolve();
+      await background;
+      database.close();
+    }
+  });
+
+  it.each([
+    ['76561198000000000', 'en', 'DE'],
+    ['76561198000000000', 'tr', 'US'],
+    ['76561198000000001', 'en', 'US'],
+  ] as const)('does not reuse a snapshot after changing to %s/%s/%s', async (steamId, language, country) => {
+    const database = createDatabase(':memory:');
+    try {
+      const users = new UserConfigRepository(database);
+      const state = new WishlistStateRepository(database);
+      const config = users.upsert('invoking-user', '76561198000000000', 'en', 'US', '2026-09-19T12:00:00Z');
+      state.assistant.saveSnapshot(config, { items: [item], errors: [] }, '2026-09-19T12:01:00Z');
+      users.upsert(config.discordUserId, steamId, language, country, '2026-09-19T12:02:00Z');
+      const fresh = { ...item, name: 'Current account and region' };
+      const reader = { getWishlistWithErrors: vi.fn().mockResolvedValue({ items: [fresh], errors: [] }) };
+      const service = new WishlistViewService(users, reader, undefined, undefined, undefined, state.assistant);
+      await expect(service.load(config.discordUserId, 'en')).resolves.toMatchObject({
+        status: 'success', items: [fresh], language, storeCountryCode: country,
+      });
+      expect(reader.getWishlistWithErrors).toHaveBeenCalledWith(steamId, country, language);
+    } finally { database.close(); }
+  });
+
   it('returns the locale fallback without calling Steam for an unconfigured user', async () => {
     const wishlistReader = { getWishlistWithErrors: vi.fn() };
     const service = new WishlistViewService(
