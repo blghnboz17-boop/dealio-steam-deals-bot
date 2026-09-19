@@ -10,6 +10,81 @@ class SetupCollectorFake extends EventEmitter {
 }
 
 describe('guided setup command', () => {
+  it('keeps successful confirmation visible when a queued click acknowledgement fails', async () => {
+    const collector = new SetupCollectorFake();
+    const interaction = setupInteraction(collector, 'tr');
+    const confirmation = Promise.withResolvers<{ summary: { status: string } }>();
+    const service = setupService();
+    service.prepare.mockResolvedValue({
+      discordUserId: 'discord-user', steamId64: '76561198000000000',
+      language: 'tr', storeCountryCode: 'TR',
+    });
+    service.confirm.mockReturnValue(confirmation.promise);
+    const modal = {
+      deferUpdate: vi.fn().mockResolvedValue(undefined),
+      fields: {
+        getTextInputValue: () => '76561198000000000',
+        getStringSelectValues: () => ['TR'],
+      },
+    };
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warnings = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const handling = handleSetup(interaction as never, service as never);
+      await vi.waitFor(() => expect(interaction.editReply).toHaveBeenCalledOnce());
+      collector.emit('collect', setupStartComponent(modal));
+      await vi.waitFor(() => expect(interaction.editReply).toHaveBeenCalledTimes(3));
+      collector.emit('collect', {
+        customId: 'setup:setup-session:confirm',
+        deferUpdate: vi.fn().mockResolvedValue(undefined),
+      });
+      await vi.waitFor(() => expect(service.confirm).toHaveBeenCalledOnce());
+      collector.emit('collect', {
+        customId: 'setup:setup-session:confirm',
+        deferUpdate: vi.fn().mockRejectedValue(new Error('Unknown interaction')),
+      });
+      confirmation.resolve({ summary: { status: 'sent' } });
+      await handling;
+      expect(errors).not.toHaveBeenCalled();
+      // welcome, preparing, confirmation, saving, success; no later error panel.
+      expect(interaction.editReply).toHaveBeenCalledTimes(5);
+    } finally {
+      confirmation.resolve({ summary: { status: 'sent' } });
+      collector.stop('time');
+      errors.mockRestore();
+      warnings.mockRestore();
+    }
+  });
+
+  it.each(['how', 'language', 'confirm', 'cancel'])('acknowledges %s while an earlier panel edit is pending', async (action) => {
+    const collector = new SetupCollectorFake();
+    const interaction = setupInteraction(collector, 'en-US');
+    const edit = Promise.withResolvers<void>();
+    const handling = handleSetup(interaction as never, setupService() as never);
+    await vi.waitFor(() => expect(interaction.editReply).toHaveBeenCalledOnce());
+    interaction.editReply.mockImplementationOnce(() => edit.promise as never);
+    const first = {
+      customId: 'setup:setup-session:how', user: { id: 'discord-user' },
+      deferUpdate: vi.fn().mockResolvedValue(undefined),
+    };
+    const next = {
+      customId: `setup:setup-session:${action}`, user: { id: 'discord-user' },
+      deferUpdate: vi.fn().mockResolvedValue(undefined),
+    };
+    collector.emit('collect', first);
+    await vi.waitFor(() => expect(interaction.editReply).toHaveBeenCalledTimes(2));
+    collector.emit('collect', next);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    const acknowledgedWhileEditPending = next.deferUpdate.mock.calls.length;
+    const editsWhilePending = interaction.editReply.mock.calls.length;
+    edit.resolve();
+    await vi.waitFor(() => expect(next.deferUpdate).toHaveBeenCalledOnce());
+    collector.stop('time');
+    await handling;
+    expect(acknowledgedWhileEditPending).toBe(1);
+    expect(editsWhilePending).toBe(2);
+  });
+
   it('defers ephemerally before checking for an existing configuration', async () => {
     // Given: a guided setup interaction and a service whose call order is observable.
     const collector = new SetupCollectorFake();
@@ -79,7 +154,7 @@ describe('guided setup command', () => {
     await vi.waitFor(() => expect(secondComponent.showModal).toHaveBeenCalledOnce());
 
     expect(firstComponent.awaitModalSubmit).toHaveBeenCalledOnce();
-    expect(secondComponent.awaitModalSubmit).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(secondComponent.awaitModalSubmit).toHaveBeenCalledOnce());
     expect(service.prepare).not.toHaveBeenCalled();
     collector.emit('end', [], 'time');
     await handling;

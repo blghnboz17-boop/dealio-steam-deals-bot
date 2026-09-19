@@ -1,3 +1,5 @@
+import { measureDiscordOperation } from '../interaction-timing.js';
+import type { InteractionEditReplyOptions } from 'discord.js';
 import { matchesRule } from '../assistant-view.js';
 import { handleAssistant } from './assistant.js';
 import { safeLogger } from '../../application/safe-logger.js';
@@ -54,7 +56,11 @@ export async function handleDealio(
   interaction: ChatInputCommandInteraction,
   services: DealioCommandServices,
 ): Promise<void> {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const editPanel = (options: InteractionEditReplyOptions) => measureDiscordOperation(
+    interaction, 'dealio.render', () => interaction.editReply(options),
+  );
+  await measureDiscordOperation(interaction, 'dealio.ack',
+    () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
   const fallbackLanguage = languageFromDiscordLocale(interaction.locale);
   let current = services.statusService.getDashboard(interaction.user.id, fallbackLanguage);
   let avatarUrl: string | undefined;
@@ -93,7 +99,7 @@ export async function handleDealio(
             } }
           : {},
       );
-  const message = await interaction.editReply({
+  const message = await editPanel({
     flags: dealioV2Flags,
     components: [firstPanel],
   });
@@ -123,6 +129,9 @@ export async function handleDealio(
   });
 
   collector.on('collect', (component) => {
+    const acknowledge = () => measureDiscordOperation(
+      component, 'dealio.button-ack', () => component.deferUpdate(),
+    );
     const action = component.customId.slice(`dealio:${interaction.id}:`.length);
     if ((action === 'history' || action === 'rhythm') && services.wishlistViewService?.assistantService) {
       void handleAssistant(component as unknown as ChatInputCommandInteraction,services.wishlistViewService?.assistantService,
@@ -184,7 +193,7 @@ export async function handleDealio(
       return;
     }
     if (action === 'refresh') {
-      const acknowledgement = component.deferUpdate();
+      const acknowledgement = acknowledge();
       void operations.enqueue(acknowledgement, async () => {
         current = services.statusService.getDashboard(interaction.user.id, fallbackLanguage);
         const refreshed = current.status === 'ready'
@@ -199,11 +208,11 @@ export async function handleDealio(
                 ? messagesFor(current.language).statusNotConfigured
                 : messagesFor(current.language).statusDashboardUnavailable,
             );
-        await interaction.editReply({ components: [refreshed] });
+        await editPanel({ components: [refreshed] });
       });
       return;
     }
-    void operations.enqueue(component.deferUpdate(), async () => undefined);
+    void operations.enqueue(acknowledge(), async () => undefined);
   });
 
   const ended = new Promise<void>((resolve) => collector.once('end', () => resolve()));
@@ -214,13 +223,13 @@ export async function handleDealio(
     await ended;
     await operations.drain();
     if (current.status === 'ready') {
-      await interaction.editReply({
+      await editPanel({
         components: [buildStatusV2Panel(current, interaction.id, {
           mode: 'home', bannerUrl, avatarUrl, ...featured(), disabled: true,
         })],
       }).catch((error: unknown) => safeLogger.error('Dealio home cleanup failed', error));
     } else {
-      await interaction.editReply({
+      await editPanel({
         components: [buildNoticePanel(
           current.language, 'info',
           current.language === 'tr' ? 'Panel kapatıldı' : 'Panel closed',

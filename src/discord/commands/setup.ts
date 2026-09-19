@@ -1,3 +1,5 @@
+import { measureDiscordOperation } from '../interaction-timing.js';
+import type { InteractionEditReplyOptions } from 'discord.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import {
   LabelBuilder,
@@ -68,12 +70,16 @@ export async function handleSetup(
   lifecycleSignal?: AbortSignal,
   presentation: SetupPresentationOptions = {},
 ): Promise<void> {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const editPanel = (options: InteractionEditReplyOptions) => measureDiscordOperation(
+    interaction, 'setup.render', () => interaction.editReply(options),
+  );
+  await measureDiscordOperation(interaction, 'setup.ack',
+    () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
   const initialLanguage = languageFromDiscordLocale(interaction.locale ?? 'en-US');
   const avatarUrl = safeAvatarUrl(interaction);
   const viewOptions = { ...presentation, avatarUrl };
   if (service.hasExistingConfiguration?.(interaction.user.id)) {
-    await interaction.editReply({
+    await editPanel({
       components: [buildSetupAlreadyCompletedPanel(initialLanguage, viewOptions)],
       flags: dealioV2Flags,
     });
@@ -88,7 +94,7 @@ export async function handleSetup(
   }
 
   let language = initialLanguage;
-  const response = await interaction.editReply({
+  const response = await editPanel({
     components: [buildSetupWelcomePanel(language, interaction.id, viewOptions)],
     flags: dealioV2Flags,
   });
@@ -126,7 +132,7 @@ export async function handleSetup(
   const reportWizardFailure = async (error: unknown): Promise<void> => {
     safeLogger.error('Discord setup wizard failed', error);
     try {
-      await interaction.editReply({
+      await editPanel({
         components: [buildSetupErrorPanel(error, language, interaction.id)],
       });
     } catch (_replyError: unknown) {
@@ -134,10 +140,13 @@ export async function handleSetup(
     }
   };
   collector.on('collect', (component) => {
+    const acknowledge = () => measureDiscordOperation(
+      component, 'setup.button-ack', () => component.deferUpdate(),
+    );
     if (component.customId === `country:${interaction.id}:range` && component.isStringSelectMenu()) {
       const rangeIndex = Number(component.values[0]);
       const previousOperations = operations;
-      const acknowledgement = component.deferUpdate().then(
+      const acknowledgement = acknowledge().then(
         () => ({ status: 'fulfilled' } as const),
         (error: unknown) => ({ status: 'rejected', error } as const),
       );
@@ -151,7 +160,7 @@ export async function handleSetup(
         if (!sessionActive) {
           return;
         }
-        await interaction.editReply({
+        await editPanel({
           components: [buildCountryListPanel(
             language,
             interaction.id,
@@ -164,7 +173,7 @@ export async function handleSetup(
     }
     if (component.customId === `country:${interaction.id}:back` && component.isButton()) {
       const previousOperations = operations;
-      const acknowledgement = component.deferUpdate().then(
+      const acknowledgement = acknowledge().then(
         () => ({ status: 'fulfilled' } as const),
         (error: unknown) => ({ status: 'rejected', error } as const),
       );
@@ -178,7 +187,7 @@ export async function handleSetup(
         if (!sessionActive) {
           return;
         }
-        await interaction.editReply({
+        await editPanel({
           components: [buildCountryRangePanel(language, interaction.id)],
         });
       })().catch(reportWizardFailure);
@@ -189,7 +198,7 @@ export async function handleSetup(
       const purpose = countrySelectionPurpose;
       const profileInput = pendingProfileInput;
       const countrySelectionOperation = (async () => {
-        await component.deferUpdate();
+        await acknowledge();
         if (!sessionActive || !selectedCountry || !purpose) {
           return;
         }
@@ -197,7 +206,7 @@ export async function handleSetup(
         if (purpose === 'change' && prepared) {
           prepared = { ...prepared, storeCountryCode: selectedCountry };
           countrySelectionPurpose = null;
-          await interaction.editReply({
+          await editPanel({
             components: [buildSetupConfirmationPanel(
               prepared,
               interaction.id,
@@ -207,7 +216,7 @@ export async function handleSetup(
           return;
         }
         if (purpose === 'initial' && profileInput) {
-          await interaction.editReply({
+          await editPanel({
             components: [buildNoticePanel(
               language,
               'info',
@@ -231,7 +240,7 @@ export async function handleSetup(
             prepared = nextPrepared;
             pendingProfileInput = null;
             countrySelectionPurpose = null;
-            await interaction.editReply({
+            await editPanel({
               components: [buildSetupConfirmationPanel(
                 prepared,
                 interaction.id,
@@ -244,7 +253,7 @@ export async function handleSetup(
             }
             pendingProfileInput = null;
             countrySelectionPurpose = null;
-            await interaction.editReply({
+            await editPanel({
               components: [buildSetupErrorPanel(error, language, interaction.id)],
             });
           }
@@ -262,14 +271,15 @@ export async function handleSetup(
       const sequence = ++modalSequence;
       const modalOperation = (async () => {
         if (completed || !sessionActive) {
-          await component.deferUpdate().catch(() => undefined);
+          await acknowledge().catch(() => undefined);
           return;
         }
         const modalId = `setup-modal:${interaction.id}:${interaction.user.id}:${sequence}`;
         const suggestedCountry = suggestedStoreCountryFromDiscordLocale(
           interaction.locale ?? '',
         ) ?? 'US';
-        await component.showModal(buildSetupModal(modalId, language, suggestedCountry));
+        await measureDiscordOperation(component, 'setup.modal',
+          () => component.showModal(buildSetupModal(modalId, language, suggestedCountry)));
         if (!sessionActive) {
           return;
         }
@@ -284,7 +294,7 @@ export async function handleSetup(
         if (!modal || !sessionActive) {
           return;
         }
-        await modal.deferUpdate();
+        await measureDiscordOperation(modal, 'setup.modal-submit-ack', () => modal.deferUpdate());
         if (sequence !== modalSequence || completed || !sessionActive) {
           return;
         }
@@ -295,12 +305,12 @@ export async function handleSetup(
           pendingProfileInput = profileInput;
           countrySelectionPurpose = 'initial';
           regionSelectionSource = 'user';
-          await interaction.editReply({
+          await editPanel({
             components: [buildCountryRangePanel(language, interaction.id)],
           });
           return;
         }
-        await interaction.editReply({
+        await editPanel({
           flags: dealioV2Flags,
           components: [buildNoticePanel(
             language,
@@ -330,7 +340,7 @@ export async function handleSetup(
           if (sequence !== modalSequence || completed || !sessionActive) {
             return;
           }
-          await interaction.editReply(error instanceof SetupAlreadyCompletedError
+          await editPanel(error instanceof SetupAlreadyCompletedError
             ? {
                 components: [buildSetupAlreadyCompletedPanel(language, viewOptions)],
               }
@@ -339,7 +349,7 @@ export async function handleSetup(
               });
           return;
         }
-        await interaction.editReply({
+        await editPanel({
           components: [buildSetupConfirmationPanel(
             prepared,
             interaction.id,
@@ -351,7 +361,7 @@ export async function handleSetup(
         if (!sessionActive) {
           return;
         }
-        await interaction.editReply({
+        await editPanel({
           components: [buildSetupErrorPanel(error, language, interaction.id)],
         }).catch(() => undefined);
       });
@@ -365,18 +375,18 @@ export async function handleSetup(
 
     if (immediateAction === 'region') {
       const regionOperation = (async () => {
-        await component.deferUpdate();
+        await acknowledge();
         if (!prepared || completed || !sessionActive) {
           return;
         }
         countrySelectionPurpose = 'change';
-        await interaction.editReply({
+        await editPanel({
           components: [buildCountryRangePanel(language, interaction.id)],
         });
       })().catch(async (error: unknown) => {
         safeLogger.error('Discord setup region picker failed', error);
         if (sessionActive) {
-          await interaction.editReply({
+          await editPanel({
             components: [buildSetupErrorPanel(error, language, interaction.id)],
           }).catch(() => undefined);
         }
@@ -389,24 +399,29 @@ export async function handleSetup(
       return;
     }
 
+    // Acknowledge on receipt, not after earlier edits or Steam work finish.
+    // Observe rejection immediately even while this action waits for the panel.
+    const acknowledgement = acknowledge().then(
+      () => ({ status: 'fulfilled' } as const),
+      (error: unknown) => ({ status: 'rejected', error } as const),
+    );
     operations = operations.then(async () => {
+      const outcome = await acknowledgement;
       const action = parseSetupAction(component.customId, interaction.id);
       if (completed) {
-        await component.deferUpdate().catch(() => undefined);
         return;
       }
+      if (outcome.status === 'rejected') throw outcome.error;
       if (action === 'how') {
-        await component.deferUpdate();
-        await interaction.editReply({
+        await editPanel({
           components: [buildSetupWelcomePanel(language, interaction.id, viewOptions, true)],
         });
         return;
       }
       if (action === 'language' && prepared) {
-        await component.deferUpdate();
         language = prepared.language === 'tr' ? 'en' : 'tr';
         prepared = { ...prepared, language };
-        await interaction.editReply({
+        await editPanel({
           components: [buildSetupConfirmationPanel(
             prepared,
             interaction.id,
@@ -418,8 +433,7 @@ export async function handleSetup(
       if (action === 'cancel') {
         completed = true;
         collector.stop('cancelled');
-        await component.deferUpdate();
-        await interaction.editReply({
+        await editPanel({
           components: [buildNoticePanel(
             language,
             'info',
@@ -431,8 +445,7 @@ export async function handleSetup(
       }
       if (action === 'confirm' && prepared) {
         completed = true;
-        await component.deferUpdate();
-        await interaction.editReply({
+        await editPanel({
           components: [buildSetupConfirmationPanel(
             prepared,
             interaction.id,
@@ -441,13 +454,12 @@ export async function handleSetup(
           )],
         });
         const result = await service.confirm(prepared);
-        await interaction.editReply({
+        await editPanel({
           components: [buildSetupCompletePanel(prepared, result.summary.status, viewOptions)],
         });
         collector.stop('completed');
         return;
       }
-      await component.deferUpdate();
     }).catch(reportWizardFailure);
   });
 
@@ -464,7 +476,7 @@ export async function handleSetup(
   if (!completed) {
     const expiredPrepared = prepared as PreparedUserConfiguration | null;
     try {
-      await interaction.editReply({
+      await editPanel({
         components: expiredPrepared
           ? [buildSetupConfirmationPanel(
               expiredPrepared,
