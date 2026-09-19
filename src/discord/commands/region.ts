@@ -1,3 +1,4 @@
+import { measureDiscordOperation } from '../interaction-timing.js';
 import {
   MessageFlags,
   SlashCommandBuilder,
@@ -34,17 +35,17 @@ export async function handleRegion(
   interaction: ChatInputCommandInteraction,
   service: UserConfigurationService,
 ): Promise<void> {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await measureDiscordOperation(interaction, 'region.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
   const existing = service.get(interaction.user.id);
   const language = existing?.language ?? languageFromDiscordLocale(interaction.locale);
   const messages = messagesFor(language);
   if (!existing) {
-    await interaction.editReply({
+    await measureDiscordOperation(interaction, 'region.render', () => interaction.editReply({
       components: [buildNoticePanel(language, 'warning',
         language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
         messages.notConfigured)],
       flags: dealioV2Flags,
-    });
+    }));
     return;
   }
 
@@ -54,17 +55,17 @@ export async function handleRegion(
       interaction.options.getString('country', true),
     );
     if (!updated) {
-      await interaction.editReply({
+      await measureDiscordOperation(interaction, 'region.render', () => interaction.editReply({
         flags: dealioV2Flags,
         components: [buildNoticePanel(language, 'warning',
           language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
           messages.notConfigured)],
-      });
+      }));
       return;
     }
     const label = storeCountryLabel(updated.storeCountryCode, updated.language);
     const unchanged = updated.configVersion === existing.configVersion;
-    await interaction.editReply({
+    await measureDiscordOperation(interaction, 'region.render', () => interaction.editReply({
       flags: dealioV2Flags,
       components: [buildNoticePanel(
         updated.language,
@@ -76,16 +77,16 @@ export async function handleRegion(
           ? messagesFor(updated.language).regionUnchanged(label)
           : messagesFor(updated.language).regionSaved(label),
       )],
-    });
+    }));
   } catch (error: unknown) {
     if (error instanceof InvalidUserConfigurationError
       && error.code === 'INVALID_STORE_COUNTRY') {
-      await interaction.editReply({
+      await measureDiscordOperation(interaction, 'region.render', () => interaction.editReply({
         flags: dealioV2Flags,
         components: [buildNoticePanel(language, 'warning',
           language === 'tr' ? 'Geçersiz mağaza bölgesi' : 'Invalid Store region',
           messages.invalidStoreCountry)],
-      });
+      }));
       return;
     }
     throw error;

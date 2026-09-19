@@ -1,3 +1,4 @@
+import { measureDiscordOperation } from '../interaction-timing.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import {
   ChatInputCommandInteraction,
@@ -39,31 +40,31 @@ export async function handleCheck(
   notificationService: NotificationService,
   navigation?: CheckNavigationServices,
 ): Promise<void> {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await measureDiscordOperation(interaction, 'check.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
   const config = statusService.get(interaction.user.id).config;
   const language = config?.language ?? 'tr';
   const messages = messagesFor(language);
   if (!config) {
-    await interaction.editReply({
+    await measureDiscordOperation(interaction, 'check.render', () => interaction.editReply({
       flags: dealioV2Flags,
       components: [buildCheckPanel(language, {
         kind: 'warning',
         title: language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
         description: messages.notConfigured,
       })],
-    });
+    }));
     return;
   }
 
   const text = uiCopy(language);
-  await interaction.editReply({
+  await measureDiscordOperation(interaction, 'check.render', () => interaction.editReply({
     flags: dealioV2Flags,
     components: [buildCheckPanel(language, {
       kind: 'info',
       title: text.checkingTitle,
       description: text.checkingDescription,
     })],
-  });
+  }));
   const result = await checkService.check(interaction.user.id);
   const currentConfig = result.status === 'success'
     ? statusService.get(interaction.user.id).config
@@ -85,7 +86,7 @@ export async function handleCheck(
     presentation,
     navigation ? interaction.id : undefined,
   );
-  const message = await interaction.editReply({ components: [finalPanel] });
+  const message = await measureDiscordOperation(interaction, 'check.render', () => interaction.editReply({ components: [finalPanel] }));
   if (!navigation) {
     return;
   }
@@ -122,15 +123,16 @@ export async function handleCheck(
       ).catch((error: unknown) => safeLogger.error('Dealio check status navigation failed', error));
       return;
     }
-    void component.deferUpdate();
+    void measureDiscordOperation(component, 'check.button-ack', () => component.deferUpdate())
+      .catch((error: unknown) => safeLogger.error('Discord check acknowledgement failed', error));
   });
   const stopForShutdown = (): void => collector.stop('shutdown');
   navigation.lifecycleSignal?.addEventListener('abort', stopForShutdown, { once: true });
   try {
     await new Promise<void>((resolve) => collector.once('end', () => resolve()));
-    await interaction.editReply({
+    await measureDiscordOperation(interaction, 'check.render', () => interaction.editReply({
       components: [buildCheckPanel(currentLanguage, presentation, interaction.id, true)],
-    }).catch((error: unknown) => safeLogger.error('Dealio check panel cleanup failed', error));
+    })).catch((error: unknown) => safeLogger.error('Dealio check panel cleanup failed', error));
   } finally {
     closeUiSession();
     navigation.lifecycleSignal?.removeEventListener('abort', stopForShutdown);

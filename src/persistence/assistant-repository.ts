@@ -20,6 +20,14 @@ export interface PricePoint { final_minor: number; initial_minor: number; observ
 export class AssistantRepository {
   constructor(public readonly db: DatabaseSync) {}
 
+  rules(scope: Scope): Map<number, GameRule> {
+    const rows = this.db.prepare(`SELECT app_id,mode,percent,target_minor,currency,muted,revision FROM game_rule
+      WHERE discord_user_id=? AND config_version=?`).all(scope.discordUserId, scope.configVersion) as unknown as
+      {app_id:number; mode:GameRule['mode']; percent:number|null; target_minor:number|null; currency:string|null; muted:number; revision:number}[];
+    return new Map(rows.map(r => [r.app_id, {mode:r.mode,percent:r.percent,targetMinor:r.target_minor,
+      currency:r.currency,muted:r.muted===1,revision:r.revision}]));
+  }
+
   rule(scope: Scope, appId: number): GameRule | null {
     const r = this.db.prepare(`SELECT mode,percent,target_minor,currency,muted,revision FROM game_rule
       WHERE discord_user_id=? AND config_version=? AND app_id=?`).get(scope.discordUserId, scope.configVersion, appId) as

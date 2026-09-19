@@ -4,6 +4,38 @@ import { measureDiscordOperation } from '../src/discord/interaction-timing.js';
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('Discord response timing', () => {
+  it.each(['setup.ack', 'status.button-ack', 'wishlist.modal', 'status.modal-submit-ack'] as const)(
+    'reports a fast but late %s acknowledgement', async (operation) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(10_000);
+      const log = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await measureDiscordOperation({ createdTimestamp: 7_500 }, operation, async () => 'ok');
+      expect(log).toHaveBeenCalledOnce();
+      expect(JSON.stringify(log.mock.calls)).toContain('startAgeMs: 2500');
+    },
+  );
+
+  it.each(['setup.render', 'assistant.load'] as const)(
+    'does not report a fast %s just because the panel is old', async (operation) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(600_000);
+      const log = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await measureDiscordOperation({ createdTimestamp: 0 }, operation, async () => 'ok');
+      expect(log).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reports an acknowledgement crossing the age threshold during a fast request', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const log = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await measureDiscordOperation({ createdTimestamp: 8_100 }, 'setup.ack', async () => {
+      vi.setSystemTime(10_200);
+    });
+    expect(log).toHaveBeenCalledOnce();
+    expect(JSON.stringify(log.mock.calls)).toContain('interactionAgeMs: 2100');
+  });
+
   it('reports slow responses with elapsed time but no interaction payload', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(10_000);

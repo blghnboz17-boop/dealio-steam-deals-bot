@@ -75,7 +75,8 @@ export async function handleDealio(
     if(!assistant||!config)return {};
     const snapshot=assistant.repository.snapshot(config);
     const items=snapshot?.items??[];
-    const matching=items.filter(item=>matchesRule(item,assistant.repository.rule(config,item.appId)??undefined,config.minimumDiscountPercent));
+    const rules=assistant.repository.rules(config);
+    const matching=items.filter(item=>matchesRule(item,rules.get(item.appId),config.minimumDiscountPercent));
     return {featuredDeal:matching[0],heroGame:matching[0]??items.find(item=>item.price?.currency),
       eligibleDealCount:snapshot?matching.length:undefined,trackedGameCount:snapshot?items.length:undefined,
       capturedAt:snapshot?.capturedAt,notificationPreference:assistant.repository.preference(config.discordUserId)};

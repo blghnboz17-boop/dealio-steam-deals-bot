@@ -1,3 +1,4 @@
+import { measureDiscordOperation } from '../interaction-timing.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import {
   ChatInputCommandInteraction,
@@ -26,7 +27,7 @@ export async function handleTestNotification(
   userConfigurationService: UserConfigurationService,
   testNotificationService: TestNotificationService,
 ): Promise<void> {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await measureDiscordOperation(interaction, 'test-notification.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
   const config = userConfigurationService.get(interaction.user.id);
   const language = config?.language ?? languageFromDiscordLocale(interaction.locale);
   const messages = messagesFor(language);
@@ -53,8 +54,8 @@ export async function handleTestNotification(
     }
   }
 
-  await interaction.editReply({
+  await measureDiscordOperation(interaction, 'test-notification.render', () => interaction.editReply({
     flags: dealioV2Flags,
     components: [buildNoticePanel(language, kind, title, description)],
-  });
+  }));
 }

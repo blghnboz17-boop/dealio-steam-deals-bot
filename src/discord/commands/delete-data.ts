@@ -1,3 +1,4 @@
+import { measureDiscordOperation } from '../interaction-timing.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import {
   ActionRowBuilder,
@@ -44,15 +45,15 @@ export async function handleDeleteData(
   lifecycleSignal?: AbortSignal,
   setupPresentation?: SetupPresentationOptions,
 ): Promise<void> {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await measureDiscordOperation(interaction, 'delete-data.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
   const config = service.get(interaction.user.id);
   const language = config?.language ?? languageFromDiscordLocale(interaction.locale);
   const text = uiCopy(language);
   const sessionId = interaction.id;
-  const message = await interaction.editReply({
+  const message = await measureDiscordOperation(interaction, 'delete-data.render', () => interaction.editReply({
     flags: dealioV2Flags,
     components: [buildDeleteWarningPanel(language, sessionId)],
-  });
+  }));
   const closeUiSession = dealioUiSessions.open(
     sessionId,
     interaction.user.id,
@@ -76,14 +77,14 @@ export async function handleDeleteData(
   collector.on('collect', (component) => {
     const action = component.customId.slice(`delete-v2:${sessionId}:`.length);
     if (action === 'cancel') {
-      const operation = component.update({
+      const operation = measureDiscordOperation(component, 'delete-data.button-ack', () => component.update({
         components: [buildNoticePanel(
           language,
           'info',
           language === 'tr' ? 'Silme işlemi iptal edildi' : 'Deletion cancelled',
           language === 'tr' ? 'Hiçbir verin değiştirilmedi.' : 'None of your data was changed.',
         )],
-      }).then(
+      })).then(
         () => undefined,
         (error: unknown) => safeLogger.error('Discord delete-data cancel failed', error),
       );
@@ -103,7 +104,7 @@ export async function handleDeleteData(
       return;
     }
     if (action !== 'confirm') {
-      const operation = component.deferUpdate().then(
+      const operation = measureDiscordOperation(component, 'delete-data.button-ack', () => component.deferUpdate()).then(
         () => undefined,
         (error: unknown) => safeLogger.error('Discord delete-data acknowledgement failed', error),
       );
@@ -112,7 +113,7 @@ export async function handleDeleteData(
     }
     const modalId = `delete-confirm:${sessionId}:${interaction.user.id}`;
     const operation = (async () => {
-      await component.showModal(buildDeleteConfirmationModal(modalId, language));
+      await measureDiscordOperation(component, 'delete-data.modal', () => component.showModal(buildDeleteConfirmationModal(modalId, language)));
       if (!sessionActive) {
         return;
       }
@@ -127,17 +128,17 @@ export async function handleDeleteData(
       if (!modal) return;
       const confirmed = modal.fields.getCheckboxGroup('delete-consent').includes('confirmed');
       if (!confirmed) {
-        await modal.reply({
+        await measureDiscordOperation(modal, 'delete-data.modal-submit-ack', () => modal.reply({
           flags: dealioEphemeralV2Flags,
           components: [buildNoticePanel(language, 'warning',
             language === 'tr' ? 'Onay gerekli' : 'Confirmation required',
             language === 'tr' ? 'Veriler silinmedi.' : 'No data was deleted.')],
-        });
+        }));
         return;
       }
-      await modal.deferUpdate();
+      await measureDiscordOperation(modal, 'delete-data.modal-submit-ack', () => modal.deferUpdate());
       const deleted = await service.deleteData(interaction.user.id);
-      await interaction.editReply({
+      await measureDiscordOperation(interaction, 'delete-data.render', () => interaction.editReply({
         components: [buildNoticePanel(
           language,
           deleted ? 'success' : 'info',
@@ -151,7 +152,7 @@ export async function handleDeleteData(
             ? { button: { customId: `delete-v2:${sessionId}:setup`, label: text.setupAgain, emoji: '✨' } }
             : {},
         )],
-      });
+      }));
       if (!setupService) {
         collector.stop('completed');
       }

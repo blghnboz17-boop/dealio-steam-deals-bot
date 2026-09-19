@@ -65,7 +65,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
         .setDisabled(disabled).addOptions(visible.map(i=>({label:i.name.slice(0,100),value:String(i.appId)})))));
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
       button(prefix+'search',tr?'Oyun ara':'Search'),button(prefix+'filter',view.eligibleOnly?(tr?'Tüm oyunlar':'All games'):(tr?'Uygun fırsatlar':'Matching deals')),
-      button(prefix+'refresh',tr?'Yenile':'Refresh')));
+      button(prefix+'refresh',tr?'Yenile':'Refresh').setDisabled(disabled||view.refreshing===true)));
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
       button(prefix+'prev','‹').setDisabled(disabled||page===0),button(prefix+'page',`${page+1} / ${pages}`).setDisabled(true),
       button(prefix+'next','›').setDisabled(disabled||page===pages-1)));

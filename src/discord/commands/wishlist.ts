@@ -1,3 +1,4 @@
+import { measureDiscordOperation } from '../interaction-timing.js';
 import { handleAssistant } from './assistant.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import {
@@ -36,7 +37,7 @@ export async function handleWishlist(
   thresholdService?: DiscountThresholdService,
 ): Promise<void> {
   if (service.assistantService) return handleAssistant(interaction, service.assistantService, service, lifecycleSignal);
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await measureDiscordOperation(interaction, 'wishlist.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
   const result = await service.load(
     interaction.user.id,
     languageFromDiscordLocale(interaction.locale),
@@ -44,24 +45,24 @@ export async function handleWishlist(
   const messages = messagesFor(result.language);
 
   if (result.status === 'not-configured') {
-    await interaction.editReply({
+    await measureDiscordOperation(interaction, 'wishlist.render', () => interaction.editReply({
       flags: dealioV2Flags,
       components: [buildNoticePanel(result.language, 'warning',
         result.language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
         messages.notConfigured)],
-    });
+    }));
     return;
   }
   if (result.status === 'unavailable') {
     const description = result.errorCode === 'STEAM_WISHLIST_INACCESSIBLE'
       ? messages.wishlistInaccessible
       : messages.wishlistUnavailable;
-    await interaction.editReply({
+    await measureDiscordOperation(interaction, 'wishlist.render', () => interaction.editReply({
       flags: dealioV2Flags,
       components: [buildNoticePanel(result.language, 'danger',
         result.language === 'tr' ? 'Wishlist yüklenemedi' : 'Wishlist unavailable',
         description)],
-    });
+    }));
     return;
   }
 
@@ -80,10 +81,10 @@ export async function handleWishlist(
   let controlsHidden = false;
   let modalSequence = 0;
   const initialPage = buildWishlistV2Page(snapshot, result.language, pageIndex, interaction.id, view);
-  const message = await interaction.editReply({
+  const message = await measureDiscordOperation(interaction, 'wishlist.render', () => interaction.editReply({
     flags: dealioV2Flags,
     components: [...initialPage.components],
-  });
+  }));
   const closeUiSession = dealioUiSessions.open(
     interaction.id,
     interaction.user.id,
@@ -108,12 +109,12 @@ export async function handleWishlist(
         view = selected;
         pageIndex = 0;
       }
-      const acknowledgement = component.deferUpdate();
+      const acknowledgement = measureDiscordOperation(component, 'wishlist.button-ack', () => component.deferUpdate());
       operations = operations.then(async () => {
         await acknowledgement;
         const page = buildWishlistV2Page(snapshot, result.language, pageIndex, interaction.id, view);
         pageIndex = page.pageIndex;
-        await interaction.editReply({ components: [...page.components] });
+        await measureDiscordOperation(interaction, 'wishlist.render', () => interaction.editReply({ components: [...page.components] }));
       }).catch((error: unknown) => safeLogger.error('Discord wishlist view update failed', error));
       return;
     }
@@ -122,7 +123,7 @@ export async function handleWishlist(
       const appId = Number(component.values[0]);
       const item = snapshot.items.find((candidate) => candidate.appId === appId);
       if (!item || !thresholdService) {
-        const acknowledgement = component.deferUpdate();
+        const acknowledgement = measureDiscordOperation(component, 'wishlist.button-ack', () => component.deferUpdate());
         operations = operations.then(() => acknowledgement)
           .then(() => undefined)
           .catch((error: unknown) => safeLogger.error('Discord wishlist fallback acknowledgement failed', error));
@@ -136,11 +137,11 @@ export async function handleWishlist(
       );
       const modalTask = (async () => {
         try {
-          await component.showModal(buildWishlistThresholdModal(
+          await measureDiscordOperation(component, 'wishlist.modal', () => component.showModal(buildWishlistThresholdModal(
             modalCustomId,
             result.language,
             snapshot.gameMinimumDiscountOverrides.get(item.appId),
-          ));
+          )));
           let cancelModal = (): void => undefined;
           const cancelled = new Promise<null>((resolve) => {
             cancelModal = () => resolve(null);
@@ -165,7 +166,7 @@ export async function handleWishlist(
           const rawValue = modal.fields.getTextInputValue('minimum-discount-percent').trim();
           const percent = parseOptionalDiscountPercent(rawValue);
           if (percent === undefined) {
-            await modal.reply({
+            await measureDiscordOperation(modal, 'wishlist.modal-submit-ack', () => modal.reply({
               flags: dealioEphemeralV2Flags,
               components: [buildNoticePanel(
                 result.language,
@@ -173,10 +174,10 @@ export async function handleWishlist(
                 result.language === 'tr' ? 'Geçersiz indirim oranı' : 'Invalid discount threshold',
                 messagesFor(result.language).discountThresholdInvalid,
               )],
-            });
+            }));
             return;
           }
-          await modal.deferUpdate();
+          await measureDiscordOperation(modal, 'wishlist.modal-submit-ack', () => modal.deferUpdate());
           operations = operations.then(async () => {
             const updated = await thresholdService.setGame(
               interaction.user.id,
@@ -201,7 +202,7 @@ export async function handleWishlist(
               interaction.id,
               view,
             );
-            await interaction.editReply({ components: [...refreshed.components] });
+            await measureDiscordOperation(interaction, 'wishlist.render', () => interaction.editReply({ components: [...refreshed.components] }));
             await modal.followUp({
               flags: dealioEphemeralV2Flags,
               components: [buildNoticePanel(
@@ -239,7 +240,7 @@ export async function handleWishlist(
     }
 
     if (!component.isButton()) {
-      const acknowledgement = component.deferUpdate();
+      const acknowledgement = measureDiscordOperation(component, 'wishlist.button-ack', () => component.deferUpdate());
       operations = operations.then(() => acknowledgement)
         .then(() => undefined)
         .catch((error: unknown) => safeLogger.error('Discord wishlist fallback acknowledgement failed', error));
@@ -248,14 +249,14 @@ export async function handleWishlist(
     if (action === 'close') {
       collector.stop('closed');
     }
-    const acknowledgement = component.deferUpdate();
+    const acknowledgement = measureDiscordOperation(component, 'wishlist.button-ack', () => component.deferUpdate());
     operations = operations.then(async () => {
       await acknowledgement;
       if (action === 'close') {
         const closed = buildWishlistV2Page(
           snapshot, result.language, pageIndex, interaction.id, view, 'hidden',
         );
-        await interaction.editReply({ components: [...closed.components] });
+        await measureDiscordOperation(interaction, 'wishlist.render', () => interaction.editReply({ components: [...closed.components] }));
         controlsHidden = true;
         return;
       }
@@ -266,7 +267,7 @@ export async function handleWishlist(
           ? Math.min(current.pageCount - 1, current.pageIndex + 1)
           : current.pageIndex;
       const next = buildWishlistV2Page(snapshot, result.language, pageIndex, interaction.id, view);
-      await interaction.editReply({ components: [...next.components] });
+      await measureDiscordOperation(interaction, 'wishlist.render', () => interaction.editReply({ components: [...next.components] }));
     }).catch((error: unknown) => safeLogger.error('Discord wishlist component update failed', error));
   });
 
@@ -287,7 +288,7 @@ export async function handleWishlist(
       const expired = buildWishlistV2Page(
         snapshot, result.language, pageIndex, interaction.id, view, 'disabled',
       );
-      await interaction.editReply({ components: [...expired.components] }).catch((error: unknown) => {
+      await measureDiscordOperation(interaction, 'wishlist.render', () => interaction.editReply({ components: [...expired.components] })).catch((error: unknown) => {
         safeLogger.error('Discord wishlist component cleanup failed', error);
       });
     }

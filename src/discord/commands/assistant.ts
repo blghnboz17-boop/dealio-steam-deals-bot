@@ -9,6 +9,7 @@ import { buildNoticePanel, dealioV2Flags, dealioEphemeralV2Flags, dealioUiSessio
 import { dealioUiSessions } from '../ui/session-manager.js';
 import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { safeLogger } from '../../application/safe-logger.js';
+import { measureDiscordOperation } from '../interaction-timing.js';
 import type { GameRule } from '../../persistence/assistant-repository.js';
 import type { NotificationPreference } from '../../domain/notification-preference.js';
 
@@ -25,36 +26,41 @@ function parseClock(value:string):number {
 
 export async function handleAssistant(interaction:ChatInputCommandInteraction, service:AssistantService,
   wishlist:WishlistViewService, signal?:AbortSignal, screen:AssistantView['screen']='wishlist'):Promise<void> {
-  await interaction.deferReply({flags:MessageFlags.Ephemeral});
+  const editPanel=(options:Parameters<typeof interaction.editReply>[0])=>
+    measureDiscordOperation(interaction,'assistant.render',()=>interaction.editReply(options));
+  const loadWishlist=(refresh=false)=>measureDiscordOperation(interaction,'assistant.load',()=>wishlist.load(interaction.user.id,language,refresh));
+  await measureDiscordOperation(interaction,'assistant.ack',()=>interaction.deferReply({flags:MessageFlags.Ephemeral}));
   const user=interaction.user.id, config=service.config(user), language=config?.language??languageFromDiscordLocale(interaction.locale);
   const tr=language==='tr';
   if(!config) {
-    await interaction.editReply({flags:dealioV2Flags,components:[buildNoticePanel(language,'warning',
+    await editPanel({flags:dealioV2Flags,components:[buildNoticePanel(language,'warning',
       tr?'Önce Steam hesabını bağla':'Connect Steam first',tr?'/setup ile başlayabilirsin.':'Start with /setup.')]});return;
   }
-  const result=await wishlist.load(user,language);
-  if(result.status!=='success') {
-    await interaction.editReply({flags:dealioV2Flags,components:[buildNoticePanel(language,'warning',
+  const result=screen==='wishlist'||screen==='detail'?await loadWishlist():null;
+  if(result && result.status!=='success') {
+    await editPanel({flags:dealioV2Flags,components:[buildNoticePanel(language,'warning',
       tr?'Wishlist alınamadı':'Wishlist unavailable',tr?'Steam’e erişilemiyor. Biraz sonra yeniden dene.':'Steam is unavailable. Try again shortly.')]});return;
   }
-  let items=result.items,capturedAt=result.capturedAt;
+  let items:AssistantViewData['items']=result?.items??[],capturedAt=result?.capturedAt??new Date().toISOString();
+  let loaded=result!==null;
   const view:AssistantView={screen,page:0,query:'',eligibleOnly:false};
   const data=():AssistantViewData=>{
     const current=service.config(user);
-    if(!current || current.configurationId!==config.configurationId) throw new Error('Configuration changed');
+    if(!current || current.configurationId!==config.configurationId || current.configVersion!==config.configVersion)
+      throw new Error('Configuration changed');
     const selected=items.find(i=>i.appId===view.selectedAppId);
-    return {config:current,items,capturedAt,rules:new Map(items.flatMap(item=>{
-      const rule=service.repository.rule(current,item.appId);return rule?[[item.appId,rule] as const]:[];
-    })),preference:service.repository.preference(user),history:service.repository.history(user),
-    prices:selected?.price?.currency?service.repository.prices(selected.appId,current.storeCountryCode,selected.price.currency):[]};
+    return {config:current,items,capturedAt,
+      rules:view.screen==='wishlist'||view.screen==='detail'?service.repository.rules(current):new Map(),
+      preference:service.repository.preference(user),history:view.screen==='history'?service.repository.history(user):[],
+      prices:view.screen==='detail'&&selected?.price?.currency?service.repository.prices(selected.appId,current.storeCountryCode,selected.price.currency):[]};
   };
   const render=async(disabled=false)=>{
-    await interaction.editReply({flags:dealioV2Flags,components:[buildAssistantView(data(),view,interaction.id,disabled)]});
+    await editPanel({flags:dealioV2Flags,components:[buildAssistantView(data(),view,interaction.id,disabled)]});
   };
   // Register ownership before exposing controls.
   const close=dealioUiSessions.open(interaction.id,user,['assistant'],dealioUiSessionTimeoutMs);
   let message;
-  try { message=await interaction.editReply({flags:dealioV2Flags,components:[buildAssistantView(data(),view,interaction.id)]}); }
+  try { message=await editPanel({flags:dealioV2Flags,components:[buildAssistantView(data(),view,interaction.id)]}); }
   catch(error) { close();throw error; }
   const collector=message.createMessageComponentCollector({time:dealioUiSessionTimeoutMs,
     filter:c=>c.user.id===user&&c.customId.startsWith('assistant:'+interaction.id+':')});
@@ -68,12 +74,35 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       : tr?'Bilgileri kontrol et. Hesap veya bölge değiştiyse /dealio ile paneli yeniden aç.':'Check the input. If account or region changed, reopen /dealio.')]});
   });
   const modalTasks=new Set<Promise<void>>();
+  let loadTask:Promise<void>|undefined;
+  const startLoad=async(refresh:boolean)=>{
+    if(loadTask)return;
+    view.refreshing=true;
+    try { await render(); } catch(error) { view.refreshing=false;throw error; }
+    // Only applying the result belongs in the UI queue. Steam must not hold navigation behind it.
+    loadTask=Promise.resolve().then(()=>loadWishlist(refresh)).then(
+      fresh=>operations.enqueue(Promise.resolve(),async()=>{
+        view.refreshing=false;
+        if(collector.ended||signal?.aborted)return;
+        if(fresh.status==='success'){items=fresh.items;capturedAt=fresh.capturedAt;loaded=true;}
+        else view.notice=tr?'Steam yenilemesi başarısız. Son kayıtlı liste gösteriliyor.':'Steam refresh failed. Showing the last saved wishlist.';
+        await render();
+      }),
+      ()=>operations.enqueue(Promise.resolve(),async()=>{
+        view.refreshing=false;
+        if(collector.ended||signal?.aborted)return;
+        view.notice=tr?'Steam yenilemesi başarısız. Son kayıtlı liste gösteriliyor.':'Steam refresh failed. Showing the last saved wishlist.';
+        await render();
+      }),
+    ).finally(()=>{loadTask=undefined;});
+  };
   let sequence=0;
   collector.on('collect',component=>{
+    const acknowledge=()=>measureDiscordOperation(component,'assistant.button-ack',()=>component.deferUpdate());
     const action=component.customId.split(':')[2];
     if(['search','target','percent','quiet','digest'].includes(action)){
       const selected=items.find(i=>i.appId===view.selectedAppId);
-      if((action==='target'||action==='percent')&&!selected){void component.deferUpdate().catch(()=>undefined);return;}
+      if((action==='target'||action==='percent')&&!selected){void acknowledge().catch(()=>undefined);return;}
       const id='assistant-modal:'+interaction.id+':'+(++sequence);
       const modal=new ModalBuilder().setCustomId(id).setTitle(action==='search'?(tr?'Wishlistinde ara':'Search your wishlist'):
         action==='target'?(tr?'Hedef fiyatını seç':'Choose your target price'):action==='percent'?(tr?'Minimum indirim':'Minimum discount'):
@@ -90,12 +119,12 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
         action==='percent'?(tr?'Yüzde (0–100)':'Percent (0–100)'):(tr?'Oyun adı (temizlemek için *)':'Game name (* to clear)'),
         action==='target'?'19.99':action==='percent'?'50':tr?'Oyun adı':'Game name'));
       const task=(async()=>{
-        await component.showModal(modal);
+        await measureDiscordOperation(component,'assistant.modal',()=>component.showModal(modal));
         const submit=await component.awaitModalSubmit({time:dealioUiSessionTimeoutMs,
           filter:m=>m.user.id===user&&m.customId===id}).catch(()=>null);
         if(!submit)return;
         if(collector.ended||signal?.aborted){await submit.reply({content:tr?'Panel kapandı. /dealio ile yeniden aç.':'Panel closed. Reopen /dealio.',flags:MessageFlags.Ephemeral});return;}
-        const ack=submit.deferUpdate();
+        const ack=measureDiscordOperation(submit,'assistant.modal-submit-ack',()=>submit.deferUpdate());
         await operations.enqueue(ack,async()=>{
           if(action==='search'){view.query=submit.fields.getTextInputValue('value').trim();if(view.query==='*')view.query='';view.page=0;}
           else if(action==='quiet'||action==='digest'){
@@ -127,7 +156,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       })().catch(error=>safeLogger.error('Assistant modal failed',error));
       modalTasks.add(task);void task.finally(()=>modalTasks.delete(task));return;
     }
-    void operations.enqueue(component.deferUpdate(),async()=>{
+    void operations.enqueue(acknowledge(),async()=>{
       view.notice=undefined;
       if(action==='retry'){
         await service.retryDm(user,config.configurationId);
@@ -135,16 +164,16 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       }
       else if(action==='game'&&component.isStringSelectMenu()){view.selectedAppId=Number(component.values[0]);view.screen='detail';}
       else if(action==='refresh'){
-        view.refreshing=true;await render();
-        const fresh=await wishlist.load(user,language,true);view.refreshing=false;
-        if(fresh.status==='success'){items=fresh.items;capturedAt=fresh.capturedAt;view.page=0;}
-        else view.notice=tr?'Steam yenilemesi başarısız. Son kayıtlı liste gösteriliyor.':'Steam refresh failed. Showing the last saved wishlist.';
+        await startLoad(true);return;
       }else if(action==='filter'){view.eligibleOnly=!view.eligibleOnly;view.page=0;}
       else if(action==='prev')view.page=Math.max(0,view.page-1);
       else if(action==='next'){
         const count=view.screen==='history'?data().history.length:filteredAssistantItems(data(),view).length;
         const size=view.screen==='history'?5:3;view.page=Math.min(Math.max(0,Math.ceil(count/size)-1),view.page+1);
-      }else if(['wishlist','history','rhythm'].includes(action)){view.screen=action as AssistantView['screen'];view.page=0;}
+      }else if(['wishlist','history','rhythm'].includes(action)){
+        view.screen=action as AssistantView['screen'];view.page=0;
+        if(action==='wishlist'&&!loaded){if(loadTask)await render();else await startLoad(false);return;}
+      }
       else if(action==='instant')await service.preference(user,config.configurationId,{mode:'instant',timezone:null,quietStart:null,quietEnd:null,digestMinute:null});
       else if((action==='inherit'||action==='mute')&&view.selectedAppId){
         const existing=service.repository.rule(config,view.selectedAppId)??{mode:'inherit',percent:null,targetMinor:null,currency:null,muted:false,revision:0};
@@ -158,6 +187,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
   signal?.addEventListener('abort',abort,{once:true});
   if(signal?.aborted)abort();
   try{await new Promise<void>(resolve=>collector.once('end',()=>resolve()));await operations.drain();
+    await loadTask;await operations.drain();
     await render(true).catch(()=>undefined);}
   finally{close();signal?.removeEventListener('abort',abort);}
   // Modal submissions are owner-bound and reject after collector end; they do not hold shutdown open.

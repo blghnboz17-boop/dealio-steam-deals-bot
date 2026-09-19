@@ -1,3 +1,4 @@
+import { measureDiscordOperation } from '../interaction-timing.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import {
   LabelBuilder,
@@ -44,12 +45,12 @@ export async function handleStatusV2(
   thresholdService?: DiscountThresholdService,
   testNotificationService?: TestNotificationService,
 ): Promise<void> {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await measureDiscordOperation(interaction, 'status-v2.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
   const fallbackLanguage = languageFromDiscordLocale(interaction.locale);
   const initial = statusService.getDashboard(interaction.user.id, fallbackLanguage);
   if (initial.status !== 'ready') {
     const messages = messagesFor(initial.language);
-    await interaction.editReply({
+    await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
       flags: dealioV2Flags,
       components: [buildNoticePanel(
         initial.language,
@@ -59,7 +60,7 @@ export async function handleStatusV2(
           : (initial.language === 'tr' ? 'Durum bilgisi alınamadı' : 'Status unavailable'),
         initial.status === 'not-configured' ? messages.statusNotConfigured : messages.statusDashboardUnavailable,
       )],
-    });
+    }));
     return;
   }
   let current: ReadyStatus = initial;
@@ -70,10 +71,10 @@ export async function handleStatusV2(
   } catch (_error: unknown) {
     avatarUrl = undefined;
   }
-  const message = await interaction.editReply({
+  const message = await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
     flags: dealioV2Flags,
     components: [buildStatusV2Panel(current, interaction.id, { avatarUrl })],
-  });
+  }));
   const closeUiSession = dealioUiSessions.open(
     interaction.id,
     interaction.user.id,
@@ -109,7 +110,7 @@ export async function handleStatusV2(
     if (refreshed.status !== 'ready') {
       controlsRemoved = true;
       collector.stop('unavailable');
-      await interaction.editReply({
+      await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
         components: [buildNoticePanel(
           refreshed.language,
           refreshed.status === 'not-configured' ? 'warning' : 'danger',
@@ -118,37 +119,37 @@ export async function handleStatusV2(
             ? messagesFor(refreshed.language).statusNotConfigured
             : messagesFor(refreshed.language).statusDashboardUnavailable,
         )],
-      });
+      }));
       return false;
     }
     current = refreshed;
-    await interaction.editReply({
+    await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
       components: [buildStatusV2Panel(current, interaction.id, { avatarUrl })],
-    });
+    }));
     return true;
   };
 
   collector.on('collect', (component) => {
     if (component.customId === `country:${interaction.id}:range` && component.isStringSelectMenu()) {
       const rangeIndex = Number(component.values[0]);
-      const acknowledgement = component.deferUpdate();
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       void operations.enqueue(acknowledgement, async () => {
-        await interaction.editReply({
+        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
           components: [buildCountryListPanel(current.language, interaction.id, rangeIndex, current.config.storeCountryCode)],
-        });
+        }));
       });
       return;
     }
     if (component.customId === `country:${interaction.id}:back` && component.isButton()) {
-      const acknowledgement = component.deferUpdate();
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       void operations.enqueue(acknowledgement, async () => {
-        await interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id)] });
+        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id)] }));
       });
       return;
     }
     if (component.customId === `country:${interaction.id}:select` && component.isStringSelectMenu()) {
       const country = parseStoreCountryCode(component.values[0] ?? '');
-      const acknowledgement = component.deferUpdate();
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       void operations.enqueue(acknowledgement, async () => {
         if (country) {
           await userConfigurationService.setStoreCountry(interaction.user.id, country);
@@ -158,21 +159,21 @@ export async function handleStatusV2(
       return;
     }
     if (!component.isButton()) {
-      void operations.enqueue(component.deferUpdate(), async () => undefined);
+      void operations.enqueue(measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate()), async () => undefined);
       return;
     }
     const action = component.customId.slice(`status-v2:${interaction.id}:`.length);
     if (action === 'region') {
-      const acknowledgement = component.deferUpdate();
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       void operations.enqueue(acknowledgement, async () => {
-        await interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id)] });
+        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id)] }));
       });
       return;
     }
     if (action === 'language') {
       const modalId = `status-language:${interaction.id}:${++modalSequence}`;
       void (async () => {
-        await component.showModal(buildLanguageModal(modalId, current.language));
+        await measureDiscordOperation(component, 'status-v2.modal', () => component.showModal(buildLanguageModal(modalId, current.language)));
         const modal = await component.awaitModalSubmit({
           time: Math.max(1, sessionExpiresAt - Date.now()),
           filter: (submission) => submission.customId === modalId
@@ -180,14 +181,14 @@ export async function handleStatusV2(
         }).catch(() => null);
         if (!modal) return;
         if (!sessionActive) {
-          await modal.reply({
+          await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.reply({
             flags: dealioEphemeralV2Flags,
             components: [buildExpiredPanel(current.language)],
-          });
+          }));
           return;
         }
         const language = modal.fields.getRadioGroup('notification-language', true);
-        await modal.deferUpdate();
+        await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate());
         if (language === 'tr' || language === 'en') {
           await userConfigurationService.setLanguage(interaction.user.id, language);
         }
@@ -199,7 +200,7 @@ export async function handleStatusV2(
       const modalId = `status-threshold-v2:${interaction.id}:${++modalSequence}`;
       const configurationId = current.config.configurationId;
       void (async () => {
-        await component.showModal(buildThresholdModal(modalId, current.language, current.config.minimumDiscountPercent));
+        await measureDiscordOperation(component, 'status-v2.modal', () => component.showModal(buildThresholdModal(modalId, current.language, current.config.minimumDiscountPercent)));
         const modal = await component.awaitModalSubmit({
           time: Math.max(1, sessionExpiresAt - Date.now()),
           filter: (submission) => submission.customId === modalId
@@ -207,30 +208,30 @@ export async function handleStatusV2(
         }).catch(() => null);
         if (!modal) return;
         if (!sessionActive) {
-          await modal.reply({
+          await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.reply({
             flags: dealioEphemeralV2Flags,
             components: [buildExpiredPanel(current.language)],
-          });
+          }));
           return;
         }
         const value = parseDiscountPercent(modal.fields.getTextInputValue('minimum-discount-percent').trim());
         if (value === null) {
-          await modal.reply({
+          await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.reply({
             flags: dealioEphemeralV2Flags,
             components: [buildNoticePanel(current.language, 'warning',
               current.language === 'tr' ? 'Geçersiz değer' : 'Invalid value',
               messagesFor(current.language).discountThresholdInvalid)],
-          });
+          }));
           return;
         }
-        await modal.deferUpdate();
+        await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate());
         await thresholdService.setGlobal(interaction.user.id, value, configurationId);
         await refresh();
       })().catch((error: unknown) => safeLogger.error('Discord status threshold update failed', error));
       return;
     }
     if (action === 'test' && testNotificationService) {
-      const acknowledgement = component.deferReply({ flags: MessageFlags.Ephemeral });
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferReply({ flags: MessageFlags.Ephemeral }));
       void operations.enqueue(acknowledgement, async () => {
         const text = uiCopy(current.language);
         try {
@@ -239,13 +240,13 @@ export async function handleStatusV2(
             current.language,
             current.config.storeCountryCode,
           );
-          await component.editReply({
+          await measureDiscordOperation(component, 'status-v2.render', () => component.editReply({
             flags: dealioV2Flags,
             components: [buildNoticePanel(current.language, 'success', text.testSentTitle, text.testSentDescription)],
-          });
+          }));
         } catch (error: unknown) {
           const cooldown = error instanceof TestNotificationCooldownError;
-          await component.editReply({
+          await measureDiscordOperation(component, 'status-v2.render', () => component.editReply({
             flags: dealioV2Flags,
             components: [buildNoticePanel(
               current.language,
@@ -255,21 +256,21 @@ export async function handleStatusV2(
                 ? messagesFor(current.language).testNotificationCooldown(error.retryAfterSeconds)
                 : messagesFor(current.language).testNotificationFailed,
             )],
-          });
+          }));
         }
         await refresh();
       });
       return;
     }
     if (action === 'enable' || action === 'disable') {
-      const acknowledgement = component.deferUpdate();
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       void operations.enqueue(acknowledgement, async () => {
         await userConfigurationService.setEnabled(interaction.user.id, action === 'enable');
         await refresh();
       });
       return;
     }
-    void operations.enqueue(component.deferUpdate(), async () => undefined);
+    void operations.enqueue(measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate()), async () => undefined);
   });
 
   const ended = new Promise<void>((resolve) => collector.once('end', () => {
@@ -284,9 +285,9 @@ export async function handleStatusV2(
     sessionActive = false;
     await operations.drain();
     if (!controlsRemoved) {
-      await interaction.editReply({
+      await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
         components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, disabled: true })],
-      }).catch((error: unknown) => safeLogger.error('Discord status V2 cleanup failed', error));
+      })).catch((error: unknown) => safeLogger.error('Discord status V2 cleanup failed', error));
     }
   } finally {
     sessionActive = false;
