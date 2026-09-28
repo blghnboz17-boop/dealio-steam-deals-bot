@@ -43,6 +43,8 @@ Ayrı Discord Developer Portal uygulaması oluştur. .env.test.example dosyasın
 
 Türkçe/İngilizce, masaüstü/mobil gerçek Discord testlerini bitir. release-evidence.example.json kapıları varsayılan başarısızdır. Gerçek kanıt yolları ve test edilen commit'i kaydet; npm run release:check -- /path/to/evidence.json geçmeden üretimi güncelleme.
 
+Her `evidence` alanı, ana kanıt JSON dosyasına göre çözümlenen bir kayıt JSON dosyasının yoludur. Kayıtta `schemaVersion: 1`, kapı adı (`gate`), aynı tam Git commit'i (`commit`), `passed: true`, ISO zaman (`checkedAt`), kısa özet (`summary`) ve en az bir `artifacts` dosya yolu bulunmalıdır. Artifact yolları kayıt dosyasına göre çözülür; her dosya var ve boş olmayan normal dosya olmalıdır. Örnek biçim `release-gate-record.example.json` içindedir. Otomatik kapı dosya ve revizyon tutarlılığını kontrol eder; ekran görüntüsünün veya canlı testin gerçekliğini insan incelemesiyle ayrıca doğrula. Token, profil kimliği ve kişisel verileri kanıt dosyalarına koyma.
+
 ## Tanıtım ve yasal sayfalar
 SWA oluşturulunca deployment token'ını özel GitHub reposunun public-site ortamında AZURE_STATIC_WEB_APPS_API_TOKEN sırrı olarak sakla. Publish public Dealio pages işi elle başlatılır; yalnız build-public-site.mjs izin listesindeki on dosya yayımlanır. Kaynak repo özel kalır.
 

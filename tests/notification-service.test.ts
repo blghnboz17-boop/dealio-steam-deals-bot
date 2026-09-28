@@ -108,6 +108,28 @@ function addCandidate(
 }
 
 describe('NotificationService', () => {
+  it('records accepted candidate-to-DM latency without user or game identifiers', async () => {
+    const sender = createSender(vi.fn());
+    const services = createService('en', sender);
+    const deliveredAt = new Date(Date.parse(services.candidate.createdAt) + 60_000).toISOString();
+    (sender.send as ReturnType<typeof vi.fn>).mockResolvedValue({
+      messageId: 'private-message-id', channelId: 'private-channel-id', deliveredAt,
+    });
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await expect(services.service.deliverPending('discord-user'))
+        .resolves.toMatchObject({ sentCount: 1 });
+      const output = JSON.stringify(log.mock.calls);
+      expect(output).toContain('candidateToDeliveryMs=60000');
+      expect(output).not.toContain('discord-user');
+      expect(output).not.toContain('Test Game');
+      expect(output).not.toContain('private-message-id');
+    } finally {
+      log.mockRestore();
+      services.database.close();
+    }
+  });
+
   it('does not disable tracking or blame DM privacy for an invalid message payload', async () => {
     const sender = createSender(vi.fn().mockRejectedValue(Object.assign(
       new Error('Invalid Form Body'), { code: 50035, status: 400 },

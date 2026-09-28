@@ -37,6 +37,20 @@ function fixture(count=50) {
 }
 
 describe('assistant latency isolation', () => {
+  it('shows shared refresh cooldown without losing the saved wishlist or blaming Steam', async()=>{
+    const f=fixture();const task=f.start();
+    try {
+      await vi.waitFor(()=>expect(f.collector.listenerCount('collect')).toBe(1));
+      f.load.mockResolvedValueOnce({status:'cooldown',language:'en',retryAfterSeconds:27});
+      const click=f.click('refresh');
+      await vi.waitFor(()=>expect(JSON.stringify(f.interaction.editReply.mock.calls.at(-1))).toContain('Wait 27 seconds'));
+      const text=JSON.stringify(f.interaction.editReply.mock.calls.at(-1));
+      expect(text).toContain('Game 0');expect(text).not.toContain('Steam refresh failed');
+      expect(click.deferUpdate).toHaveBeenCalledOnce();
+      f.click('history');
+      await vi.waitFor(()=>expect(JSON.stringify(f.interaction.editReply.mock.calls.at(-1))).toContain('Your alert history'));
+    }finally{f.collector.stop();await task;f.db.close();}
+  });
   it.each(['history', 'rhythm'] as const)('opens %s without a Steam request or cached wishlist', async screen => {
     const f = fixture(); const task = f.start(screen);
     try {

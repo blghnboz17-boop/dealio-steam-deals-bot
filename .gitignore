@@ -28,3 +28,6 @@ NUL
 caddy.exe
 !.env.test.example
 .runtime-test-results.txt
+
+# Graft's regenerable local graph cache.
+/graft/

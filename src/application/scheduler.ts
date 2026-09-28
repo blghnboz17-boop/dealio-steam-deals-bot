@@ -171,6 +171,7 @@ export class WishlistScheduler {
   }
 
   private async executeRun(): Promise<SchedulerRunSummary> {
+    const runStartedMs = this.now().getTime();
     let users: UserConfig[];
     try {
       users = this.options.userConfigRepository.findEnabled();
@@ -182,6 +183,12 @@ export class WishlistScheduler {
     this.logger.info(`Run started for ${users.length} enabled user(s).`);
     let completedCount = 0;
     let errorCount = 0;
+    let checkedGames = 0;
+    let steamItemErrors = 0;
+    let unknownPrices = 0;
+    let unavailableCount = 0;
+    let dmSent = 0;
+    let dmFailed = 0;
 
     let nextUserIndex = 0;
     const processNextUser = async (): Promise<void> => {
@@ -194,13 +201,19 @@ export class WishlistScheduler {
         try {
           const result = await this.options.checkService.check(user.discordUserId, 'automatic');
           if (result.status === 'success') {
+            checkedGames += result.checkedCount;
+            steamItemErrors += result.failedItems.length;
+            unknownPrices += result.unknownPriceCount;
             const delivery = await this.options.notificationService.deliverPending(
               user.discordUserId,
             );
+            dmSent += delivery.sentCount;
+            dmFailed += delivery.failedCount;
             this.logger.info(
               `Check completed (${index + 1}/${users.length}): status=success checked=${result.checkedCount} candidates=${delivery.candidateCount} dmSent=${delivery.sentCount} dmFailed=${delivery.failedCount}.`,
             );
           } else if (result.status === 'unavailable') {
+            unavailableCount += 1;
             errorCount += 1;
             this.logger.error(
               `Check completed (${index + 1}/${users.length}): status=unavailable code=${result.errorCode}.`,
@@ -232,7 +245,10 @@ export class WishlistScheduler {
     );
 
     this.logger.info(
-      `Run completed: users=${users.length} completed=${completedCount} errors=${errorCount}.`,
+      `Run completed: users=${users.length} completed=${completedCount} errors=${errorCount} `
+      + `durationMs=${Math.max(0, this.now().getTime() - runStartedMs)} checkedGames=${checkedGames} `
+      + `steamItemErrors=${steamItemErrors} unknownPrices=${unknownPrices} `
+      + `unavailable=${unavailableCount} dmSent=${dmSent} dmFailed=${dmFailed}.`,
     );
     return { userCount: users.length, completedCount, errorCount };
   }

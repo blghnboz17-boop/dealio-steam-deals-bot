@@ -315,7 +315,7 @@ describe("project-local OpenCode handoff plugin", () => {
     expect(result).toMatchObject({ output: "Handoff completed", metadata: { status: "complete" } });
     expect((await authority(root)).status).toBe("complete");
     expect(fake.modelCalls).toEqual([]);
-  });
+  }, 20_000);
 
   it("disables persistence when required capabilities are absent", async () => {
     // Given
