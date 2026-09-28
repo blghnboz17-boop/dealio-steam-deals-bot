@@ -9,6 +9,7 @@ describe('operational metrics report', () => {
       '[discord-metric] {"operation":"wishlist.button-ack","durationMs":200,"failed":true,"interactionAgeMs":3100}',
       'Run completed: users=2 completed=2 errors=1 durationMs=1250 checkedGames=30 steamItemErrors=2 unknownPrices=1 unavailable=1 dmSent=1 dmFailed=0.',
       '[notification-timing] candidateToDeliveryMs=60000 mode=immediate',
+      '[notification-timing] candidateToDeliveryMs=7200000 mode=quiet',
       '[notification-timing] candidateToDeliveryMs=3600000 mode=digest',
       '[discord-metric] malformed',
     ]);
@@ -23,8 +24,8 @@ describe('operational metrics report', () => {
         unavailable: 1, dmSent: 1, dmFailed: 0, p95DurationMs: 1250,
       },
       deliveries: {
-        count: 2, immediateCount: 1, digestCount: 1,
-        p95CandidateToDeliveryMs: 3_600_000,
+        count: 3, immediateCount: 1, quietCount: 1, digestCount: 1,
+        p95CandidateToDeliveryMs: 7_200_000,
         p95ImmediateCandidateToDeliveryMs: 60_000,
       },
     });

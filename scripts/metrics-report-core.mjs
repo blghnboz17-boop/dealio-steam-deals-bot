@@ -22,7 +22,7 @@ export function summarizeOperationalLogs(lines) {
       dmSent: 0, dmFailed: 0, p95DurationMs: null,
     },
     deliveries: {
-      count: 0, immediateCount: 0, digestCount: 0,
+      count: 0, immediateCount: 0, quietCount: 0, digestCount: 0,
       p95CandidateToDeliveryMs: null,
       p95ImmediateCandidateToDeliveryMs: null,
     },
@@ -66,13 +66,14 @@ export function summarizeOperationalLogs(lines) {
       continue;
     }
 
-    const delivery = line.match(/\[notification-timing\] candidateToDeliveryMs=(\d+) mode=(immediate|digest)/);
+    const delivery = line.match(/\[notification-timing\] candidateToDeliveryMs=(\d+) mode=(immediate|quiet|digest)/);
     if (delivery) {
       const latency = Number(delivery[1]);
       if (Number.isSafeInteger(latency)) {
         deliveryLatencies.push(latency);
         report.deliveries.count += 1;
         if (delivery[2] === 'digest') report.deliveries.digestCount += 1;
+        else if (delivery[2] === 'quiet') report.deliveries.quietCount += 1;
         else {
           report.deliveries.immediateCount += 1;
           immediateDeliveryLatencies.push(latency);

@@ -269,11 +269,12 @@ export class NotificationService {
     batch: DurableNotificationBatch,
   ): Promise<BatchDeliveryOutcome> {
     let receipt: DeliveryReceipt | void;
-    let deliveryMode: 'digest' | 'immediate' = 'immediate';
+    let deliveryMode: 'digest' | 'quiet' | 'immediate' = 'immediate';
     try {
       const user=batch.notifications[0].discordUserId;
-      const digest=this.wishlistStateRepository.assistant.preference(user).mode==='digest';
-      deliveryMode = digest ? 'digest' : 'immediate';
+      const preferenceMode = this.wishlistStateRepository.assistant.preference(user).mode;
+      const digest = preferenceMode === 'digest';
+      deliveryMode = preferenceMode === 'instant' ? 'immediate' : preferenceMode;
       receipt = digest ? await this.sender.send(batch,batch.language,{digest:true}) : await this.sender.send(batch,batch.language);
     } catch (error: unknown) {
       if (error instanceof NotificationDeliveryCancelledError) {

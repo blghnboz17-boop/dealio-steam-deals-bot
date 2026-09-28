@@ -84,7 +84,7 @@ export class WishlistViewService {
     const context = JSON.stringify([config.configurationId, config.configVersion, config.language]);
     const existing = this.loads.get(discordUserId);
     if (existing?.pending && existing.context === context) return existing.pending;
-    if (existing && (existing.pending || existing.availableAt > this.now().getTime())) {
+    if (existing?.context === context && (existing.pending || existing.availableAt > this.now().getTime())) {
       return { status: 'cooldown', language: config.language,
         retryAfterSeconds: existing.pending ? 1 : Math.max(1, Math.ceil((existing.availableAt - this.now().getTime()) / 1000)) };
     }

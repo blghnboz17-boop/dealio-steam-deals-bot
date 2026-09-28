@@ -63,17 +63,25 @@ describe('shared wishlist refresh admission',()=>{
       expect(await f.service.load('u','en',true)).toMatchObject({status:'cooldown',retryAfterSeconds:30});
     }finally{gate.resolve({items:[],errors:[]});f.db.close();}
   });
-  it('does not share an old account result or enqueue more work after a configuration change',async()=>{
+  it('loads the new account after an old queued request is cancelled',async()=>{
     const f=fixture();const gate=Promise.withResolvers<void>();
     const busy=f.coordinator.runExclusive('u',()=>gate.promise);
     try{
       const first=f.service.load('u','en',true);
       f.users.upsert('u','76561198000000002','en','TR',new Date().toISOString());
       const second=f.service.load('u','en',true);
-      // A different configuration must get an immediate response, not join the pending result.
-      expect(await second).toMatchObject({status:'cooldown'});
-      gate.resolve();await busy;await first;
-      expect(f.reader.getWishlistWithErrors).not.toHaveBeenCalled();
+      gate.resolve();await busy;
+      expect(await first).toMatchObject({status:'unavailable',errorCode:'STEAM_CANCELLED'});
+      expect(await second).toMatchObject({status:'success'});
+      expect(f.reader.getWishlistWithErrors).toHaveBeenCalledTimes(1);
     }finally{gate.resolve();await busy;f.db.close();}
+  });
+  it('does not apply the old account cooldown to a new account',async()=>{
+    const f=fixture();try{
+      expect(await f.service.load('u','en',true)).toMatchObject({status:'success'});
+      f.users.upsert('u','76561198000000002','en','TR',new Date().toISOString());
+      expect(await f.service.load('u','en',true)).toMatchObject({status:'success'});
+      expect(f.reader.getWishlistWithErrors).toHaveBeenCalledTimes(2);
+    }finally{f.db.close();}
   });
 });
