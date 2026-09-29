@@ -22,13 +22,9 @@
 </p>
 
 <p align="center">
-  <a href="#beta-durumu"><img src="https://img.shields.io/badge/Durum-S%C4%B1n%C4%B1rl%C4%B1_beta-8B5CF6?style=flat-square" alt="Sınırlı beta"></a>
+  <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/tag/v0.1.0-beta.1"><img src="https://img.shields.io/badge/Beta-v0.1.0--beta.1-8B5CF6?style=flat-square" alt="Sınırlı beta v0.1.0-beta.1"></a>
   <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-Testleri_g%C3%B6r-238636?style=flat-square&amp;logo=github" alt="GitHub testlerini görüntüle"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lisans-MIT-2980B9?style=flat-square" alt="MIT"></a>
-</p>
-
-<p align="center">
-  <a href="https://blghnboz17-boop.github.io/dealio-public-pages/">🌐 Dealio</a> &nbsp; · &nbsp; <a href="#son-gelismeler">✨ Son gelişmeler</a> &nbsp; · &nbsp; <a href="#komutlar">💬 Komutlar</a> &nbsp; · &nbsp; <a href="README.md">🇬🇧 English</a>
 </p>
 
 ---
@@ -60,11 +56,8 @@ Her oyun için ayrı hedef belirleyebilir, gece bildirim istemiyorsan sessiz saa
 >
 > Üç kişi bilgisayarda, Türkiye mağazası ve Türkçe menülerle kurulumu tamamladı. Denedikleri komutlarda sorun bildirmediler. Şimdi günlük kullanımda bildirimleri ve olası aksaklıkları takip ediyoruz.
 
-Bu turda bildirim/gecikme ölçümleri, dayanıklılık senaryoları, şifreli uzak yedek, geri yükleme provası, bağımsız e-posta alarmı ve yardım/gizlilik sayfaları tamamlandı.
+Bildirim güvenilirliği ve beta hazırlıkları bu sürümde bir araya geldi. [v0.1.0-beta.1 sürüm notları →](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/tag/v0.1.0-beta.1)
 
-[Beta notları](docs/phase4-beta.tr.md) · [İşletim kaydı](docs/phase3-acceptance.tr.md) · [GitHub Releases](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases)
-
-<sub>Son etiketli GitHub release’i 25 Ağustos 2026 tarihli `discord` sürümüdür. Yukarıdaki gelişmeler daha yenidir; bu etiket canlı botun güncel revizyonunu temsil etmez.</sub>
 
 <a name="discordda-başla"></a>
 
@@ -78,20 +71,11 @@ Dealio şu an küçük bir grupla deneniyor. Katılmak istersen [beta sayfasınd
 
 Steam wishlist’in herkese açık olmalı; Discord, bottan DM almana izin vermeli. Dealio Steam şifreni, çerezlerini veya giriş oturumunu istemez.
 
-## 🔔 Bildirimler nasıl çalışır?
+## 🔔 Bildirimler ne zaman gelir?
 
-**Kontroller 30 dakikalık düzende yapılır; Steam’den anlık olay akışı alınmaz.** Bir sonraki otomatik tarama, önceki tarama bittikten 30 dakika sonrasına planlanır. Steam veya Discord kesintileri gecikme yaratabilir.
+Dealio, her tarama bittikten **30 dakika sonra** yeniden kontrol eder. Kuralına uyan bir fiyat değişimi olduğunda, seçtiğin bildirim zamanına göre DM gönderir. Steam veya Discord’da sorun varsa gecikme olabilir.
 
-| Adım | Ne olur? |
-| :--- | :--- |
-| Gözlemle | Seçtiğin ülke ve dil için Steam fiyatları alınır. Başarılı oyun fiyatı sorguları beş dakikalık ortak önbelleği kullanır; gerçek gözlem zamanı korunur. |
-| Karşılaştır | Oyunun hedef fiyatı veya indirim kuralı değerlendirilir. Alınamayan fiyat, fırsat olarak yorumlanmaz. |
-| Gerekirse beklet | Sessiz saatler, günlük özet veya teslimat tekrarları için uygun bildirimler kalıcı kuyrukta tutulur. |
-| Doğrula ve ilet | Gönderim öncesi bekleyen fırsatların fiyatı tekrar kontrol edilir. Bittiği doğrulanan teklif gönderilmez. |
-
-Kurulum başlangıç durumunu kaydeder ve ayrıca bir wishlist özeti gönderebilir. Zaten indirimdeki her oyun için ayrı yeni-indirim bildirimi oluşturmaz. Mevcut fiyatın zaten karşıladığı bir hedefi kaydetmek de başlangıç bildirimi üretmez.
-
-Fiyatlar Steam’in bildirdiği para biriminde kalır; tahmini kur dönüşümü yapılmaz. Hedef fiyat para birimine bağlıdır; ülke/para birimi değişince yeni hedef gerekebilir. Satın almadan önce Steam’deki ödeme fiyatını doğrula.
+İlk kurulum mevcut indirimlerin bir özetini gönderebilir; hepsi için ayrı yeni-indirim bildirimi oluşturmaz. Şu anki fiyatın zaten karşıladığı bir hedefi kaydetmek de hemen DM göndermez. Fiyatlar seçtiğin Steam mağazasının para birimindedir; satın alırken son fiyatı Steam’de kontrol et.
 
 <a name="komutlar"></a>
 
@@ -114,16 +98,7 @@ Paneller sana özeldir; düğmeler paneli açan kullanıcıya bağlıdır. Süre
 
 ## 🧪 Beta durumu
 
-Bot mevcut Azure VM’de çalışıyor. **Şu an gerçek kullanıcı denemesi aşamasındayız; genel kullanım kabulü henüz tamamlanmadı.**
-
-- [x] İlk kullanıcılarla Türkçe masaüstü kurulumu ve komut denemeleri
-- [x] Şifreli uzak yedek, geri yükleme ve bağımsız alarmın denenmesi
-- [x] Yardım, gizlilik ve kullanım koşullarının yayımlanması
-- [ ] En az yedi günlük gerçek kullanım gözlemi
-- [ ] Gerçek indirim, zamanlanmış teslim ve tekrar bildirim kontrolleri
-- [ ] İngilizce, mobil ve onaylı veri silme denemeleri
-
-[Yol haritası ve kabul notları →](docs/phase4-beta.tr.md)
+Üç kişi Türkçe masaüstü kurulumu ve komut denemelerini sorunsuz tamamladığını bildirdi. Şimdi en az yedi günlük gerçek kullanımı izliyoruz. İngilizce, mobil ve uzun süreli bildirim kontrolleri tamamlanmadan genel daveti açmayacağız.
 
 ## 🔒 Verilerin ve kontrolün
 
@@ -193,6 +168,40 @@ TypeScript · discord.js Components V2 · SQLite · Azure VM
 - [GitHub kontrolleri](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml) — güncel doğrulamalar
 
 İlk sürüm Steam wishlist’lerine odaklanır. Ödeme sistemi, ayrı web yönetim paneli, diğer mağazalar ve tahmini para birimi dönüşümü kapsam dışındadır.
+
+<details>
+<summary><strong>Teknik ayrıntılar ve beta kontrol listesi</strong></summary>
+
+## 🔔 Bildirimler nasıl çalışır?
+
+**Kontroller 30 dakikalık düzende yapılır; Steam’den anlık olay akışı alınmaz.** Bir sonraki otomatik tarama, önceki tarama bittikten 30 dakika sonrasına planlanır. Steam veya Discord kesintileri gecikme yaratabilir.
+
+| Adım | Ne olur? |
+| :--- | :--- |
+| Gözlemle | Seçtiğin ülke ve dil için Steam fiyatları alınır. Başarılı oyun fiyatı sorguları beş dakikalık ortak önbelleği kullanır; gerçek gözlem zamanı korunur. |
+| Karşılaştır | Oyunun hedef fiyatı veya indirim kuralı değerlendirilir. Alınamayan fiyat, fırsat olarak yorumlanmaz. |
+| Gerekirse beklet | Sessiz saatler, günlük özet veya teslimat tekrarları için uygun bildirimler kalıcı kuyrukta tutulur. |
+| Doğrula ve ilet | Gönderim öncesi bekleyen fırsatların fiyatı tekrar kontrol edilir. Bittiği doğrulanan teklif gönderilmez. |
+
+Kurulum başlangıç durumunu kaydeder ve ayrıca bir wishlist özeti gönderebilir. Zaten indirimdeki her oyun için ayrı yeni-indirim bildirimi oluşturmaz. Mevcut fiyatın zaten karşıladığı bir hedefi kaydetmek de başlangıç bildirimi üretmez.
+
+Fiyatlar Steam’in bildirdiği para biriminde kalır; tahmini kur dönüşümü yapılmaz. Hedef fiyat para birimine bağlıdır; ülke/para birimi değişince yeni hedef gerekebilir. Satın almadan önce Steam’deki ödeme fiyatını doğrula.
+
+## 🧪 Beta durumu
+
+Bot mevcut Azure VM’de çalışıyor. **Şu an gerçek kullanıcı denemesi aşamasındayız; genel kullanım kabulü henüz tamamlanmadı.**
+
+- [x] İlk kullanıcılarla Türkçe masaüstü kurulumu ve komut denemeleri
+- [x] Şifreli uzak yedek, geri yükleme ve bağımsız alarmın denenmesi
+- [x] Yardım, gizlilik ve kullanım koşullarının yayımlanması
+- [ ] En az yedi günlük gerçek kullanım gözlemi
+- [ ] Gerçek indirim, zamanlanmış teslim ve tekrar bildirim kontrolleri
+- [ ] İngilizce, mobil ve onaylı veri silme denemeleri
+
+[Yol haritası ve kabul notları →](docs/phase4-beta.tr.md)
+
+
+</details>
 
 ---
 

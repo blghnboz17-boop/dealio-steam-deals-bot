@@ -22,13 +22,9 @@
 </p>
 
 <p align="center">
-  <a href="#beta-status"><img src="https://img.shields.io/badge/Status-Limited_beta-8B5CF6?style=flat-square" alt="Limited beta"></a>
+  <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/tag/v0.1.0-beta.1"><img src="https://img.shields.io/badge/Beta-v0.1.0--beta.1-8B5CF6?style=flat-square" alt="Limited beta v0.1.0-beta.1"></a>
   <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-View_checks-238636?style=flat-square&amp;logo=github" alt="View GitHub checks"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2980B9?style=flat-square" alt="MIT"></a>
-</p>
-
-<p align="center">
-  <a href="https://blghnboz17-boop.github.io/dealio-public-pages/index-en.html">🌐 Dealio</a> &nbsp; · &nbsp; <a href="#latest-updates">✨ Latest updates</a> &nbsp; · &nbsp; <a href="#commands">💬 Commands</a> &nbsp; · &nbsp; <a href="README.tr.md">🇹🇷 Türkçe</a>
 </p>
 
 ---
@@ -60,11 +56,8 @@ Set a different target for each game, or use one discount threshold across your 
 >
 > Three desktop users completed setup with the Türkiye store and Turkish menus. They reported no problems with the commands they tried. We're now watching how notifications hold up in everyday use.
 
-Completed in this round: notification and latency measurements, reliability scenarios, encrypted offsite backups, a restore rehearsal, independent email alerts, and published help and privacy pages.
+This release brings together the notification reliability work and beta preparations. [Read the v0.1.0-beta.1 notes →](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/tag/v0.1.0-beta.1)
 
-[Beta notes, TR](docs/phase4-beta.tr.md) · [Operations record, TR](docs/phase3-acceptance.tr.md) · [GitHub Releases](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases)
-
-<sub>The latest tagged GitHub release is `discord`, published on 25 August 2026. The updates above are newer; that tag does not identify the current live bot revision.</sub>
 
 <a name="start-in-discord"></a>
 
@@ -78,20 +71,11 @@ Dealio is being tested with a small group. If you'd like to join, get in touch t
 
 Your Steam wishlist must be publicly readable, and Discord must allow DMs from the bot. Dealio does not ask for a Steam password, cookie, or login session.
 
-## 🔔 How alerts work
+## 🔔 When will I hear from Dealio?
 
-**Checks run on a 30-minute schedule, not a live Steam event feed.** The next automatic scan is scheduled 30 minutes after the previous scan completes. Steam or Discord outages can add delay.
+Dealio checks again **30 minutes after each scan finishes**. When a price change meets your rule, it sends a DM according to your notification schedule. Steam or Discord issues can add delay.
 
-| Stage | What happens |
-| :--- | :--- |
-| Observe | Read Steam prices for your configured country and language. Successful app-price requests share a five-minute cache; the original observation time is preserved. |
-| Match | Evaluate your game's target or discount rule. An unavailable price is not treated as a deal. |
-| Wait, if needed | Keep qualifying alerts in a persistent queue for quiet hours, a daily digest, or delivery retries. |
-| Revalidate & deliver | Check pending offers again before sending. Offers confirmed to have ended are not sent. |
-
-Setup establishes a baseline and can send a separate wishlist summary. It does **not** send a new-sale alert for every existing discount. Likewise, saving a target that the current price already meets does not create an initial alert.
-
-Prices stay in Steam's reported currency, with no estimated exchange-rate conversion. Target prices are currency-bound; a region/currency change may require a new target. Always confirm the checkout price on Steam.
+Initial setup may send a summary of existing discounts, rather than a new-sale alert for each one. Saving a target that the current price already meets won't trigger an immediate DM either. Prices use your selected Steam Store currency; check the final price on Steam before buying.
 
 <a name="commands"></a>
 
@@ -114,16 +98,7 @@ Panels are private and bound to the person who opened them. After a timeout or b
 
 ## 🧪 Beta status
 
-The bot runs on the existing Azure VM. **Real-user testing is underway; general-release acceptance is still pending.**
-
-- [x] First Turkish desktop setup and command trials
-- [x] Encrypted offsite backup, restore, and independent alarm exercises
-- [x] Published help, privacy, and terms pages
-- [ ] At least seven days of real-world use
-- [ ] Real sale alerts, scheduled delivery, and duplicate checks
-- [ ] English, mobile, and consented data-deletion trials
-
-[Roadmap and acceptance notes, TR →](docs/phase4-beta.tr.md)
+Three users reported successful Turkish desktop setup and command trials. We're now working through at least seven days of real-world use. English, mobile, and longer-running delivery checks remain on the list before the general invite opens.
 
 ## 🔒 Privacy & control
 
@@ -193,6 +168,40 @@ TypeScript · discord.js Components V2 · SQLite · Azure VM
 - [CI runs](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml) — current verification
 
 The first release stays focused on Steam wishlists. Payments, a separate web dashboard, other stores, and estimated currency conversion are outside its scope.
+
+<details>
+<summary><strong>Technical details and beta checklist</strong></summary>
+
+## 🔔 How alerts work
+
+**Checks run on a 30-minute schedule, not a live Steam event feed.** The next automatic scan is scheduled 30 minutes after the previous scan completes. Steam or Discord outages can add delay.
+
+| Stage | What happens |
+| :--- | :--- |
+| Observe | Read Steam prices for your configured country and language. Successful app-price requests share a five-minute cache; the original observation time is preserved. |
+| Match | Evaluate your game's target or discount rule. An unavailable price is not treated as a deal. |
+| Wait, if needed | Keep qualifying alerts in a persistent queue for quiet hours, a daily digest, or delivery retries. |
+| Revalidate & deliver | Check pending offers again before sending. Offers confirmed to have ended are not sent. |
+
+Setup establishes a baseline and can send a separate wishlist summary. It does **not** send a new-sale alert for every existing discount. Likewise, saving a target that the current price already meets does not create an initial alert.
+
+Prices stay in Steam's reported currency, with no estimated exchange-rate conversion. Target prices are currency-bound; a region/currency change may require a new target. Always confirm the checkout price on Steam.
+
+## 🧪 Beta status
+
+The bot runs on the existing Azure VM. **Real-user testing is underway; general-release acceptance is still pending.**
+
+- [x] First Turkish desktop setup and command trials
+- [x] Encrypted offsite backup, restore, and independent alarm exercises
+- [x] Published help, privacy, and terms pages
+- [ ] At least seven days of real-world use
+- [ ] Real sale alerts, scheduled delivery, and duplicate checks
+- [ ] English, mobile, and consented data-deletion trials
+
+[Roadmap and acceptance notes, TR →](docs/phase4-beta.tr.md)
+
+
+</details>
 
 ---
 
