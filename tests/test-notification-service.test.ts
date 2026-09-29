@@ -6,6 +6,18 @@ import { WishlistStateRepository } from '../src/persistence/wishlist-state-repos
 import type { WishlistItem } from '../src/domain/steam.js';
 
 describe('TestNotificationService', () => {
+  it('records receipt latency as a test metric without recipient or message identifiers', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const sender = createSender(vi.fn(async (batch) => ({
+      messageId: 'private-message', channelId: 'private-channel',
+      deliveredAt: new Date(Date.parse(batch.notifications[0].createdAt) + 450).toISOString(),
+    })));
+    try {
+      await new TestNotificationService(sender).send('private-recipient', 'en');
+      expect(log.mock.calls).toEqual([['[test-notification-timing] candidateToDeliveryMs=450']]);
+    } finally { log.mockRestore(); }
+  });
+
   it('sends an in-memory example without writing sale or notification records', async () => {
     const database = createDatabase(':memory:');
     seedSaleNotification(database);

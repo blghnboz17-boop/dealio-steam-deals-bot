@@ -6,6 +6,7 @@
 - Kayıtlı wishlist okuması kullanıcıya ait arka plan işleminin bitmesini beklemez. Yeni hesap, bölge ve dil için eski kayıt kullanılmaz.
 - Geçmiş ve bildirim ritmi ekranları Steam'e erişim gerektirmez. Bu ekranlardan wishlist'e geçilirse liste ihtiyaç anında yüklenir.
 - Steam yenilemesi sürerken menü, filtre ve sayfa geçişleri kullanılabilir. Aynı panelde tekrarlanan yenilemeler tek istekte birleşir.
+- Kullanıcının farklı panellerindeki aynı yapılandırmaya ait yüklemeler de tek isteği paylaşır. Bir yükleme bittikten sonra 30 saniye boyunca yeni ağ yüklemesi başlatılmaz; başarısız denemeler de dahildir. Kayıtlı liste okumaları bu sınırdan etkilenmez. Bekleme süresi kullanıcıya gösterilir. Hesap/bölge/dil değişince eski yapılandırmanın devam eden sonucu paylaşılmaz. Bu sınır tek bot sürecinde uygulanır; yeniden başlatmada sıfırlanır ve otomatik tarama zamanlamasını değiştirmez.
 - Panel kapandıktan sonra gelen yenileme sonucu paneli yeniden açmaz. Hesap/bölge sürümü değişmişse eski panel yeni veriyi çizmez.
 - Oyun kuralları oyun başına sorgulanmaz; kullanıcı ve yapılandırma sürümüne göre tek sorguda alınır. Geçmiş/fiyat geçmişi yalnız ilgili ekranda okunur.
 
@@ -32,3 +33,18 @@ Yerel geliştirme makinesinde `npm run typecheck`, `npm test` ve `npm run build`
 Canlı Discord kontrolü: `/dealio`, `/setup`, `/status`, `/wishlist` ekranlarını aç; wishlist yenilenirken geçmişe ve tekrar wishlist'e geç; aynı kontrolleri ikinci bir Discord kullanıcısıyla tekrarla. Sorun varsa yaklaşık saatiyle birlikte ilgili timing kaydını incele. Otomatik testler kullanıcının Discord istemcisindeki görünür gecikmeyi ölçmez.
 
 Mevcut 1 GiB sunucuda tam test paketi çalıştırılmaz. Derleme ve testler yerelde yapılır. Kaynak sürümü, dağıtılan JavaScript dosyaları ve servis sağlığı ayrıca doğrulanır. Steam/Discord kesintileri ve ağ gecikmesi kod optimizasyonuyla sıfırlanamaz; yeni fiyatın doğrulanması için gerçek Steam yanıtı beklenir.
+
+## Canlı ölçüm
+
+`/test-notification` için Discord teslim makbuzundan hesaplanan süre `testDeliveries` alanında ayrı raporlanır. Bu kontrollü DM denemesi taşıma yolunu doğrular; doğal bir indirim tespitini veya kalıcı kuyrukta beklemeyi ölçmez. Gerçek indirim teslimatları örnek üretince `deliveries` alanında ayrıca değerlendirilir.
+
+Yeni sürüm dağıtıldıktan sonra, üretim sunucusunda şu iki salt okunur komutu çalıştır:
+
+```bash
+journalctl -u dealio --since '7 days ago' -o cat --no-pager | npm run metrics:report
+npm run monitor:preview
+```
+
+İlk komut kimliksiz Discord ilk yanıt sürelerinin p95 değerini, üç saniyeyi aşan yanıt sayısını, otomatik tarama sürelerini ve hata sayılarını, aday kaydından Discord'un kabul ettiği DM'ye kadar süreyi özetler. Teslimat sayıları `immediate`, `quiet` ve `digest` olarak ayrılır; `immediate` p95 değeri sessiz saat ve günlük özet teslimatlarını içermez. Sınıflandırma teslimat anındaki tercihe göre yapılır; kullanıcı bekleme sırasında tercih değiştirirse önceki bekleme nedeni bu günlükte korunmaz. İkinci komut mevcut sağlık, son başarılı tarama, bekleyen kuyruk ve yedek yaşını gösterir. `null` yüzdelik, geçerli örnek bulunmadığı anlamına gelir; başarı olarak yorumlanmaz. Yeni günlük biçiminden önceki kayıtlar rapora dahil edilmez.
+
+Discord ilk yanıtı üç saniyenin altında kalmalıdır; canlı beta hedefi p95 için iki saniyenin altıdır. Tespitten anlık DM teslimine p95 için beş dakika hedeflenir. Bu değerler ölçülüp karşılanmadan hız iddiası yayımlanmaz. Adaydan DM'ye süre, Steam'de indirim başladığı andan taramaya kadar geçen süreyi içermez. Günlük özet ve sessiz saatler nedeniyle bekletilen bildirimler ayrı değerlendirilir.

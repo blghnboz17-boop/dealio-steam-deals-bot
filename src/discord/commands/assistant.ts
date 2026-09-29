@@ -32,6 +32,8 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
   await measureDiscordOperation(interaction,'assistant.ack',()=>interaction.deferReply({flags:MessageFlags.Ephemeral}));
   const user=interaction.user.id, config=service.config(user), language=config?.language??languageFromDiscordLocale(interaction.locale);
   const tr=language==='tr';
+  const cooldownNotice=(seconds:number)=>tr?`Yeniden yenilemek için ${seconds} saniye bekle. Bu sınır tüm panellerinde ortaktır.`
+    :`Wait ${seconds} seconds before refreshing again. This limit is shared across all your panels.`;
   if(!config) {
     await editPanel({flags:dealioV2Flags,components:[buildNoticePanel(language,'warning',
       tr?'Önce Steam hesabını bağla':'Connect Steam first',tr?'/setup ile başlayabilirsin.':'Start with /setup.')]});return;
@@ -39,7 +41,8 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
   const result=screen==='wishlist'||screen==='detail'?await loadWishlist():null;
   if(result && result.status!=='success') {
     await editPanel({flags:dealioV2Flags,components:[buildNoticePanel(language,'warning',
-      tr?'Wishlist alınamadı':'Wishlist unavailable',tr?'Steam’e erişilemiyor. Biraz sonra yeniden dene.':'Steam is unavailable. Try again shortly.')]});return;
+      result.status==='cooldown'?(tr?'Biraz bekle':'Please wait'):(tr?'Wishlist alınamadı':'Wishlist unavailable'),
+      result.status==='cooldown'?cooldownNotice(result.retryAfterSeconds):(tr?'Steam’e erişilemiyor. Biraz sonra yeniden dene.':'Steam is unavailable. Try again shortly.'))]});return;
   }
   let items:AssistantViewData['items']=result?.items??[],capturedAt=result?.capturedAt??new Date().toISOString();
   let loaded=result!==null;
@@ -85,6 +88,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
         view.refreshing=false;
         if(collector.ended||signal?.aborted)return;
         if(fresh.status==='success'){items=fresh.items;capturedAt=fresh.capturedAt;loaded=true;}
+        else if(fresh.status==='cooldown')view.notice=cooldownNotice(fresh.retryAfterSeconds);
         else view.notice=tr?'Steam yenilemesi başarısız. Son kayıtlı liste gösteriliyor.':'Steam refresh failed. Showing the last saved wishlist.';
         await render();
       }),

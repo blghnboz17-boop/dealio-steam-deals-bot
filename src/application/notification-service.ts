@@ -1,4 +1,4 @@
-import { redactSecrets } from './safe-logger.js';
+import { redactSecrets, safeLogger } from './safe-logger.js';
 import { deliveryAllowed } from '../domain/notification-preference.js';
 import type { Language } from '../domain/user-config.js';
 import type { StoreCountryCode } from '../domain/store-country.js';
@@ -143,8 +143,7 @@ export class NotificationService {
     const assistant = this.wishlistStateRepository.assistant;
     const preference = assistant.preference(discordUserId);
     if (!deliveryAllowed(preference, this.now())) return {candidateCount:0,sentCount:0,failedCount:0};
-    const pending = assistant.db.prepare(`SELECT 1 FROM notification_log WHERE discord_user_id=? AND config_version=?
-      AND status IN ('candidate','failed','sending') LIMIT 1`).get(discordUserId,config.configVersion);
+    const pending = this.wishlistStateRepository.hasPendingNotifications(discordUserId, config.configVersion);
     if (pending && this.revalidate && !await this.revalidate(discordUserId))
       return {candidateCount:0,sentCount:0,failedCount:0};
     // A removed/replaced account must never receive an old queued message.
@@ -270,9 +269,12 @@ export class NotificationService {
     batch: DurableNotificationBatch,
   ): Promise<BatchDeliveryOutcome> {
     let receipt: DeliveryReceipt | void;
+    let deliveryMode: 'digest' | 'quiet' | 'immediate' = 'immediate';
     try {
       const user=batch.notifications[0].discordUserId;
-      const digest=this.wishlistStateRepository.assistant.preference(user).mode==='digest';
+      const preferenceMode = this.wishlistStateRepository.assistant.preference(user).mode;
+      const digest = preferenceMode === 'digest';
+      deliveryMode = preferenceMode === 'instant' ? 'immediate' : preferenceMode;
       receipt = digest ? await this.sender.send(batch,batch.language,{digest:true}) : await this.sender.send(batch,batch.language);
     } catch (error: unknown) {
       if (error instanceof NotificationDeliveryCancelledError) {
@@ -312,6 +314,17 @@ export class NotificationService {
 
     try {
       this.wishlistStateRepository.markNotificationBatchSent(batch, receipt || undefined);
+      if (receipt) {
+        const deliveredMs = Date.parse(receipt.deliveredAt);
+        for (const notification of batch.notifications) {
+          const candidateMs = Date.parse(notification.createdAt);
+          if (Number.isFinite(deliveredMs) && Number.isFinite(candidateMs)) {
+            safeLogger.log(
+              `[notification-timing] candidateToDeliveryMs=${Math.max(0, deliveredMs - candidateMs)} mode=${deliveryMode}`,
+            );
+          }
+        }
+      }
       return {
         sentCount: batch.notifications.length,
         failedCount: 0,

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "gate": "testBotDesktop",
+  "commit": "replace-with-full-tested-git-sha",
+  "passed": false,
+  "checkedAt": "",
+  "summary": "",
+  "artifacts": []
+}

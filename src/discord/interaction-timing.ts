@@ -27,6 +27,11 @@ export async function measureDiscordOperation<T>(
     const phase = operation.slice(operation.lastIndexOf('.') + 1);
     const acknowledgement = ['ack', 'button-ack', 'modal', 'modal-submit-ack'].includes(phase);
     const lateAcknowledgement = acknowledgement && (interactionAgeMs ?? 0) >= 2000;
+    if (acknowledgement) {
+      safeLogger.log('[discord-metric]', JSON.stringify({
+        operation, durationMs, failed, interactionAgeMs,
+      }));
+    }
     if (failed || durationMs >= 1000 || lateAcknowledgement) {
       // Never log interaction objects, response bodies, custom IDs or error URLs.
       safeLogger.warn('[discord-timing]', {

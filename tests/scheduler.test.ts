@@ -109,6 +109,30 @@ function createScheduler(
 }
 
 describe('WishlistScheduler', () => {
+  it('reports aggregate scan duration and Steam item errors without account identifiers', async () => {
+    let nowMs = Date.parse('2026-08-22T00:00:00.000Z');
+    const checkService = {
+      check: vi.fn().mockImplementation(async () => {
+        nowMs += 1_250;
+        return {
+          ...successResult(), checkedCount: 3,
+          failedItems: [{ appId: 10, code: 'STEAM_UPSTREAM_ERROR' }],
+        };
+      }),
+    };
+    const { scheduler, logger } = createScheduler(
+      [user('sensitive-user-id')], checkService,
+      createNotificationService(), createClock(), 3,
+      createScheduleRepository(), () => new Date(nowMs),
+    );
+    await scheduler.runOnce();
+    const messages = (logger.info as ReturnType<typeof vi.fn>).mock.calls.flat().join('\n');
+    expect(messages).toContain('durationMs=1250');
+    expect(messages).toContain('checkedGames=3');
+    expect(messages).toContain('steamItemErrors=1');
+    expect(messages).not.toContain('sensitive-user-id');
+  });
+
   it('checks every enabled configured user', async () => {
     const checkService = { check: vi.fn().mockResolvedValue(successResult()) };
     const { scheduler } = createScheduler(

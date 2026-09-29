@@ -1,6 +1,7 @@
 import type { Language } from '../domain/user-config.js';
 import type { StoreCountryCode } from '../domain/store-country.js';
 import type { NotificationSender, SaleNotification } from './notification-service.js';
+import { safeLogger } from './safe-logger.js';
 
 const exampleNotification: Omit<SaleNotification, 'discordUserId' | 'createdAt'> = {
   appId: 620,
@@ -72,10 +73,16 @@ export class TestNotificationService {
       throw new Error('Test notification could not be planned as one Discord message');
     }
 
-    await this.sender.send(
+    const receipt = await this.sender.send(
       batch,
       language,
       { test: true },
     );
+    if (receipt) {
+      const latency = Date.parse(receipt.deliveredAt) - Date.parse(notification.createdAt);
+      if (Number.isFinite(latency) && latency >= 0) {
+        safeLogger.log(`[test-notification-timing] candidateToDeliveryMs=${latency}`);
+      }
+    }
   }
 }

@@ -13,6 +13,15 @@ import {
 export class NotificationQueueRepository {
   public constructor(private readonly database: DatabaseSync) {}
 
+  public hasPendingNotifications(discordUserId: string, configVersion: number): boolean {
+    return this.database.prepare(`
+      SELECT 1 FROM notification_log
+      WHERE discord_user_id = ? AND config_version = ?
+        AND status IN ('candidate', 'failed', 'sending')
+      LIMIT 1
+    `).get(discordUserId, configVersion) !== undefined;
+  }
+
   public recoverStaleSending(scope: WishlistScope, staleBefore: string): number {
     this.database.exec('BEGIN IMMEDIATE');
 

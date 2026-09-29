@@ -44,6 +44,16 @@ export async function handleWishlist(
   );
   const messages = messagesFor(result.language);
 
+  if (result.status === 'cooldown') {
+    await measureDiscordOperation(interaction, 'wishlist.render', () => interaction.editReply({
+      flags: dealioV2Flags,
+      components: [buildNoticePanel(result.language, 'info', result.language === 'tr' ? 'Biraz bekle' : 'Please wait',
+        result.language === 'tr' ? `Yeniden yenilemek için ${result.retryAfterSeconds} saniye bekle. Bu sınır tüm panellerinde ortaktır.`
+          : `Wait ${result.retryAfterSeconds} seconds before refreshing again. This limit is shared across all your panels.`)],
+    }));
+    return;
+  }
+
   if (result.status === 'not-configured') {
     await measureDiscordOperation(interaction, 'wishlist.render', () => interaction.editReply({
       flags: dealioV2Flags,
