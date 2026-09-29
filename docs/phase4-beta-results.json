@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "cohortStartedAt": null,
+  "cohortParticipationConfirmed": true,
+  "reportedOn": "2026-09-30",
+  "reportTimezone": "Europe/Istanbul",
+  "participantCountReported": 3,
+  "evidenceSource": "operator report in conversation",
+  "participants": [],
+  "results": [
+    {
+      "scope": "three participants, aggregate report",
+      "platform": "desktop",
+      "language": "tr",
+      "checkedAt": null,
+      "scenario": "wishlist-setup",
+      "result": "reported-pass",
+      "notes": "Operator reports three friends completed setup without problems.",
+      "storeCountry": "TR"
+    },
+    {
+      "scope": "three participants, aggregate report",
+      "platform": "desktop",
+      "language": "tr",
+      "checkedAt": null,
+      "scenario": "commands-general",
+      "result": "reported-pass",
+      "notes": "Operator reports all commands tried successfully; no command-by-command evidence supplied.",
+      "storeCountry": "TR"
+    }
+  ],
+  "pendingEvidence": [
+    "first-test-date",
+    "english-client",
+    "mobile-client",
+    "seven-day-observation",
+    "real-sale-delivery",
+    "duplicate-prevention",
+    "scheduled-delivery",
+    "consented-data-deletion"
+  ],
+  "generalReleaseAccepted": false
+}

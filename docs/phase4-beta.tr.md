@@ -3,14 +3,14 @@
 Durum: başladı; kabul tamamlanmadı, genel davet kapalı.
 Teknik gözlem başlangıcı: 29 Eylül 2026 23:22 Türkiye / 20:22 UTC.
 İncelenen canlı revizyon: 93a1c9446dde3edf71bfbd4d1226f7ec6b07ae01.
-Gerçek kullanıcı grubu başlangıcı: BEKLİYOR (ilk yeni katılımcının denemesi).
+Gerçek kullanıcı katılımı: doğrulandı (30 Eylül 2026 tarihli operatör bildirimi); ilk denemenin tarihi/saati netleştiriliyor.
 En az yedi günlük gerçek kullanım bu tarihten itibaren değerlendirilir;
 boşta çalışan sunucunun geçen süresi çok kullanıcılı beta yerine sayılmaz.
 
 ## Grup ve kapsam
 
 - Operatör: yalnız masaüstü; mobil denemesi yapılmış sayılmaz.
-- Kullanıcı 2–5 arkadaş bulabileceğini belirtti; henüz katılım doğrulanmadı.
+- Operatör 3 arkadaşın kurulumu tamamladığını ve denedikleri komutların sorunsuz çalıştığını bildirdi. Üçü de masaüstü, Türkiye mağazası ve Türkçe menü kullandı; ilk deneme zamanı henüz belirtilmedi.
 - Bu ilk küçük gruptur. Önceki yol haritasındaki onlarca kullanıcıya geçişin
   yerine sayılmaz; ilk grup sorunsuz olduktan sonra kapsam ayrıca kararlaştırılır.
 - Katılımcılar B01–B05 gibi takma kodlarla kaydedilir; Discord/Steam kimliği,
@@ -36,7 +36,7 @@ Botun bulunduğu sunucuda veya önceden onaylı kurulum yoluyla katılınır.
 
 | Senaryo | TR masaüstü | EN masaüstü | Mobil | Kanıt |
 |---|---|---|---|---|
-| Yeni kurulum ve wishlist eşleştirme | bekliyor | bekliyor | bekliyor | katılımcı/saat/sonuç |
+| Yeni kurulum ve wishlist eşleştirme | 3 kişi: operatör bildirimiyle başarılı | bekliyor | bekliyor | katılımcı/saat/sonuç |
 | Menü, sayfalama, yenileme/bekleme | bekliyor | bekliyor | bekliyor | katılımcı/saat/sonuç |
 | Hedef fiyat / yüzde kuralı / susturma | bekliyor | bekliyor | bekliyor | önce/sonra, geri alma |
 | Sessiz saat / günlük özet / saat dilimi | bekliyor | bekliyor | bekliyor | beklenen ve gerçek teslim saati |
@@ -96,3 +96,22 @@ ve para biriminin doğru göründüğünü kontrol et; `/test-notification` ile 
 gelebildiğini dene. Bilgisayar mı telefon mu kullandığını, bot dilini (TR/EN),
 deneme saatini ve takıldığın yeri bildirmen yeterli. Steam şifreni paylaşma.
 Veri silme veya ayar değiştirme testlerini sonraki adımda birlikte yapacağız.
+
+## 30 Eylül 2026 — ilk katılımcı geri bildirimi
+
+Kaynak: operatörün bu sohbetteki bildirimi (doğrudan test gözlemi veya sunucu
+metriği değildir). Üç arkadaş setup sürecini sorunsuz tamamladı; operatör tüm
+komutları denediklerini ve hepsinin çalıştığını bildirdi. Tek tek komut/saat
+kaydı olmadığı için bu sonuç toplu kullanıcı bildirimi olarak tutulur.
+
+Katılım artık beklemiyor. Üçü de masaüstü, Türkiye mağazası ve Türkçe menü kullandı. İngilizce ve mobil kabul bekler; ilk deneme tarihi henüz belirtilmedi. Gerçek indirim DM'si, yinelenmeme, zamanlanmış teslim ve
+veri silme için ayrı kanıt gerekir; genel “her komut çalıştı” bildirimi bu
+senaryoların tamamlandığı anlamına gelmez. Yedi günlük süre tamamlanmadı.
+Daha fazla gönüllü katılımı planlanıyor; genel davet kapalı kalıyor.
+
+
+Ek doğrulama: üç katılımcı da bilgisayar kullandı, mağazayı Türkiye seçti ve
+Türkçe menü gördü. İngilizce/mobil kabul yapılmadı. İlk deneme tarihi henüz
+verilmedi; rapor tarihi 30 Eylül 2026, deneme tarihi yerine konulmaz.
+Günlük Codex incelemesi 30 Eylül kontrolünde PAUSED durumunda bulundu;
+yeniden etkinleştirilmedi. Bu kayıt Healthchecks durumunu doğrulamaz.
