@@ -121,3 +121,36 @@ Ek ölçüm değişikliğinde tür kontrolleri ve derleme başarılı; tam paket
 729 test geçti, bağımsız incelemede açık bulgu yok.
 Bu kayıt genel kullanıma hazır olma beyanı değildir. Bir haftalık gerçek
 kullanıcı ölçümü, uzak yedek ve bağımsız alarm sonraki aşamalardadır.
+
+### Menü ölçümünün canlı sonucu ve VM sınırı
+
+[PR #4](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/pull/4)
+sonrası kaynak revizyonu `26b5e000b6644f2a842d3b5767ebf15f18b6fa97`.
+Main CI Node 22/24 başarılı; doğrulanmış aday derlemesi VM'ye aktarıldı.
+Yeni başlangıç: `2026-09-29T19:03:37.469Z`; ready ve Discord bağlı.
+Son iki gerçek menü açılışında:
+
+| Ölçüm | İlk | İkinci |
+|---|---:|---:|
+| Komuttan ilk yanıtın kabulüne | 391 ms | 452 ms |
+| Botun veriyi hazırlaması | 2 ms | 0 ms |
+| İlk menü düzenleme isteği | 577 ms | 418 ms |
+| Komuttan menünün Discord tarafından kabulüne | 970 ms | 871 ms |
+
+Kullanıcı son denemelerin hızlı hissettirdiğini belirtti. Bu örneklerde bot içi
+veri hazırlama darboğazı görülmedi. İki örnek süreklilik garantisi değildir;
+Discord istemcisinin ekran çizimi ölçülmez. Önceki öznel dalgalanmanın kesin
+nedeni belirlenmiş sayılmaz; anonim aşama ölçümleri sonraki kullanımda açık kalır.
+
+Aday derlemesi sırasında 1 GiB / 2 vCPU VM'de bellek baskısı görüldü
+(841 MiB kullanılabilir toplam, swap yok). 18:59:56, 19:00:10 ve 19:00:21 UTC
+journald kayıtları bellek baskısı bildirdi; SSH geçici olarak banner aşamasında
+zaman aşımına uğradı ve 19:01:24 UTC'de geri geldi. Bot aynı PID ile çalışıyordu,
+yeniden başlama ve OOM ile öldürülme kaydı gözlenmedi. VM büyütülmedi.
+[Dağıtım rehberi](../deploy/README.tr.md) düzeltildi: bundan sonra derleme ve tam
+test üretim dışında yapılır, VM'ye doğrulanmış derleme aktarılır. Bu olay küçük
+VM'nin geniş canlı yük için kanıtlanmış kapasitesi olduğu şeklinde yorumlanamaz.
+
+İkinci aşamanın kontrollü güvenilirlik/kapasite kontrolleri ve canlı menü/DM
+kabulü tamamlandı. Geniş erişim kararı, sonraki aşamaların işletim güvenceleri ve
+uzun süreli beta ölçümünü gerektirir.
