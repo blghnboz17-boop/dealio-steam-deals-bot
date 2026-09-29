@@ -1,7 +1,7 @@
 # 3. aşama: açık beta işletimi
 
 Başlangıç: 29 Eylül 2026, `c65e9f0a11dce26a5f3423b72bd92c7cd7aae103`.
-Durum: devam ediyor; genel yayın onayı verilmedi.
+Durum: 3. aşamanın sınırlı beta işletim kabulü tamamlandı; genel yayın onayı verilmedi.
 
 ## İş sırası ve kabul
 
@@ -110,3 +110,16 @@ Durum: devam ediyor; genel yayın onayı verilmedi.
 
 Dördüncü aşamadaki masaüstü/mobil kullanıcı kabulü ve bir haftalık gözlem henüz
 geçti işaretlenmez. Yayın kapısının bu alanları boş kalır; genel erişim açılmaz.
+
+## Kapanış
+
+- Kullanıcı yeni kurulumdan sonra /dealio menüsü ve /test-notification DM'sinin
+  geldiğini doğruladı. Sağlık kaydı ready, Discord bağlı, otomatik restart 0.
+- Otomatik site yayın run 36624292213 başarılı; public Pages build
+  7cc614cc127ce23b454215584eaf18f77cda85ba built. Sekiz canlı HTML sayfası
+  satır sonları normalize edilerek onaylı derleme çıktısıyla aynı bulundu.
+- GitHub'daki iki işletim artifact'i toplam 157267 bayt. Yedek 6 Ekim,
+  restore kanıtı 3 Kasım 2026'da sona erecek şekilde doğrulandı.
+- Kaynak repo private; public site deposunda sadece web dosyaları var.
+- Sonraki aşama: sınırlı kullanıcı grubu, TR/EN masaüstü/mobil kabul ve en az
+  bir haftalık gerçek ölçüm. Kullanıcı onayı olmadan kapsam genişletilmez.

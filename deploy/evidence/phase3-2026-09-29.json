@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "phase": 3,
+  "scope": "limited-beta-operations",
+  "observedRuntimeCommit": "f25e212c2d703b930fef69863dabf59f4ce94666",
+  "publisherCommit": "b2c1770225e318f6ad9f2a99bdcb8ee80762d053",
+  "backupRun": "https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/runs/36622820238",
+  "restoreRun": "https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/runs/36622998327",
+  "publisherRun": "https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/runs/36624292213",
+  "restore": {
+    "ok": true,
+    "checkedAt": "2026-09-29T19:58:49.304Z",
+    "schemaVersion": 10,
+    "sha256": "42f730124809653de17501343a347f8578e335091cf384ccd1502fa464efcff2"
+  },
+  "pages": {
+    "checkedAt": "2026-09-29T20:10:37.738Z",
+    "base": "https://blghnboz17-boop.github.io/dealio-public-pages/",
+    "pages": [
+      {
+        "name": "index.html",
+        "status": 200,
+        "matchesApprovedBuild": true
+      },
+      {
+        "name": "index-en.html",
+        "status": 200,
+        "matchesApprovedBuild": true
+      },
+      {
+        "name": "privacy.html",
+        "status": 200,
+        "matchesApprovedBuild": true
+      },
+      {
+        "name": "privacy-tr.html",
+        "status": 200,
+        "matchesApprovedBuild": true
+      },
+      {
+        "name": "terms.html",
+        "status": 200,
+        "matchesApprovedBuild": true
+      },
+      {
+        "name": "terms-tr.html",
+        "status": 200,
+        "matchesApprovedBuild": true
+      },
+      {
+        "name": "help.html",
+        "status": 200,
+        "matchesApprovedBuild": true
+      },
+      {
+        "name": "help-tr.html",
+        "status": 200,
+        "matchesApprovedBuild": true
+      }
+    ]
+  },
+  "alarm": {
+    "signalStoppedAt": "2026-09-29T19:58:24Z",
+    "downObservedMinute": "2026-09-29T20:02Z",
+    "providerDeliveryObservedBeforeRecovery": true,
+    "signalResumedAt": "2026-09-29T20:02:56Z",
+    "userConfirmedEmailReceipt": true,
+    "userDescribedReceivedStatus": "success",
+    "recoveryObserved": true
+  },
+  "discordSmoke": {
+    "menuReceived": true,
+    "testDmReceived": true,
+    "confirmationSource": "user in this session"
+  },
+  "generalReleaseAccepted": false,
+  "pendingPhase4": [
+    "desktop-mobile-TR-EN-user-acceptance",
+    "one-week-observation"
+  ]
+}
