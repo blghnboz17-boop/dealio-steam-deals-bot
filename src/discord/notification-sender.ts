@@ -1,5 +1,5 @@
 import { safeLogger } from '../application/safe-logger.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   Events,
   MessageFlags,
@@ -197,6 +197,10 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
 
     const delivered = await this.client.rest.post(Routes.channelMessages(channel.id), {
       body: {
+        // Discord deduplicates recent nonces only; durable retries keep the same
+        // identity, but long outages still have at-least-once delivery semantics.
+        nonce: createHash('sha256').update(batch.batchId ?? randomUUID()).digest('hex').slice(0, 24),
+        enforce_nonce: true,
         flags: MessageFlags.IsComponentsV2,
         components: [buildSaleNotificationPanel(batch.notifications, language, options).toJSON()],
         allowed_mentions: { parse: [] },

@@ -1,3 +1,4 @@
+import { preparedStatement } from './prepared-statement.js';
 import type { DeliveryReceipt } from '../domain/wishlist-state.js';
 // SIZE_OK: Durable batch SQL and transactions form one atomic state machine.
 import { randomUUID } from 'node:crypto';
@@ -27,8 +28,7 @@ export class NotificationBatchRepository {
     scope: WishlistScope,
     now: string,
   ): DurableNotificationBatch[] {
-    const rows = this.database
-      .prepare(
+    const rows = preparedStatement(this.database,
         `SELECT batch_id, language, attempt_count, member_count
          FROM notification_batch
          WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
@@ -91,8 +91,7 @@ export class NotificationBatchRepository {
 
     try {
       const first = notifications[0];
-      this.database
-        .prepare(
+      preparedStatement(this.database,
           `INSERT INTO notification_batch
              (batch_id, discord_user_id, steam_id64, config_version, language,
               status, member_count, attempt_count, created_at,
@@ -115,8 +114,7 @@ export class NotificationBatchRepository {
         );
 
       for (const [position, notification] of notifications.entries()) {
-        const claimed = this.database
-          .prepare(
+        const claimed = preparedStatement(this.database,
             `UPDATE notification_log AS notification
              SET status = 'sending', last_attempt_at = ?,
                  next_attempt_at = NULL, last_error = NULL
@@ -162,8 +160,7 @@ export class NotificationBatchRepository {
           throw new BatchClaimConflictError('Notification batch claim lost a member');
         }
 
-        this.database
-          .prepare(
+        preparedStatement(this.database,
             `INSERT INTO notification_batch_item
                (batch_id, position, discord_user_id, config_version, app_id, sale_episode_id)
              VALUES (?, ?, ?, ?, ?, ?)`,
@@ -193,8 +190,7 @@ export class NotificationBatchRepository {
     this.database.exec('BEGIN IMMEDIATE');
 
     try {
-      const parent = this.database
-        .prepare(
+      const parent = preparedStatement(this.database,
           `UPDATE notification_batch
            SET status = 'sending', last_attempt_at = ?, next_attempt_at = NULL, last_error = NULL
            WHERE batch_id = ? AND status = 'failed' AND next_attempt_at <= ?`,
@@ -204,8 +200,7 @@ export class NotificationBatchRepository {
         throw new BatchClaimConflictError('Notification batch is no longer retryable');
       }
 
-      const members = this.database
-        .prepare(
+      const members = preparedStatement(this.database,
           `UPDATE notification_log AS notification
            SET status = 'sending', last_attempt_at = ?, next_attempt_at = NULL, last_error = NULL
            WHERE status = 'failed'
@@ -270,8 +265,7 @@ export class NotificationBatchRepository {
     this.database.exec('BEGIN IMMEDIATE');
 
     try {
-      const members = this.database
-        .prepare(
+      const members = preparedStatement(this.database,
           `UPDATE notification_log AS notification
            SET status = 'terminal_failed', next_attempt_at = NULL, last_error = ?
            WHERE status = 'failed'
@@ -285,8 +279,7 @@ export class NotificationBatchRepository {
              )`,
         )
         .run(errorMessage, batch.batchId);
-      const parent = this.database
-        .prepare(
+      const parent = preparedStatement(this.database,
           `UPDATE notification_batch
            SET status = 'terminal_failed', next_attempt_at = NULL, last_error = ?
            WHERE batch_id = ? AND status = 'failed'`,
@@ -305,8 +298,7 @@ export class NotificationBatchRepository {
   private toDurableBatch(row: NotificationBatchRow): DurableNotificationBatch {
     const batchId = textValue(row.batch_id, 'batch_id');
     const memberCount = integerValue(row.member_count, 'member_count');
-    const rows = this.database
-      .prepare(
+    const rows = preparedStatement(this.database,
         `SELECT ${notificationColumns}
          FROM notification_batch_item AS item
          JOIN notification_log AS notification
@@ -342,8 +334,7 @@ export class NotificationBatchRepository {
     this.database.exec('BEGIN IMMEDIATE');
 
     try {
-      const members = this.database
-        .prepare(
+      const members = preparedStatement(this.database,
           `UPDATE notification_log AS notification
            SET status = ?,
                attempt_count = attempt_count + ?,
@@ -368,8 +359,7 @@ export class NotificationBatchRepository {
           receipt?.deliveredAt ?? null,
           batch.batchId,
         );
-      const parent = this.database
-        .prepare(
+      const parent = preparedStatement(this.database,
           `UPDATE notification_batch
            SET status = ?,
                attempt_count = attempt_count + ?,

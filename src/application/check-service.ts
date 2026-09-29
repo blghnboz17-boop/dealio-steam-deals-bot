@@ -11,6 +11,7 @@ import { UserConfigRepository } from '../persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../persistence/wishlist-state-repository.js';
 import type { SteamClient } from '../steam/steam-client.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
+import { PersistenceWorkQueue } from './persistence-work-queue.js';
 
 export type CheckResult =
   | { readonly status: 'not-configured' }
@@ -49,6 +50,7 @@ export interface CheckRunOptions {
 const defaultCooldownMs = 5 * 60 * 1000;
 
 export class CheckService {
+  private readonly persistenceQueue = new PersistenceWorkQueue();
   private readonly runningUsers = new Set<string>();
   private readonly cooldownMs: number;
   private readonly now: () => Date;
@@ -188,7 +190,7 @@ export class CheckService {
       const completedAt = this.now().toISOString();
       if (steamResult.items.length === 0 && steamResult.errors.length > 0) {
         const errorCode = steamResult.errors[0]?.code ?? 'STEAM_UPSTREAM_ERROR';
-        this.wishlistStateRepository.runInImmediateTransaction(() => {
+        await this.persistenceQueue.run(() => this.wishlistStateRepository.runInImmediateTransaction(() => {
           const failedAppIds = steamResult.errors.map((error) => error.appId);
           this.wishlistStateRepository.markObservationStatus(
             config,
@@ -204,7 +206,7 @@ export class CheckService {
             errorCode,
             config.configVersion,
           );
-        });
+        }));
         return { status: 'unavailable', errorCode };
       }
       const knownItems = steamResult.items.filter((item) => !(
@@ -219,7 +221,7 @@ export class CheckService {
         ...steamResult.items.map((item) => item.appId),
         ...steamResult.errors.map((error) => error.appId),
       ];
-      const notificationCandidates = this.wishlistStateRepository.runInImmediateTransaction(() => {
+      const notificationCandidates = await this.persistenceQueue.run(() => this.wishlistStateRepository.runInImmediateTransaction(() => {
         this.wishlistStateRepository.assistant.saveSnapshot(config, steamResult, completedAt);
         const candidates: NotificationCandidate[] = [];
         for (const item of knownItems) {
@@ -260,7 +262,7 @@ export class CheckService {
           },
         );
         return candidates;
-      });
+      }));
 
       return {
         status: 'success',

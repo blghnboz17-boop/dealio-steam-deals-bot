@@ -141,6 +141,38 @@ const candidate: NotificationCandidate = {
 const batch = { notifications: [candidate] as const };
 
 describe('DiscordNotificationSender', () => {
+  it('deduplicates an accepted message with a lost response using the durable batch identity', async () => {
+    const accepted = new Map<string, string>();
+    const post = vi.fn(async (route: string, request: { body: Record<string, unknown> }) => {
+      if (route === '/users/@me/channels') return { id: '123' };
+      const nonce = request.body.nonce as string;
+      expect(nonce).toMatch(/^[a-f0-9]{24}$/);
+      expect(request.body.enforce_nonce).toBe(true);
+      if (accepted.has(nonce)) return { id: accepted.get(nonce) };
+      accepted.set(nonce, String(accepted.size + 100));
+      throw new Error('response lost after acceptance');
+    });
+    const durable = { ...batch, batchId: 'durable-batch-1' };
+    await expect(new DiscordNotificationSender({ rest: { post } } as never).send(durable, 'en'))
+      .rejects.toThrow('response lost');
+    const receipt = await new DiscordNotificationSender({ rest: { post } } as never)
+      .send(durable, 'en');
+    expect(receipt.messageId).toBe('100');
+    expect(accepted.size).toBe(1);
+    await expect(new DiscordNotificationSender({ rest: { post } } as never)
+      .send({ ...durable, batchId: 'durable-batch-2' }, 'en')).rejects.toThrow('response lost');
+    expect(accepted.size).toBe(2);
+  });
+
+  it('gives separate test deliveries different nonces', async () => {
+    const post = vi.fn().mockResolvedValue({ id: '123' });
+    const sender = new DiscordNotificationSender({ rest: { post } } as never);
+    await sender.send(batch, 'en', { test: true });
+    await sender.send(batch, 'en', { test: true });
+    expect(post.mock.calls[1]?.[1]?.body.nonce).toEqual(expect.any(String));
+    expect(post.mock.calls[1]?.[1]?.body.nonce).not.toBe(post.mock.calls[3]?.[1]?.body.nonce);
+  });
+
   it('creates a DM channel and sends a mention-safe Components V2 panel with one signal', async () => {
     const post = vi
       .fn()
@@ -193,7 +225,7 @@ describe('DiscordNotificationSender', () => {
 
   it('aborts a stalled delivery at the total deadline', async () => {
     vi.useFakeTimers();
-    const post = vi.fn(() => new Promise(() => undefined));
+    const post = vi.fn((_route: string, _options: { signal: AbortSignal }) => new Promise(() => undefined));
     const sender = new DiscordNotificationSender(
       { rest: { post } } as never,
       { timeoutMs: 1_000 },

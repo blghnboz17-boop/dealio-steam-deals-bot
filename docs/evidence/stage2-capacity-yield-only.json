@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-29T18:38:00.864Z",
+  "node": "v24.19.0",
+  "platform": "win32",
+  "profile": {
+    "users": 50,
+    "gamesPerUser": 500,
+    "sharedGameCatalog": true,
+    "syntheticTransports": true,
+    "fileSqlite": true
+  },
+  "phases": [
+    {
+      "phase": "baseline",
+      "elapsedMs": 2179,
+      "rssMiB": 337
+    },
+    {
+      "phase": "sale",
+      "elapsedMs": 11025,
+      "rssMiB": 265
+    },
+    {
+      "phase": "delivery",
+      "elapsedMs": 116877,
+      "rssMiB": 341
+    },
+    {
+      "phase": "same-sale",
+      "elapsedMs": 10572,
+      "rssMiB": 592
+    }
+  ],
+  "totalMs": 140895,
+  "sampledPeakRssMiB": 1089,
+  "eventLoopDelayP99Ms": 293,
+  "eventLoopDelayMaxMs": 803,
+  "steam": {
+    "peakConcurrency": 3,
+    "wishlistRequests": 150,
+    "priceRequests": 1000
+  },
+  "notifications": {
+    "candidates": 25000,
+    "sent": 25000,
+    "messages": 5000,
+    "lost": 0,
+    "duplicateMessages": 0
+  },
+  "caveats": [
+    "Synthetic shared catalog; not a live API or VM SLA.",
+    "Memory is sampled process RSS, not whole-host usage.",
+    "Long ambiguous delivery can duplicate after Discord nonce expiry; see resilience tests."
+  ]
+}
