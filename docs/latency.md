@@ -36,6 +36,8 @@ Mevcut 1 GiB sunucuda tam test paketi çalıştırılmaz. Derleme ve testler yer
 
 ## Canlı ölçüm
 
+`/test-notification` için Discord teslim makbuzundan hesaplanan süre `testDeliveries` alanında ayrı raporlanır. Bu kontrollü DM denemesi taşıma yolunu doğrular; doğal bir indirim tespitini veya kalıcı kuyrukta beklemeyi ölçmez. Gerçek indirim teslimatları örnek üretince `deliveries` alanında ayrıca değerlendirilir.
+
 Yeni sürüm dağıtıldıktan sonra, üretim sunucusunda şu iki salt okunur komutu çalıştır:
 
 ```bash

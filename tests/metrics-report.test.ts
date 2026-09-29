@@ -11,9 +11,11 @@ describe('operational metrics report', () => {
       '[notification-timing] candidateToDeliveryMs=60000 mode=immediate',
       '[notification-timing] candidateToDeliveryMs=7200000 mode=quiet',
       '[notification-timing] candidateToDeliveryMs=3600000 mode=digest',
+      '[test-notification-timing] candidateToDeliveryMs=450',
       '[discord-metric] malformed',
     ]);
     expect(report).toEqual({
+      testDeliveries: { count: 1, p95CandidateToDeliveryMs: 450 },
       acknowledgements: {
         count: 2, failed: 1, overThreeSeconds: 1,
         p95AgeMs: 3100, p95DurationMs: 200,

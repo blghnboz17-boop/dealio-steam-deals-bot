@@ -14,7 +14,9 @@ export function summarizeOperationalLogs(lines) {
   const scanDurations = [];
   const deliveryLatencies = [];
   const immediateDeliveryLatencies = [];
+  const testDeliveryLatencies = [];
   const report = {
+    testDeliveries: { count: 0, p95CandidateToDeliveryMs: null },
     acknowledgements: { count: 0, failed: 0, overThreeSeconds: 0, p95AgeMs: null, p95DurationMs: null },
     scans: {
       runs: 0, users: 0, completed: 0, errors: 0, checkedGames: 0,
@@ -29,6 +31,15 @@ export function summarizeOperationalLogs(lines) {
   };
 
   for (const line of lines) {
+    const testDelivery = line.match(/\[test-notification-timing\] candidateToDeliveryMs=(\d+)/);
+    if (testDelivery) {
+      const latency = Number(testDelivery[1]);
+      if (Number.isSafeInteger(latency)) {
+        testDeliveryLatencies.push(latency);
+        report.testDeliveries.count += 1;
+      }
+      continue;
+    }
     const ackMarker = '[discord-metric] ';
     const ackIndex = line.indexOf(ackMarker);
     if (ackIndex >= 0) {
@@ -87,5 +98,6 @@ export function summarizeOperationalLogs(lines) {
   report.scans.p95DurationMs = percentile95(scanDurations);
   report.deliveries.p95CandidateToDeliveryMs = percentile95(deliveryLatencies);
   report.deliveries.p95ImmediateCandidateToDeliveryMs = percentile95(immediateDeliveryLatencies);
+  report.testDeliveries.p95CandidateToDeliveryMs = percentile95(testDeliveryLatencies);
   return report;
 }
