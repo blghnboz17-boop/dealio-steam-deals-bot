@@ -15,8 +15,17 @@
     "testFiles": 57,
     "tests": 726
   },
-  "vmCandidateChecks": { "typecheck": true, "scenarioTypecheck": true, "build": true, "scenarioTests": 91 },
-  "health": { "phase": "ready", "discordReady": true, "heartbeatAgeSeconds": 6.885 },
+  "vmCandidateChecks": {
+    "typecheck": true,
+    "scenarioTypecheck": true,
+    "build": true,
+    "scenarioTests": 91
+  },
+  "health": {
+    "phase": "ready",
+    "discordReady": true,
+    "heartbeatAgeSeconds": 6.885
+  },
   "pendingNotifications": 0,
   "testedBuildMatches": true,
   "backup": {
@@ -26,7 +35,10 @@
     "restoreVerified": true,
     "offsiteConfigured": false
   },
-  "service": { "restarts": 0, "memoryCurrentBytes": 74645504 },
+  "service": {
+    "restarts": 0,
+    "memoryCurrentBytes": 74645504
+  },
   "postDeployUserConfirmation": {
     "wishlistOpened": true,
     "testDmReceived": true,
@@ -34,19 +46,89 @@
     "repeatUserFeedback": "Second repeat felt a little slower than the first."
   },
   "postDeployMetrics": {
-    "testDeliveries": { "count": 1, "p95CandidateToDeliveryMs": 681 },
-    "acknowledgements": { "count": 2, "failed": 0, "overThreeSeconds": 0, "p95AgeMs": 902 },
-    "initialMenuAcknowledgement": { "ageMs": 902, "requestDurationMs": 796 },
+    "testDeliveries": {
+      "count": 1,
+      "p95CandidateToDeliveryMs": 681
+    },
+    "acknowledgements": {
+      "count": 2,
+      "failed": 0,
+      "overThreeSeconds": 0,
+      "p95AgeMs": 902
+    },
+    "initialMenuAcknowledgement": {
+      "ageMs": 902,
+      "requestDurationMs": 796
+    },
     "renderOrLoadWarningsOverOneSecond": 0,
     "repeatMenuAcknowledgements": [
-      { "ageMs": 486, "requestDurationMs": 326 },
-      { "ageMs": 368, "requestDurationMs": 284 }
+      {
+        "ageMs": 486,
+        "requestDurationMs": 326
+      },
+      {
+        "ageMs": 368,
+        "requestDurationMs": 284
+      }
     ]
   },
   "limitations": [
     "Synthetic capacity does not establish a live API or VM SLA.",
     "Ambiguous delivery after Discord nonce expiry can duplicate a message.",
-    "Acknowledgement speed does not fully explain the perceived menu delay. Sub-second load/render and initial-open timing are being added; client-side rendering remains unmeasured.",
+    "Latest menu samples were accepted by Discord in 970 and 871 ms; data load took 2 and 0 ms. Two samples cannot establish sustained latency, and client rendering remains unmeasured.",
     "Offsite backup, independent alerts and week-long beta acceptance belong to later phases."
-  ]
+  ],
+  "uiFollowUp": {
+    "sourceCommit": "26b5e000b6644f2a842d3b5767ebf15f18b6fa97",
+    "ciUrl": "https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/runs/36616458238",
+    "ciConclusion": "success",
+    "localChecks": {
+      "typecheck": true,
+      "scenarioTypecheck": true,
+      "build": true,
+      "testFiles": 57,
+      "tests": 729
+    },
+    "startedAt": "2026-09-29T19:03:37.469Z",
+    "health": {
+      "phase": "ready",
+      "discordReady": true,
+      "restarts": 0
+    },
+    "userFeedback": "Both latest openings felt fast.",
+    "menuSamples": [
+      {
+        "ackAgeMs": 391,
+        "loadMs": 2,
+        "discordEditMs": 577,
+        "menuAcceptedAgeMs": 970
+      },
+      {
+        "ackAgeMs": 452,
+        "loadMs": 0,
+        "discordEditMs": 418,
+        "menuAcceptedAgeMs": 871
+      }
+    ],
+    "clientRenderingMeasured": false
+  },
+  "vmBuildIncident": {
+    "date": "2026-09-29",
+    "sku": "Standard B2ts v2",
+    "vcpus": 2,
+    "provisionedMemoryGiB": 1,
+    "reportedMemoryMiB": 841,
+    "swapMiB": 0,
+    "causeEvidence": "Candidate typecheck/build overlapped kernel journald memory-pressure notices and temporary SSH banner timeouts.",
+    "pressureNoticesUtc": [
+      "18:59:56",
+      "19:00:10",
+      "19:00:21"
+    ],
+    "sshRecoveredUtc": "19:01:24",
+    "botRestartedDuringIncident": false,
+    "oomKillObserved": false,
+    "mitigation": "Build and run full tests outside production; transfer verified artifacts. Documented in deploy/README.tr.md.",
+    "resized": false
+  }
 }

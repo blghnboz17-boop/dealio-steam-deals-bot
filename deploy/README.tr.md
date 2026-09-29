@@ -2,29 +2,60 @@
 
 ## Azure'daki çalışan botu güncelleme
 
-Üretim botu Azure sunucusunda çalışır. Windows CMD veya PowerShell'de önce:
+Üretim botu 1 GiB RAM'li Azure VM'de çalışır. **Derleme, tür kontrolü ve tam
+test paketini bu VM'de çalıştırmayın.** 29 Eylül 2026 aday derlemesinde bellek
+baskısı ve geçici SSH yanıtsızlığı görüldü. Derlemeyi yerelde veya CI'da üretin.
+
+### Hazırlık: üretim dışında
+
+1. Dağıtılacak kesin commit'i temiz bir checkout'ta seçin. `npm ci`,
+   `npm run typecheck`, `npm run typecheck:scenarios`, `npm test` ve
+   `npm run build` başarılı olmalı; GitHub Node 22/24 kontrollerini doğrulayın.
+2. `dist` arşivi hazırlayın. Yanına kaynak commit'i, Node sürümünü,
+   `package-lock.json` SHA-256 değerini ve arşivin SHA-256 değerini içeren bir
+   manifest koyun. `.env`, veritabanı ve geliştirme bağımlılıklarını eklemeyin.
+3. Arşivi ve manifesti SSH/SCP ile VM'de yeni bir aday klasörüne aktarın;
+   aktarılan arşivin SHA-256 değerini manifestle karşılaştırın. Güvenilen kendi
+   derlemenizi bu boş klasörde açın; çalışan `dist` üzerine açmayın.
+
+Windows CMD veya PowerShell'den sunucuya bağlantı:
 
 ```bash
 ssh dealiobot@20.240.162.55
 ```
 
-Sunucuya bağlandıktan sonra:
+### VM'de kısa geçiş
+
+1. Çalışan Git revizyonunu, temiz çalışma ağacını ve taze sağlık kaydını
+   doğrulayın. `git fetch` sonrası hedef commit manifestteki commit ile aynı
+   olmalı. `package-lock.json` değişmemişse mevcut üretim bağımlılıkları
+   kullanılabilir. Değişmişse hedef Linux/Node sürümüne uygun üretim
+   bağımlılıklarını ayrı ortamda hazırlayıp adayla doğrulayın; Windows
+   `node_modules` klasörünü Linux'a taşımayın. Doğrulanmış bağımlılık paketi
+   hazır olmadan geçiş yapmayın.
+2. Tutarlı SQLite yedeği alın ve izole geri yükleme kontrolünü doğrulayın.
+   Eski commit, `dist` ve değişiyorsa bağımlılık paketini geri dönüş için saklayın.
+3. Git'i doğrulanmış hedef commit'e fast-forward ilerletin. Aday derleme hazırken
+   servisi durdurun; eski `dist` klasörünü yedek konuma taşıyıp aday `dist`i
+   yerine koyun. Aday ve kurulu derleme dosyalarının aynı olduğunu doğrulayın.
+4. Servisi başlatın ve sağlık kontrolünü tamamlayın:
 
 ```bash
 cd /home/dealiobot/steam-wishlist-discord-bot
-git pull --ff-only
-sudo systemctl stop dealio
-npm ci
-npm ci --prefix .opencode
-npm run typecheck
-npm run typecheck:handoff
-npm test
-npm run build
 sudo systemctl start dealio
 sudo systemctl status dealio --no-pager
 ```
 
-Derleme veya test başarısızsa yeni sürümü başlatmadan önce hatayı giderin.
+`.runtime/bot.health.json` yeni başlangıca ait olmalı: `phase: ready`,
+`discordReady: true` ve güncel heartbeat aranır. Gerçek menü/test DM kabulünü
+ve anonim süre kayıtlarını kontrol edin. Başarısızsa servisi durdurup saklanan
+derleme, bağımlılıklar ve Git revizyonuna dönün; veritabanı şeması değiştiyse
+önceden doğrulanmış geri dönüş planını uygulayın. Veritabanını körlemesine eski
+yedekle değiştirmek aradaki kullanıcı işlemlerini kaybedebilir.
+
+Kayda test edilen kaynak commit'ini, dağıtılan commit'i, derleme özetini,
+CI sonucunu, yedek/geri yükleme ve sağlık kanıtını yazın. Belgeler için daha
+sonra gelen commit'leri derlemenin kaynak commit'iyle karıştırmayın.
 Tarama aralığı sunucudaki `.env` dosyasında `POLL_INTERVAL_HOURS=0.5` olmalıdır.
 WSL'deki yerel `.env` değişikliği sunucuya kendiliğinden aktarılmaz.
 
