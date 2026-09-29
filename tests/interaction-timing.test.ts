@@ -4,6 +4,23 @@ import { measureDiscordOperation } from '../src/discord/interaction-timing.js';
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('Discord response timing', () => {
+  it.each(['assistant.load', 'assistant.render', 'assistant.open'] as const)(
+    'records sub-second %s separately from first-response metrics', async operation => {
+      vi.useFakeTimers(); vi.setSystemTime(10_000);
+      const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+      await measureDiscordOperation(
+        { createdTimestamp: 9_500, token: 'private-token' } as { createdTimestamp: number },
+        operation, async () => { vi.setSystemTime(10_250); return 'ok'; },
+      );
+      expect(log).toHaveBeenCalledOnce();
+      expect(log.mock.calls[0]?.[0]).toBe('[discord-ui-metric]');
+      expect(JSON.parse(log.mock.calls[0]?.[1] as string)).toMatchObject({
+        operation, durationMs: 250, interactionAgeMs: 750, failed: false,
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toContain('private-token');
+    },
+  );
+
   it('records a fast acknowledgement without logging interaction data', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(10_000);
