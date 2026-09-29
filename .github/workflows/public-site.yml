@@ -5,8 +5,8 @@ permissions:
   contents: read
 jobs:
   publish:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: public-site
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

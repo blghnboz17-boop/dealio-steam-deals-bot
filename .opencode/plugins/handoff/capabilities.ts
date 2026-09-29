@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { mkdir, open, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+
+import { replaceFile } from "./node-replace.js";
 
 import type { Event } from "@opencode-ai/sdk";
 
@@ -77,7 +79,7 @@ export const nodeCapabilityFileSystem: CapabilityFileSystem = {
     await rm(path, { force: true });
   },
   replace: async (source, target) => {
-    await rename(source, target);
+    await replaceFile(source, target);
   },
 };
 

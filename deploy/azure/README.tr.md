@@ -48,13 +48,13 @@ Her `evidence` alanı, ana kanıt JSON dosyasına göre çözümlenen bir kayıt
 ## Tanıtım ve yasal sayfalar
 SWA oluşturulunca deployment token'ını özel GitHub reposunun public-site ortamında AZURE_STATIC_WEB_APPS_API_TOKEN sırrı olarak sakla. Publish public Dealio pages işi elle başlatılır; yalnız build-public-site.mjs izin listesindeki on dosya yayımlanır. Kaynak repo özel kalır.
 
-Yayımlanan /terms.html, /privacy.html ve Türkçe eşlerinin HTTP 200 olduğunu kontrol et. Discord Developer Portal > General Information içindeki Terms of Service URL ve Privacy Policy URL değerlerini gerçek SWA adresiyle güncelle. Eski GitHub Pages bağlantıları kullanılmaz. Desteklenen resmi API işlemi doğrulanmadan bu alanların API üzerinden güncellendiği varsayılmaz.
+Yayımlanan /terms.html, /privacy.html, /help.html ve Türkçe eşlerinin HTTP 200 olduğunu kontrol et. Yayın kanıtındaki termsUrl, privacyUrl ve supportUrl gerçek HTTPS sayfalarını göstermelidir; kapı üçünün de erişilebilir HTML olduğunu kontrol eder. Discord Developer Portal > General Information içindeki Terms of Service URL ve Privacy Policy URL değerlerini gerçek SWA adresiyle güncelle. Eski GitHub Pages bağlantıları kullanılmaz. Desteklenen resmi API işlemi doğrulanmadan bu alanların API üzerinden güncellendiği varsayılmaz.
 
 ## Geçiş ve geri dönüş
 1. Yayın kanıtı geçsin; üretim HEAD ve .env konumu kaydedilsin.
 2. Backup işini elle çalıştır ve izole geri yüklemeyi geçir.
 3. Üretimi durdur; son tutarlı SQLite yedeği ve önceki commit'i özel operatör alanına kaydet.
-4. Test edilmiş commit'e geç, npm ci ve npm run build çalıştır. Kilit, izleme ve yedek ayarları olmadan yeni sürümü açma.
+4. Test edilmiş commit'e geç ve üretim dışında hazırlanmış doğrulanmış derlemeyi kur; [dağıtım rehberini](../README.tr.md) izle. Küçük üretim VM'sinde derleme veya tam test çalıştırma. Kilit, izleme ve yedek ayarları olmadan yeni sürümü açma.
 5. Başlat; sağlık, kira, yeni /dealio, teslimat ve alarm verilerini kontrol et.
 
 Şema 10'dur. Eski koda dönerken uyumlu veritabanı yedeği de gerekir. Eski kodu yeni veritabanına karşı çalıştırma. Geri yükleme sonradan silinen kullanıcıları canlandırabilir: bildirimler kapalıyken sonraki silme taleplerini uzlaştır; gerektiğinde yeniden onay al. Kod geri dönüşü bunun yerine geçmez.

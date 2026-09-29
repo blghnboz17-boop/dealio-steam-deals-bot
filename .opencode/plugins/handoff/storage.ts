@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { open, readFile, readdir, rename, rm, mkdir } from 'node:fs/promises';
+import { open, readFile, readdir, rm, mkdir } from 'node:fs/promises';
+import { replaceFile } from './node-replace.js';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { renderHandoffMarkdown } from './render.js';
@@ -59,7 +60,7 @@ export const nodeStorageFileSystem: StorageFileSystem = {
   },
   readText: async (path) => readFile(path, 'utf8'),
   remove: async (path) => rm(path, { force: true }),
-  replace: async (source, target) => rename(source, target),
+  replace: async (source, target) => replaceFile(source, target),
 };
 
 const defaultDependencies = (): StorageDependencies => ({
