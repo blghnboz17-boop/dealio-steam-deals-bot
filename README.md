@@ -6,56 +6,61 @@
 
 <p align="center">
   A personal Steam price assistant, right inside Discord.<br>
-  Choose your price. Choose your notification schedule. Keep the context.
+  Pick your price. Choose when to hear about it. Let Dealio keep watch.
 </p>
 
 <p align="center">
-  <strong>🧪 Limited beta</strong> &nbsp;·&nbsp; 💙 Free to use &nbsp;·&nbsp; 🎮 Steam only &nbsp;·&nbsp; English &amp; Türkçe
+  <a href="#beta-status"><img src="https://img.shields.io/badge/Status-Limited_beta-8B5CF6?style=flat-square" alt="Limited beta"></a>
+  <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-View_checks-238636?style=flat-square&amp;logo=github" alt="View GitHub checks"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2980B9?style=flat-square" alt="MIT"></a>
 </p>
 
 <p align="center">
-  <a href="https://discord.com/oauth2/authorize?client_id=1540325119690412172&amp;integration_type=0&amp;scope=bot%20applications.commands&amp;permissions=0"><img src="https://img.shields.io/badge/Add_to_Discord-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Add Dealio to Discord"></a>
-  <a href="#commands"><img src="https://img.shields.io/badge/Explore_commands-1B2838?style=for-the-badge&amp;logo=steam&amp;logoColor=white" alt="Explore commands"></a>
-</p>
-
-<p align="center">
-  <a href="#commands"><img src="https://img.shields.io/badge/Steam-wishlist_tracking-171D25?style=flat-square&amp;logo=steam&amp;logoColor=white" alt="Steam wishlist tracking"></a>
-  <a href="README.tr.md"><img src="https://img.shields.io/badge/T%C3%BCrk%C3%A7e-English-2980B9?style=flat-square" alt="Türkçe and English"></a>
-  <a href="#start-in-discord"><img src="https://img.shields.io/badge/Setup-no_Steam_password-238636?style=flat-square" alt="No Steam password required"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-8B5CF6?style=flat-square" alt="MIT license"></a>
-</p>
-
-<p align="center">
-  <a href="https://discord.com/oauth2/authorize?client_id=1540325119690412172&amp;integration_type=0&amp;scope=bot%20applications.commands&amp;permissions=0"><strong>Try Dealio in Discord →</strong></a>
-  &nbsp;&nbsp; <a href="README.tr.md">🇹🇷 Türkçe</a>
-  &nbsp;&nbsp; <a href="#commands">💬 Commands</a>
-  &nbsp;&nbsp; <a href="#beta-status">🧪 Beta status</a>
+  <a href="https://blghnboz17-boop.github.io/dealio-public-pages/index-en.html">🌐 Dealio</a> &nbsp; · &nbsp; <a href="#latest-updates">✨ Latest updates</a> &nbsp; · &nbsp; <a href="#commands">💬 Commands</a> &nbsp; · &nbsp; <a href="README.tr.md">🇹🇷 Türkçe</a>
 </p>
 
 ---
 
-## 🎮 Less checking. More choosing.
+## 🎮 Less checking. More playing.
 
-Dealio follows your public Steam wishlist and sends matching price alerts by DM. Browse game artwork, set a target, and see when a price was observed—all from a private Discord panel.
+There's a game on your Steam wishlist, but the price isn't quite right. Tell Dealio what you'd like to pay. It checks Steam at regular intervals and sends you a Discord DM when your rule is met.
+
+Set a different target for each game, or use one discount threshold across your list. Choose quiet hours if you don't want late-night notifications. To browse your games or change a setting, just open `/dealio`.
 
 | 🎯 Your price | 🔕 Your schedule | 📊 Your context |
 | :--- | :--- | :--- |
 | Set a target price or a discount threshold for each game. Mute the games you want to skip. | Get alerts when detected, hold them during quiet hours, or choose a daily digest. | See Steam's regional currency, recent observed prices, and the reason behind an alert. |
 
-### ✨ Inside Dealio
+### ✨ What's inside?
 
-- 🏠 **A personal home.** Featured game artwork, observed prices, matching deals, and direct access to your wishlist, alert timing, and history.
-- 🎮 **A wishlist you can work with.** Three compact game cards per page, name search, matching-deal filters, and a detail view for each game.
-- 🎯 **Rules that stay yours.** A game can use your global discount threshold, its own percentage, or a target price in its Steam currency. Muting is independent.
-- 📬 **A delivery record.** Pending, delivered, blocked, and expired alerts, with a way to test DM access. “Delivered to Discord” does not mean “read.”
-- 📊 **An honest price history.** Up to 90 days of Dealio's own observations. New games may have little history; this is not an all-time-low database.
-- 🌍 **Two languages.** Turkish and English panels, including setup, settings, and notifications.
+- 🏠 **One place to start.** Game artwork, matching deals, notification settings, and history.
+- 🎮 **A list you can browse.** Search, filter, move through three-game pages, or open a game's details.
+- 🎯 **A choice for each game.** Use your default discount threshold, set a different percentage, or enter a target price. Mute games you want to skip.
+- 📬 **A record of your alerts.** See pending and sent DMs, and try a test message if delivery isn't working. A delivery record doesn't mean the message was read.
+- 📊 **Prices over time.** Dealio keeps its own observations for 90 days. Newly tracked games may have little history; these records don't establish an all-time low.
+- 🌍 **English and Turkish.** Both are available throughout setup, menus, and notifications. A human-led Turkish localization pass is also underway.
+
+<a name="latest-updates"></a>
+
+## ✨ Latest updates
+
+> **30 September 2026 · Limited beta, first users**
+>
+> Three desktop users completed setup with the Türkiye store and Turkish menus. They reported no problems with the commands they tried. We're now watching how notifications hold up in everyday use.
+
+Completed in this round: notification and latency measurements, reliability scenarios, encrypted offsite backups, a restore rehearsal, independent email alerts, and published help and privacy pages.
+
+[Beta notes, TR](docs/phase4-beta.tr.md) · [Operations record, TR](docs/phase3-acceptance.tr.md) · [GitHub Releases](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases)
+
+<sub>The latest tagged GitHub release is `discord`, published on 25 August 2026. The updates above are newer; that tag does not identify the current live bot revision.</sub>
 
 <a name="start-in-discord"></a>
 
 ## 🚀 Start in Discord
 
-1. **[Add Dealio to your server](https://discord.com/oauth2/authorize?client_id=1540325119690412172&integration_type=0&scope=bot%20applications.commands&permissions=0).** No administrator permission is requested.
+Dealio is being tested with a small group. If you'd like to join, get in touch through the [beta page](https://blghnboz17-boop.github.io/dealio-public-pages/index-en.html). It's free to use; the general invite will open after acceptance testing.
+
+1. **Join a server with the bot.** We'll share access details when you join the beta.
 2. **Run `/setup`.** Enter your SteamID64 or profile link, confirm your Steam Store country and language, then explicitly enable sale DMs.
 3. **Open `/dealio`.** Browse your wishlist, choose a game, and set the price you want.
 
@@ -97,18 +102,16 @@ Panels are private and bound to the person who opened them. After a timeout or b
 
 ## 🧪 Beta status
 
-**Current stage: limited beta on the existing Azure VM.** The core assistant is running. On 12 September 2026, 648 automated tests passed, CI passed on Node.js 22 and 24, and the owner reported that the manual checklist appeared to work. This is useful feedback, not a documented pass for every device or long-running delivery scenario.
+The bot runs on the existing Azure VM. **Real-user testing is underway; general-release acceptance is still pending.**
 
-Before announcing a general open beta:
+- [x] First Turkish desktop setup and command trials
+- [x] Encrypted offsite backup, restore, and independent alarm exercises
+- [x] Published help, privacy, and terms pages
+- [ ] At least seven days of real-world use
+- [ ] Real sale alerts, scheduled delivery, and duplicate checks
+- [ ] English, mobile, and consented data-deletion trials
 
-- [ ] Publish accessible privacy, terms, and help pages; update the Discord application links.
-- [ ] Verify Azure credit coverage before provisioning additional resources.
-- [ ] Enable remote backups, run a restore rehearsal, and test an independent operational alert.
-- [ ] Validate the distributed application lease and record desktop/mobile and timed-delivery acceptance.
-
-The current deployment has a pinned-host startup restriction, an application lock, and a local rollback backup. Cloud lease, backup, monitoring, and website deployment code is prepared; those external services are **not yet provisioned**.
-
-[Deployment evidence and remaining work →](deploy/IMPLEMENTATION-STATUS.tr.md)
+[Roadmap and acceptance notes, TR →](docs/phase4-beta.tr.md)
 
 ## 🔒 Privacy & control
 
@@ -116,7 +119,7 @@ Dealio stores your account identifiers, preferences, game rules, observed wishli
 
 Notification history displays the last **30 days**; price observations are retained for **90 days**. Active deliveries and ongoing-offer deduplication records may be kept longer. `/delete-data` removes active account records; existing backup copies are not rewritten by that command.
 
-Policy sources are available in the repository: [privacy](docs/privacy.html) · [terms](docs/terms.html). Public policy endpoints are still a release prerequisite.
+[Privacy](https://blghnboz17-boop.github.io/dealio-public-pages/privacy.html) · [Terms](https://blghnboz17-boop.github.io/dealio-public-pages/terms.html) · [Help](https://blghnboz17-boop.github.io/dealio-public-pages/help.html)
 
 ## ❓ A few useful answers
 
@@ -137,7 +140,7 @@ Yes. Use the notification toggle in `/status`. Your settings remain available. M
 <details>
 <summary><strong>Can an alert arrive twice?</strong></summary>
 
-Persistent deduplication prevents routine repeats for the same offer. If Discord accepts a message but its confirmation is lost, a retry can still produce a duplicate. Delivery is not guaranteed to be exactly once.
+Dealio records the alerts it sends and skips routine repeats for the same offer. If Discord accepts a message but its acknowledgement is lost, a retry can still produce a duplicate. Please report it if you see one.
 
 </details>
 
@@ -147,7 +150,7 @@ TypeScript · discord.js Components V2 · SQLite · Azure VM
 
 - [Development guide](docs/development.md) — isolated setup, environment, and checks
 - [Architecture](docs/architecture.md) — pricing, rules, delivery, and persistence
-- [Azure operations](deploy/azure/README.tr.md) — deployment prerequisites and recovery
+- [Current operations setup, TR](deploy/FREE-OPERATIONS.tr.md) — free backups, alerts, and recovery
 - [CI runs](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml) — current verification
 
 The first release stays focused on Steam wishlists. Payments, a separate web dashboard, other stores, and estimated currency conversion are outside its scope.
@@ -155,6 +158,6 @@ The first release stays focused on Steam wishlists. Payments, a separate web das
 ---
 
 <p align="center">
-  Built by <a href="https://github.com/blghnboz17-boop">Bilgehan</a> · <a href="LICENSE">MIT license</a> · Source repository is private.<br>
+  Made by <a href="https://github.com/blghnboz17-boop">Bilgehan</a>. Still growing. 💙 · <a href="LICENSE">MIT license</a> · Source repository is private.<br>
   <sub>Dealio is an independent project, not affiliated with Valve or Discord.</sub>
 </p>
