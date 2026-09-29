@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "cohortStartedAt": null,
+  "participants": [],
+  "results": [],
+  "resultExample": {
+    "participant": "B01",
+    "platform": "desktop",
+    "language": "tr",
+    "scenario": "wishlist-setup",
+    "checkedAt": null,
+    "result": "pending",
+    "notes": "No real user result recorded yet"
+  },
+  "generalReleaseAccepted": false
+}
