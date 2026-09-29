@@ -5,57 +5,62 @@
 <h1 align="center">🎮 Senin Wishlist’in. Senin kuralların.</h1>
 
 <p align="center">
-  Discord içindeki kişisel Steam fiyat asistanın.<br>
-  Fiyatını seç. Bildirim zamanını belirle. Fırsatı bilgisiyle birlikte gör.
+  Discord’daki kişisel Steam fiyat asistanın.<br>
+  Fiyatını seç. Bildirim zamanını belirle. Gerisini Dealio takip etsin.
 </p>
 
 <p align="center">
-  <strong>🧪 Sınırlı beta</strong> &nbsp;·&nbsp; 💙 Ücretsiz kullanım &nbsp;·&nbsp; 🎮 Yalnızca Steam &nbsp;·&nbsp; Türkçe &amp; English
+  <a href="#beta-durumu"><img src="https://img.shields.io/badge/Durum-S%C4%B1n%C4%B1rl%C4%B1_beta-8B5CF6?style=flat-square" alt="Sınırlı beta"></a>
+  <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-Testleri_g%C3%B6r-238636?style=flat-square&amp;logo=github" alt="GitHub testlerini görüntüle"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Lisans-MIT-2980B9?style=flat-square" alt="MIT"></a>
 </p>
 
 <p align="center">
-  <a href="https://discord.com/oauth2/authorize?client_id=1540325119690412172&amp;integration_type=0&amp;scope=bot%20applications.commands&amp;permissions=0"><img src="https://img.shields.io/badge/Discord%E2%80%99a_ekle-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Dealio’yu Discord’a ekle"></a>
-  <a href="#komutlar"><img src="https://img.shields.io/badge/Komutlar%C4%B1_ke%C5%9Ffet-1B2838?style=for-the-badge&amp;logo=steam&amp;logoColor=white" alt="Komutları keşfet"></a>
-</p>
-
-<p align="center">
-  <a href="#komutlar"><img src="https://img.shields.io/badge/Steam-wishlist_takibi-171D25?style=flat-square&amp;logo=steam&amp;logoColor=white" alt="Steam wishlist takibi"></a>
-  <a href="README.md"><img src="https://img.shields.io/badge/T%C3%BCrk%C3%A7e-English-2980B9?style=flat-square" alt="Türkçe ve English"></a>
-  <a href="#discordda-başla"><img src="https://img.shields.io/badge/Kurulum-Steam_%C5%9Fifresi_gerekmez-238636?style=flat-square" alt="Steam şifresi gerekmez"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/Lisans-MIT-8B5CF6?style=flat-square" alt="MIT lisansı"></a>
-</p>
-
-<p align="center">
-  <a href="https://discord.com/oauth2/authorize?client_id=1540325119690412172&amp;integration_type=0&amp;scope=bot%20applications.commands&amp;permissions=0"><strong>Dealio’yu Discord’da dene →</strong></a>
-  &nbsp;&nbsp; <a href="README.md">🇬🇧 English</a>
-  &nbsp;&nbsp; <a href="#komutlar">💬 Komutlar</a>
-  &nbsp;&nbsp; <a href="#beta-durumu">🧪 Beta durumu</a>
+  <a href="https://blghnboz17-boop.github.io/dealio-public-pages/">🌐 Dealio</a> &nbsp; · &nbsp; <a href="#son-gelismeler">✨ Son gelişmeler</a> &nbsp; · &nbsp; <a href="#komutlar">💬 Komutlar</a> &nbsp; · &nbsp; <a href="README.md">🇬🇧 English</a>
 </p>
 
 ---
 
-## 🎮 Daha az kontrol. Daha çok seçim.
+## 🎮 Daha az kontrol. Daha çok oyun.
 
-Dealio, herkese açık Steam wishlist’ini takip eder ve kurallarına uyan fırsatları DM ile iletir. Oyun görsellerini incele, hedef fiyat belirle ve fiyatın ne zaman gözlemlendiğini sana özel Discord panelinde gör.
+Wishlist’ine bir oyun ekledin ama şu anki fiyatı sana fazla geliyor. Dealio’ya hangi fiyatta haber almak istediğini söyle; Steam’i belirli aralıklarla kontrol edip koşulların oluştuğunda sana Discord’dan DM göndersin.
+
+Her oyun için ayrı hedef belirleyebilir, gece bildirim istemiyorsan sessiz saatlerini seçebilirsin. Listeye bakmak veya bir ayarı değiştirmek için `/dealio` yazman yeterli.
 
 | 🎯 Senin fiyatın | 🔕 Senin zamanın | 📊 Fiyatın geçmişi |
 | :--- | :--- | :--- |
 | Her oyun için hedef fiyat veya indirim eşiği belirle. Bildirim istemediğin oyunu sustur. | Tespit edilince bildirim al, sessiz saatler seç veya günlük özete geç. | Steam’in bölgesel para birimini, gözlemlenen fiyatları ve bildirimin neden geldiğini incele. |
 
-### ✨ Dealio’da neler var?
+### ✨ İçeride neler var?
 
-- 🏠 **Kişisel ana ekran.** Öne çıkan oyun görseli, gözlemlenen fiyatlar, kurallarına uygun fırsatlar ve wishlist, bildirim zamanı, geçmiş bağlantıları.
-- 🎮 **Kullanışlı wishlist.** Sayfa başına üç kompakt oyun kartı, isimle arama, uygun fırsatlar filtresi ve her oyun için detay ekranı.
-- 🎯 **Sana ait kurallar.** Oyun genel indirim eşiğini kullanabilir; kendi yüzdesi veya Steam para biriminde hedef fiyatı olabilir. Susturma ayrıca uygulanır.
-- 📬 **Teslimat kaydı.** Bekleyen, iletilen, engellenen ve geçerliliğini kaybeden bildirimler; DM erişimini deneme seçeneği. “Discord’a iletildi”, “okundu” demek değildir.
-- 📊 **Gerçek gözlemlerden fiyat geçmişi.** Dealio’nun son 90 günlük kayıtları. Yeni oyunlarda veri az olabilir; bu, tüm zamanların en düşük fiyatları arşivi değildir.
-- 🌍 **İki dil.** Kurulumdan bildirimlere kadar Türkçe ve İngilizce paneller.
+- 🏠 **Her şey tek panelde.** Oyun kapakları, kurallarına uyan indirimler, bildirim ayarları ve geçmiş.
+- 🎮 **Listende kolayca gezin.** Oyun ara, filtrele, üçer oyunluk sayfalarda dolaş veya bir oyunun detayını aç.
+- 🎯 **Her oyuna ayrı karar ver.** Genel indirim eşiğini kullan, o oyuna özel bir yüzde seç ya da doğrudan fiyat yaz. İlgilenmediğin oyunu sustur.
+- 📬 **Bildirimini takip et.** Bekleyen ve gönderilen DM’leri gör. Mesaj alamıyorsan test bildirimiyle kontrol et; gönderim kaydı mesajın okunduğu anlamına gelmez.
+- 📊 **Fiyatın zamanla nasıl değiştiğine bak.** Dealio kendi gözlemlerini 90 gün tutar. Yeni izlenen oyunların geçmişi kısa olabilir; bu kayıtlar tüm zamanların en düşük fiyatını göstermez.
+- 🌍 **Türkçe veya İngilizce kullan.** Kurulumdan bildirimlere kadar iki dil de mevcut. Türkçe metinler için ayrıca insan eliyle yerelleştirme çalışması sürüyor.
+
+<a name="son-gelismeler"></a>
+
+## ✨ Son gelişmeler
+
+> **30 Eylül 2026 · Sınırlı beta, ilk kullanıcılar**
+>
+> Üç kişi bilgisayarda, Türkiye mağazası ve Türkçe menülerle kurulumu tamamladı. Denedikleri komutlarda sorun bildirmediler. Şimdi günlük kullanımda bildirimleri ve olası aksaklıkları takip ediyoruz.
+
+Bu turda bildirim/gecikme ölçümleri, dayanıklılık senaryoları, şifreli uzak yedek, geri yükleme provası, bağımsız e-posta alarmı ve yardım/gizlilik sayfaları tamamlandı.
+
+[Beta notları](docs/phase4-beta.tr.md) · [İşletim kaydı](docs/phase3-acceptance.tr.md) · [GitHub Releases](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases)
+
+<sub>Son etiketli GitHub release’i 25 Ağustos 2026 tarihli `discord` sürümüdür. Yukarıdaki gelişmeler daha yenidir; bu etiket canlı botun güncel revizyonunu temsil etmez.</sub>
 
 <a name="discordda-başla"></a>
 
 ## 🚀 Discord’da başla
 
-1. **[Dealio’yu sunucuna ekle](https://discord.com/oauth2/authorize?client_id=1540325119690412172&integration_type=0&scope=bot%20applications.commands&permissions=0).** Yönetici izni istenmez.
+Dealio şu an küçük bir grupla deneniyor. Katılmak istersen [beta sayfasından](https://blghnboz17-boop.github.io/dealio-public-pages/) ulaşabilirsin. Kullanım ücretsiz; genel daveti testler tamamlandığında açacağız.
+
+1. **Botun bulunduğu sunucuya katıl.** Davet bilgilerini beta katılımı sırasında paylaşacağız.
 2. **`/setup` yaz.** SteamID64 veya profil bağlantını gir; gerçek Steam Store ülkeni ve dilini doğrula, ardından indirim DM’lerini açıkça onayla.
 3. **`/dealio` aç.** Wishlist’ini incele, bir oyun seç ve istediğin fiyatı belirle.
 
@@ -97,18 +102,16 @@ Paneller sana özeldir; düğmeler paneli açan kullanıcıya bağlıdır. Süre
 
 ## 🧪 Beta durumu
 
-**Mevcut aşama: Azure’daki mevcut sunucuda sınırlı beta.** Temel asistan çalışıyor. 12 Eylül 2026’da 648 otomatik test ve Node.js 22/24 GitHub kontrolleri geçti; proje sahibi manuel kontrol listesinin çalışıyor göründüğünü bildirdi. Bu geri bildirim, bütün cihazların ve uzun süreli teslimat senaryolarının belgelenmiş kabulü anlamına gelmez.
+Bot mevcut Azure VM’de çalışıyor. **Şu an gerçek kullanıcı denemesi aşamasındayız; genel kullanım kabulü henüz tamamlanmadı.**
 
-Herkese açık beta duyurusundan önce:
+- [x] İlk kullanıcılarla Türkçe masaüstü kurulumu ve komut denemeleri
+- [x] Şifreli uzak yedek, geri yükleme ve bağımsız alarmın denenmesi
+- [x] Yardım, gizlilik ve kullanım koşullarının yayımlanması
+- [ ] En az yedi günlük gerçek kullanım gözlemi
+- [ ] Gerçek indirim, zamanlanmış teslim ve tekrar bildirim kontrolleri
+- [ ] İngilizce, mobil ve onaylı veri silme denemeleri
 
-- [ ] Erişilebilir gizlilik, koşullar ve yardım sayfalarını yayımla; Discord uygulamasındaki bağlantıları güncelle.
-- [ ] Ek kaynak açmadan önce Azure kredi kapsamını doğrula.
-- [ ] Uzak yedeği etkinleştir, geri yükleme provası yap ve bağımsız operasyon alarmını dene.
-- [ ] Dağıtık uygulama kilidini doğrula; masaüstü/mobil ve zamanlı bildirim kabulünü kaydet.
-
-Mevcut kurulumda belirli sunucuya bağlı başlangıç kontrolü, uygulama kilidi ve yerel geri dönüş yedeği var. Bulut kilidi, yedek, izleme ve site yayını için kod hazır; bu dış hizmetler **henüz kurulmadı**.
-
-[Geçiş kanıtı ve kalan işler →](deploy/IMPLEMENTATION-STATUS.tr.md)
+[Yol haritası ve kabul notları →](docs/phase4-beta.tr.md)
 
 ## 🔒 Verilerin ve kontrolün
 
@@ -116,7 +119,7 @@ Dealio hesap kimliklerini, tercihlerini, oyun kurallarını, gözlemlenen wishli
 
 Bildirim geçmişi son **30 günü** gösterir; fiyat gözlemleri **90 gün** tutulur. Aktif teslimat ve devam eden tekliflerin tekrarını önleyen kayıtlar daha uzun kalabilir. `/delete-data` aktif hesap kayıtlarını siler; mevcut yedek kopyaları bu komutla yeniden yazılmaz.
 
-Politika kaynakları repoda bulunur: [gizlilik](docs/privacy-tr.html) · [koşullar](docs/terms-tr.html). Herkese erişilebilir politika bağlantıları hâlâ yayın ön koşuludur.
+[Gizlilik](https://blghnboz17-boop.github.io/dealio-public-pages/privacy-tr.html) · [Kullanım koşulları](https://blghnboz17-boop.github.io/dealio-public-pages/terms-tr.html) · [Yardım](https://blghnboz17-boop.github.io/dealio-public-pages/help-tr.html)
 
 ## ❓ Sık sorulanlar
 
@@ -137,7 +140,7 @@ Evet. `/status` içindeki bildirim düğmesini kullan. Ayarların korunur. Otoma
 <details>
 <summary><strong>Aynı bildirim iki kez gelebilir mi?</strong></summary>
 
-Kalıcı tekilleştirme aynı teklifin rutin olarak tekrar gönderilmesini önler. Discord mesajı kabul ettiği hâlde teyidi kaybolursa, yeniden deneme çift mesaj üretebilir. Tam olarak bir kez teslim garantisi verilmez.
+Dealio gönderdiği bildirimi kaydeder ve aynı teklif için normal kontrollerde tekrar mesaj atmaz. Yine de Discord mesajı kabul edip yanıtı kaybolursa yeniden deneme çift mesaj oluşturabilir. Böyle bir durum görürsen bildirebilirsin.
 
 </details>
 
@@ -147,7 +150,7 @@ TypeScript · discord.js Components V2 · SQLite · Azure VM
 
 - [Geliştirme rehberi](docs/development.md) — ayrı test kurulumu, ayarlar ve kontroller
 - [Mimari](docs/architecture.md) — fiyatlar, kurallar, teslimat ve veri
-- [Azure işletimi](deploy/azure/README.tr.md) — yayın ön koşulları ve kurtarma
+- [Mevcut işletim düzeni](deploy/FREE-OPERATIONS.tr.md) — ücretsiz yedek, alarm ve kurtarma
 - [GitHub kontrolleri](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml) — güncel doğrulamalar
 
 İlk sürüm Steam wishlist’lerine odaklanır. Ödeme sistemi, ayrı web yönetim paneli, diğer mağazalar ve tahmini para birimi dönüşümü kapsam dışındadır.
@@ -155,6 +158,6 @@ TypeScript · discord.js Components V2 · SQLite · Azure VM
 ---
 
 <p align="center">
-  <a href="https://github.com/blghnboz17-boop">Bilgehan</a> tarafından geliştirildi · <a href="LICENSE">MIT lisansı</a> · Kaynak repo özeldir.<br>
+  <a href="https://github.com/blghnboz17-boop">Bilgehan</a> tarafından geliştiriliyor. 💙 · <a href="LICENSE">MIT lisansı</a> · Kaynak repo özeldir.<br>
   <sub>Dealio bağımsız bir projedir; Valve veya Discord ile bağlantılı değildir.</sub>
 </p>
