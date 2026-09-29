@@ -1,3 +1,6 @@
+> Güncel ücretsiz beta kurulumu için `../FREE-OPERATIONS.tr.md` kullanılır.
+> Buradaki Azure Monitor/Blob şablonu ücretli alternatiftir; mevcut beta için uygulanmaz.
+
 
 # Azure açık beta kurulumu
 
