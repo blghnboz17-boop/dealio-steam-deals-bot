@@ -39,6 +39,17 @@ Her oyun için ayrı hedef belirleyebilir, gece bildirim istemiyorsan sessiz saa
 | :--- | :--- | :--- |
 | Her oyun için hedef fiyat veya indirim eşiği belirle. Bildirim istemediğin oyunu sustur. | Tespit edilince bildirim al, sessiz saatler seç veya günlük özete geç. | Steam’in bölgesel para birimini, gözlemlenen fiyatları ve bildirimin neden geldiğini incele. |
 
+## 👀 Discord’da nasıl görünüyor?
+
+<table>
+  <tr>
+    <td width="44%" valign="top"><strong>🎮 Wishlist · oyunlar ve fiyat kuralları</strong><br><br><a href="docs/assets/screenshots/wishlist-desktop.png"><img src="docs/assets/screenshots/wishlist-desktop.png" alt="Discord masaüstünde Dealio wishlist paneli: üç oyun, fiyatları, arama ve bildirim kontrolleri" width="380"></a></td>
+    <td width="56%" valign="top"><strong>📬 İndirim geldiğinde DM kutunda</strong><br><br><a href="docs/assets/screenshots/sale-dm-example.png"><img src="docs/assets/screenshots/sale-dm-example.png" alt="Outbound için önceki bir indirim DM örneği: fiyat, indirim yüzdesi ve tasarruf" width="480"></a></td>
+  </tr>
+</table>
+
+<sub>Kullanıcı tarafından paylaşılan gerçek Discord ekranları; arayüz dili İngilizce. DM görseli 22 Eylül 2026’dan bir örnektir; fiyat ve bazı arayüz ayrıntıları güncel sürümden farklı olabilir.</sub>
+
 ### ✨ İçeride neler var?
 
 - 🏠 **Her şey tek panelde.** Oyun kapakları, kurallarına uyan indirimler, bildirim ayarları ve geçmiş.

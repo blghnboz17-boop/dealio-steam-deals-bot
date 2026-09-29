@@ -39,6 +39,17 @@ Set a different target for each game, or use one discount threshold across your 
 | :--- | :--- | :--- |
 | Set a target price or a discount threshold for each game. Mute the games you want to skip. | Get alerts when detected, hold them during quiet hours, or choose a daily digest. | See Steam's regional currency, recent observed prices, and the reason behind an alert. |
 
+## 👀 A look inside Discord
+
+<table>
+  <tr>
+    <td width="44%" valign="top"><strong>🎮 Wishlist · games and price rules</strong><br><br><a href="docs/assets/screenshots/wishlist-desktop.png"><img src="docs/assets/screenshots/wishlist-desktop.png" alt="Dealio desktop wishlist panel with three games, prices, search and alert controls" width="380"></a></td>
+    <td width="56%" valign="top"><strong>📬 A sale alert in your DMs</strong><br><br><a href="docs/assets/screenshots/sale-dm-example.png"><img src="docs/assets/screenshots/sale-dm-example.png" alt="An earlier Outbound sale DM showing price, discount and savings" width="480"></a></td>
+  </tr>
+</table>
+
+<sub>Real Discord screenshots shared by the user, with English UI. The DM is an example from 22 September 2026; prices and some interface details may differ from the current version.</sub>
+
 ### ✨ What's inside?
 
 - 🏠 **One place to start.** Game artwork, matching deals, notification settings, and history.
