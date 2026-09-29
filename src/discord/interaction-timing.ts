@@ -1,6 +1,6 @@
 import { safeLogger } from '../application/safe-logger.js';
 
-type DiscordOperation = `${string}.${'ack' | 'button-ack' | 'modal' | 'modal-submit-ack' | 'render' | 'load'}`;
+type DiscordOperation = `${string}.${'ack' | 'button-ack' | 'modal' | 'modal-submit-ack' | 'render' | 'load' | 'open'}`;
 
 export async function measureDiscordOperation<T>(
   interaction: { readonly createdTimestamp?: number },
@@ -29,6 +29,12 @@ export async function measureDiscordOperation<T>(
     const lateAcknowledgement = acknowledgement && (interactionAgeMs ?? 0) >= 2000;
     if (acknowledgement) {
       safeLogger.log('[discord-metric]', JSON.stringify({
+        operation, durationMs, failed, interactionAgeMs,
+      }));
+    } else if (['load', 'render', 'open'].includes(phase)) {
+      // Keep UI work separate: its duration is not an interaction acknowledgement.
+      // Only *.open age denotes initial panel readiness; later render ages do not.
+      safeLogger.log('[discord-ui-metric]', JSON.stringify({
         operation, durationMs, failed, interactionAgeMs,
       }));
     }

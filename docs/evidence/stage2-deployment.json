@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-29T18:49:59.376Z",
+  "sourceCommit": "e8df8fb91e43133c8c6c3fccece0a6e5e650c9a7",
+  "node": "v22.23.2",
+  "ci": {
+    "url": "https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/runs/36614608903",
+    "node22": "success",
+    "node24": "success"
+  },
+  "localChecks": {
+    "typecheck": true,
+    "scenarioTypecheck": true,
+    "build": true,
+    "testFiles": 57,
+    "tests": 726
+  },
+  "vmCandidateChecks": { "typecheck": true, "scenarioTypecheck": true, "build": true, "scenarioTests": 91 },
+  "health": { "phase": "ready", "discordReady": true, "heartbeatAgeSeconds": 6.885 },
+  "pendingNotifications": 0,
+  "testedBuildMatches": true,
+  "backup": {
+    "createdAt": "2026-09-29T18:47:24.783Z",
+    "sha256": "92e76636cc26fad3251258604025db6cc54eb5e8c5c4b7510ff91c93fc8ba55a",
+    "schemaVersion": 10,
+    "restoreVerified": true,
+    "offsiteConfigured": false
+  },
+  "service": { "restarts": 0, "memoryCurrentBytes": 74645504 },
+  "postDeployUserConfirmation": {
+    "wishlistOpened": true,
+    "testDmReceived": true,
+    "userReportedPossibleOpeningDelay": true,
+    "repeatUserFeedback": "Second repeat felt a little slower than the first."
+  },
+  "postDeployMetrics": {
+    "testDeliveries": { "count": 1, "p95CandidateToDeliveryMs": 681 },
+    "acknowledgements": { "count": 2, "failed": 0, "overThreeSeconds": 0, "p95AgeMs": 902 },
+    "initialMenuAcknowledgement": { "ageMs": 902, "requestDurationMs": 796 },
+    "renderOrLoadWarningsOverOneSecond": 0,
+    "repeatMenuAcknowledgements": [
+      { "ageMs": 486, "requestDurationMs": 326 },
+      { "ageMs": 368, "requestDurationMs": 284 }
+    ]
+  },
+  "limitations": [
+    "Synthetic capacity does not establish a live API or VM SLA.",
+    "Ambiguous delivery after Discord nonce expiry can duplicate a message.",
+    "Acknowledgement speed does not fully explain the perceived menu delay. Sub-second load/render and initial-open timing are being added; client-side rendering remains unmeasured.",
+    "Offsite backup, independent alerts and week-long beta acceptance belong to later phases."
+  ]
+}

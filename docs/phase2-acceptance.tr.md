@@ -97,7 +97,27 @@ kontrol edildi; önemli açık bulgu kalmadı.
 ### Yayın doğrulaması
 
 Yerel `npm run typecheck`, `npm run typecheck:scenarios`, `npm run build` ve
-`npm test -- --maxWorkers=1` başarılı: 57 dosya, 726 test. Yayın revizyonu
-doğrulaması sürüyor. Bu kayıt tek başına VM'ye
-dağıtım veya genel kullanıma hazır olma beyanı değildir. Bir haftalık gerçek
+`npm test -- --maxWorkers=1` başarılı: 57 dosya, 726 test.
+
+[PR #3](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/pull/3)
+birleştirildi. Yayın revizyonu `e8df8fb91e43133c8c6c3fccece0a6e5e650c9a7`:
+GitHub Node 22/24 tam CI başarılı; VM Node 22.23.2 adayında derleme ve 91 ilgili
+test başarılı. Test edilen `dist` ile canlı `dist` bire bir aynı. VM `ready`,
+Discord bağlı, bekleyen bildirim 0, yeniden başlama 0. Dağıtım öncesi yerel
+SQLite yedeği yeni kodla izole geri yüklenerek doğrulandı; eski derleme saklandı.
+Kanıt: [yayın kaydı](evidence/stage2-deployment.json).
+
+Yeni sürümle gerçek menü ve test DM kullanıcı tarafından doğrulandı. DM kabul
+süresi 681 ms. İki komutun ilk yanıtları 902 ve 554 ms; başarısız veya üç saniyeyi
+aşan ilk yanıt yok. Kullanıcı menünün biraz gecikmeli açıldığını hissettiğini
+bildirdi: ilk menü yanıt isteği 796 ms sürdü; bir saniyeyi aşan render/load
+uyarısı yok. Tekrarlanan iki açılışın ilk yanıtları 486 ve 368 ms olmasına rağmen
+kullanıcı ikinciyi biraz daha yavaş hissetti. Bu nedenle yalnızca ilk yanıt
+ölçümüyle sorun kapatılmadı: bir saniyenin altındaki load/render işlemleri ve
+ilk panelin Discord tarafından kabul edilmesine kadarki toplam süre ayrı
+`discord-ui-metric` kaydına eklendi. Yeni ölçüm ilk yanıt istatistiğine katılmaz;
+menü akışını değiştirmez. İstemcinin kendi çizim süresi bu kayıtlarla ölçülemez.
+Ek ölçüm değişikliğinde tür kontrolleri ve derleme başarılı; tam paket 57 dosya /
+729 test geçti, bağımsız incelemede açık bulgu yok.
+Bu kayıt genel kullanıma hazır olma beyanı değildir. Bir haftalık gerçek
 kullanıcı ölçümü, uzak yedek ve bağımsız alarm sonraki aşamalardadır.

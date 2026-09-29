@@ -63,7 +63,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
   // Register ownership before exposing controls.
   const close=dealioUiSessions.open(interaction.id,user,['assistant'],dealioUiSessionTimeoutMs);
   let message;
-  try { message=await editPanel({flags:dealioV2Flags,components:[buildAssistantView(data(),view,interaction.id)]}); }
+  try { message=await measureDiscordOperation(interaction,'assistant.open',()=>interaction.editReply({flags:dealioV2Flags,components:[buildAssistantView(data(),view,interaction.id)]})); }
   catch(error) { close();throw error; }
   const collector=message.createMessageComponentCollector({time:dealioUiSessionTimeoutMs,
     filter:c=>c.user.id===user&&c.customId.startsWith('assistant:'+interaction.id+':')});
