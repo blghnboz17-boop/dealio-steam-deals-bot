@@ -1,3 +1,4 @@
+import { preparedStatement } from './prepared-statement.js';
 import { AssistantRepository } from './assistant-repository.js';
 // allow: SIZE_OK — Observation transitions, notification eligibility, and candidate creation form one atomic SQLite state machine.
 import { randomUUID } from 'node:crypto';
@@ -53,8 +54,7 @@ export class WishlistObservationRepository {
     configVersion?: number,
   ): WishlistItemState | null {
     const row = configVersion === undefined
-      ? this.database
-          .prepare(
+      ? preparedStatement(this.database,
             `SELECT ${stateColumns}
              FROM wishlist_item_state
              WHERE discord_user_id = ? AND app_id = ?
@@ -62,8 +62,7 @@ export class WishlistObservationRepository {
              LIMIT 1`,
           )
           .get(discordUserId, appId)
-      : this.database
-          .prepare(
+      : preparedStatement(this.database,
             `SELECT ${stateColumns}
              FROM wishlist_item_state
              WHERE discord_user_id = ? AND config_version = ? AND app_id = ?`,
@@ -75,15 +74,13 @@ export class WishlistObservationRepository {
 
   public countNotificationCandidates(discordUserId: string, configVersion?: number): number {
     const row = configVersion === undefined
-      ? this.database
-          .prepare(
+      ? preparedStatement(this.database,
             `SELECT COUNT(*) AS count
              FROM notification_log
              WHERE discord_user_id = ? AND status = 'candidate'`,
           )
           .get(discordUserId)
-      : this.database
-          .prepare(
+      : preparedStatement(this.database,
             `SELECT COUNT(*) AS count
              FROM notification_log
              WHERE discord_user_id = ? AND config_version = ? AND status = 'candidate'`,
@@ -102,8 +99,7 @@ export class WishlistObservationRepository {
     const exclusion = uniqueAppIds.length > 0
       ? `AND app_id NOT IN (${uniqueAppIds.map(() => '?').join(', ')})`
       : '';
-    const result = this.database
-      .prepare(
+    const result = preparedStatement(this.database,
         `UPDATE wishlist_item_state
          SET on_sale = 0,
              sale_episode_id = NULL,
@@ -123,7 +119,7 @@ export class WishlistObservationRepository {
         ...uniqueAppIds,
       );
 
-    this.database.prepare(`UPDATE game_rule SET initialized=0,eligible=0,event_id=NULL
+    preparedStatement(this.database,`UPDATE game_rule SET initialized=0,eligible=0,event_id=NULL
       WHERE discord_user_id=? AND config_version=? ${exclusion}`).run(scope.discordUserId,scope.configVersion,...uniqueAppIds);
     return Number(result.changes);
   }
@@ -139,7 +135,7 @@ export class WishlistObservationRepository {
       return 0;
     }
     const placeholders = uniqueAppIds.map(() => '?').join(', ');
-    const result = this.database.prepare(
+    const result = preparedStatement(this.database,
       `UPDATE wishlist_item_state
        SET observation_status = ?, last_seen_at = ?
        WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
@@ -200,8 +196,7 @@ export class WishlistObservationRepository {
           : observedAt
         : null;
 
-      this.database
-        .prepare(
+      preparedStatement(this.database,
            `INSERT INTO wishlist_item_state
              (discord_user_id, steam_id64, config_version, store_country_code, app_id, on_sale,
                sale_episode_id, sale_started_at, sale_key, currency,
@@ -253,8 +248,7 @@ export class WishlistObservationRepository {
         price.discountPercent > 0 &&
         price.finalMinor < price.initialMinor
       ) {
-        const notificationExists = this.database
-          .prepare(
+        const notificationExists = preparedStatement(this.database,
             `SELECT 1
              FROM notification_log
              WHERE discord_user_id = ? AND config_version = ?
@@ -271,8 +265,7 @@ export class WishlistObservationRepository {
           item.appId,
         );
         if (notificationExists || meetsThreshold) {
-          const result = this.database
-            .prepare(
+          const result = preparedStatement(this.database,
              `INSERT INTO notification_log
                   (discord_user_id, steam_id64, config_version, store_country_code,
                    app_id, sale_episode_id,
@@ -342,7 +335,7 @@ export class WishlistObservationRepository {
   }
 
   private findNotificationEligibility(scope: WishlistScope, appId: number): boolean {
-    const row = this.database.prepare(
+    const row = preparedStatement(this.database,
       `SELECT notification_eligible
        FROM wishlist_item_state
        WHERE discord_user_id = ? AND config_version = ? AND app_id = ?`,
@@ -356,7 +349,7 @@ export class WishlistObservationRepository {
   }
 
   private findEffectiveMinimumDiscount(scope: WishlistScope, appId: number): number {
-    const row = this.database.prepare(
+    const row = preparedStatement(this.database,
       `SELECT COALESCE(threshold.minimum_discount_percent, config.minimum_discount_percent)
          AS minimum_discount_percent
        FROM user_config AS config

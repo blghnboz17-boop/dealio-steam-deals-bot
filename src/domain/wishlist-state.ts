@@ -41,6 +41,8 @@ export interface NotificationCandidate {
 }
 
 export interface NotificationBatch<T> {
+  /** Stable delivery identity when this batch is backed by the durable queue. */
+  readonly batchId?: string;
   readonly notifications: readonly [T, ...T[]];
 }
 
