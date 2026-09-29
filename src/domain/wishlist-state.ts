@@ -23,6 +23,7 @@ export interface WishlistItemState {
 }
 
 export interface NotificationCandidate {
+  readonly headerImageUrl?: string;
   readonly reason?: string;
   readonly discordUserId: string;
   readonly steamId64: string;

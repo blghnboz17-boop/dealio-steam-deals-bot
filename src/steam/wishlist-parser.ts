@@ -1,3 +1,4 @@
+import { steamArtworkUrl } from '../domain/steam-artwork.js';
 import {
   SteamWishlistError,
   type SalePrice,
@@ -10,6 +11,7 @@ interface ParsedWishlistEntry {
 }
 
 interface ParsedAppDetails {
+  readonly headerImageUrl?: string;
   readonly name: string;
   readonly price: SalePrice | null;
 }
@@ -117,9 +119,12 @@ export function parseAppDetailsResponse(value: unknown, appId: number): ParsedAp
     schemaError(`Steam appdetails is_free for app ${appId} must be a boolean`);
   }
 
+  const headerImageUrl = steamArtworkUrl(data.header_image, appId);
+  const artwork = headerImageUrl ? { headerImageUrl } : {};
+
   if (data.is_free === true) {
     return {
-      name: data.name,
+      name: data.name, ...artwork,
       price: {
         currency: null,
         initialMinor: 0,
@@ -131,7 +136,7 @@ export function parseAppDetailsResponse(value: unknown, appId: number): ParsedAp
   }
 
   if (data.price_overview === undefined || data.price_overview === null) {
-    return { name: data.name, price: null };
+    return { name: data.name, ...artwork, price: null };
   }
 
   if (!isObject(data.price_overview)) {
@@ -170,7 +175,7 @@ export function parseAppDetailsResponse(value: unknown, appId: number): ParsedAp
   }
 
   return {
-    name: data.name,
+    name: data.name, ...artwork,
     price: {
       currency: priceOverview.currency.toUpperCase(),
       initialMinor,

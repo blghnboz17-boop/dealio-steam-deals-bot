@@ -1,3 +1,4 @@
+import { artworkAccessory } from './ui/game-artwork.js';
 import { buildHomePanel } from './home-view.js';
 import type { NotificationPreference } from '../domain/notification-preference.js';
 import type { WishlistItem } from '../domain/steam.js';
@@ -100,9 +101,8 @@ function buildPreferencesPanel(
   );
   if(mode==='home' && options.featuredDeal?.price?.currency){
     const item=options.featuredDeal;
-    container.addSectionComponents(new SectionBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(
-      `### ${tr?'Kurallarına uygun':'Matches your rules'} · ${options.eligibleDealCount??1}\n[${sanitizeGameName(item.name).slice(0,100)}](https://store.steampowered.com/app/${item.appId})\n**${formatMinorPrice(item.price!.finalMinor,item.price!.currency!,language)}** · −${item.price!.discountPercent}%`))
-      .setThumbnailAccessory(new ThumbnailBuilder().setURL(`https://cdn.akamai.steamstatic.com/steam/apps/${item.appId}/header.jpg`).setDescription(item.name.slice(0,100))));
+    container.addSectionComponents(artworkAccessory(new SectionBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(
+      `### ${tr?'Kurallarına uygun':'Matches your rules'} · ${options.eligibleDealCount??1}\n[${sanitizeGameName(item.name).slice(0,100)}](https://store.steampowered.com/app/${item.appId})\n**${formatMinorPrice(item.price!.finalMinor,item.price!.currency!,language)}** · −${item.price!.discountPercent}%`)), item));
   }
   const accountContent = [
     `### ${text.account}`,

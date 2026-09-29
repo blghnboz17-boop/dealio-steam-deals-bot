@@ -17,6 +17,7 @@ it.each(['tr', 'en'] as const)('fits the complete home panel and disables nested
     latestPriceCurrencies: ['USD'], gameDiscountOverrideCount: 1,
   };
   const item = {
+    headerImageUrl: 'https://cdn.akamai.steamstatic.com/steam/apps/570/header.jpg',
     appId: 570, name: 'A'.repeat(256), onSale: true,
     price: {currency: 'USD', initialMinor: 5999, finalMinor: 2999, discountPercent: 50, isFree: false},
     priority: 1, dateAdded: 1700000000, priceObservedAt: '2026-09-12T00:00:00Z',

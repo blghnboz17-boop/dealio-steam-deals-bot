@@ -15,6 +15,7 @@ import {
 function paidItem(appId: number, currency: string): WishlistItem {
   return {
     appId,
+    headerImageUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
     name: `Game ${appId}`,
     priority: appId,
     dateAdded: 1_700_000_000 + appId,

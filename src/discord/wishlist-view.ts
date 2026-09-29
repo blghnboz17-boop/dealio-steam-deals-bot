@@ -1,3 +1,4 @@
+import { artworkEmbed, artworkAccessory } from './ui/game-artwork.js';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -10,7 +11,6 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   TextDisplayBuilder,
-  ThumbnailBuilder,
   type APIActionRowComponent,
   type APIButtonComponent,
   type APIEmbed,
@@ -220,17 +220,12 @@ function buildWishlistV2GameSection(
   const savings = item.onSale && item.price?.currency && item.price.finalMinor < item.price.initialMinor
     ? `\n${language === 'tr' ? 'Kazancın' : 'You save'} **${formatMinorPrice(item.price.initialMinor - item.price.finalMinor, item.price.currency, language)}**`
     : '';
-  return new SectionBuilder()
+  return artworkAccessory(new SectionBuilder()
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
         `### [${sanitizeWishlistGameName(item.name)}](${storeUrl})\n${price}${savings}\n-# ${text.wishlistThreshold(threshold, override !== undefined)}`,
       ),
-    )
-    .setThumbnailAccessory(
-      new ThumbnailBuilder()
-        .setURL(`https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${item.appId}/header.jpg`)
-        .setDescription(item.name.slice(0, 100)),
-    );
+    ), item);
 }
 
 export function filterAndSortWishlist(
@@ -417,9 +412,7 @@ export function buildWishlistGameEmbed(
     title: sanitizeWishlistGameName(item.name),
     url: storeUrl,
     fields,
-    image: {
-      url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${item.appId}/header.jpg`,
-    },
+    ...artworkEmbed(item),
   };
 }
 

@@ -28,6 +28,7 @@ export interface NotificationSender {
 }
 
 export interface SaleNotification {
+  readonly headerImageUrl?: string;
   readonly reason?: string;
   readonly discordUserId: string;
   readonly appId: number;
@@ -265,6 +266,22 @@ export class NotificationService {
     };
   }
 
+  private withArtwork(batch: DurableNotificationBatch): DurableNotificationBatch {
+    // Presentation metadata is optional; it must never prevent delivery or change its identity.
+    try {
+      const config = this.userConfigRepository.findByDiscordUserId(batch.notifications[0].discordUserId);
+      if (!config) return batch;
+      const snapshot = this.wishlistStateRepository.assistant.snapshot(config);
+      const images = new Map(snapshot?.items.map(item => [item.appId, item.headerImageUrl]));
+      const enrich = (item: NotificationCandidate): NotificationCandidate => {
+        const headerImageUrl = images.get(item.appId);
+        return headerImageUrl ? { ...item, headerImageUrl } : item;
+      };
+      const [first, ...rest] = batch.notifications;
+      return { ...batch, notifications: [enrich(first), ...rest.map(enrich)] };
+    } catch { return batch; }
+  }
+
   private async deliverClaimedBatch(
     batch: DurableNotificationBatch,
   ): Promise<BatchDeliveryOutcome> {
@@ -275,7 +292,8 @@ export class NotificationService {
       const preferenceMode = this.wishlistStateRepository.assistant.preference(user).mode;
       const digest = preferenceMode === 'digest';
       deliveryMode = preferenceMode === 'instant' ? 'immediate' : preferenceMode;
-      receipt = digest ? await this.sender.send(batch,batch.language,{digest:true}) : await this.sender.send(batch,batch.language);
+      const renderedBatch = this.withArtwork(batch);
+      receipt = digest ? await this.sender.send(renderedBatch,batch.language,{digest:true}) : await this.sender.send(renderedBatch,batch.language);
     } catch (error: unknown) {
       if (error instanceof NotificationDeliveryCancelledError) {
         return { sentCount: 0, failedCount: 0, cancelled: true };

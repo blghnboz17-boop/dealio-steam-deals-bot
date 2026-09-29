@@ -1,6 +1,7 @@
+import { artworkAccessory, addArtwork } from './ui/game-artwork.js';
 
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, MediaGalleryBuilder, MediaGalleryItemBuilder,
-  SectionBuilder, StringSelectMenuBuilder, TextDisplayBuilder, ThumbnailBuilder, escapeMarkdown } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder,
+  SectionBuilder, StringSelectMenuBuilder, TextDisplayBuilder, escapeMarkdown } from 'discord.js';
 import type { WishlistItem } from '../domain/steam.js';
 import type { UserConfig } from '../domain/user-config.js';
 import type { GameRule, HistoryEntry, PricePoint } from '../persistence/assistant-repository.js';
@@ -55,9 +56,8 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       const ruleText=rule?.muted?(tr?'Susturuldu':'Muted'):rule?.mode==='target'?
         (tr?'Hedef: ':'Target: ')+price(rule.targetMinor!,rule.currency!):
         (tr?'En az %':'Minimum ')+(rule?.mode==='percent'?rule.percent:data.config.minimumDiscountPercent)+(tr?'':'%');
-      root.addSectionComponents(new SectionBuilder().addTextDisplayComponents(text(
-        `### ${escapeMarkdown(item.name).slice(0,100)}\n**${current}**${item.onSale?' · −'+p?.discountPercent+'%':''}\n-# ${ruleText}${matchesRule(item,rule,data.config.minimumDiscountPercent)?(tr?' · Kuralına uygun':' · Matches your rule'):''}`))
-        .setThumbnailAccessory(new ThumbnailBuilder().setURL(`https://cdn.akamai.steamstatic.com/steam/apps/${item.appId}/header.jpg`).setDescription(item.name.slice(0,100))));
+      root.addSectionComponents(artworkAccessory(new SectionBuilder().addTextDisplayComponents(text(
+        `### ${escapeMarkdown(item.name).slice(0,100)}\n**${current}**${item.onSale?' · −'+p?.discountPercent+'%':''}\n-# ${ruleText}${matchesRule(item,rule,data.config.minimumDiscountPercent)?(tr?' · Kuralına uygun':' · Matches your rule'):''}`)), item));
     }
     if(!visible.length) add(tr?'Bu görünümde oyun yok. Aramayı veya filtreyi temizleyebilirsin.':'No games here. Clear the search or filter.');
     if(visible.length) root.addActionRowComponents(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
@@ -74,8 +74,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
     if(!item) add(tr?'Oyun kayıtlı listede bulunamadı.':'Game not found in the saved wishlist.');
     else{
       const p=item.price,rule=data.rules.get(item.appId);
-      root.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder()
-        .setURL(`https://cdn.akamai.steamstatic.com/steam/apps/${item.appId}/header.jpg`).setDescription(item.name.slice(0,100))));
+      addArtwork(root, item);
       add('## '+escapeMarkdown(item.name).slice(0,120));
       add(p?.currency? '**'+price(p.finalMinor,p.currency)+'**'+(item.onSale?' · −'+p.discountPercent+'%':''):(tr?'Fiyat doğrulanamadı':'Price unavailable'));
       add((tr?'-# Fiyat gözlemi: ':'-# Price observed: ')+`<t:${Math.floor(Date.parse(item.priceObservedAt??data.capturedAt)/1000)}:R>`);
