@@ -10,6 +10,18 @@
 </p>
 
 <p align="center">
+  <a href="https://blghnboz17-boop.github.io/dealio-public-pages/"><img src="https://img.shields.io/badge/Beta%E2%80%99ya_kat%C4%B1l-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Beta’ya katıl"></a>
+  <a href="#komutlar"><img src="https://img.shields.io/badge/Komutlar%C4%B1_ke%C5%9Ffet-1B2838?style=for-the-badge&amp;logo=steam&amp;logoColor=white" alt="Komutları keşfet"></a>
+  <a href="#son-gelismeler"><img src="https://img.shields.io/badge/Son_geli%C5%9Fmeler-8B5CF6?style=for-the-badge" alt="Son gelişmeler"></a>
+</p>
+
+<p align="center">
+  <a href="#komutlar"><img src="https://img.shields.io/badge/Steam-wishlist_takibi-171D25?style=flat-square&amp;logo=steam&amp;logoColor=white" alt="Steam-wishlist takibi"></a>
+  <a href="README.md"><img src="https://img.shields.io/badge/T%C3%BCrk%C3%A7e-English-2980B9?style=flat-square" alt="Türkçe-English"></a>
+  <a href="#discordda-başla"><img src="https://img.shields.io/badge/Kurulum-Steam_%C5%9Fifresi_gerekmez-238636?style=flat-square" alt="Kurulum-Steam şifresi gerekmez"></a>
+</p>
+
+<p align="center">
   <a href="#beta-durumu"><img src="https://img.shields.io/badge/Durum-S%C4%B1n%C4%B1rl%C4%B1_beta-8B5CF6?style=flat-square" alt="Sınırlı beta"></a>
   <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-Testleri_g%C3%B6r-238636?style=flat-square&amp;logo=github" alt="GitHub testlerini görüntüle"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lisans-MIT-2980B9?style=flat-square" alt="MIT"></a>

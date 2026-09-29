@@ -10,6 +10,18 @@
 </p>
 
 <p align="center">
+  <a href="https://blghnboz17-boop.github.io/dealio-public-pages/index-en.html"><img src="https://img.shields.io/badge/Join_the_beta-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Join the beta"></a>
+  <a href="#commands"><img src="https://img.shields.io/badge/Explore_commands-1B2838?style=for-the-badge&amp;logo=steam&amp;logoColor=white" alt="Explore commands"></a>
+  <a href="#latest-updates"><img src="https://img.shields.io/badge/Latest_updates-8B5CF6?style=for-the-badge" alt="Latest updates"></a>
+</p>
+
+<p align="center">
+  <a href="#commands"><img src="https://img.shields.io/badge/Steam-wishlist_tracking-171D25?style=flat-square&amp;logo=steam&amp;logoColor=white" alt="Steam-wishlist tracking"></a>
+  <a href="README.tr.md"><img src="https://img.shields.io/badge/T%C3%BCrk%C3%A7e-English-2980B9?style=flat-square" alt="Türkçe-English"></a>
+  <a href="#start-in-discord"><img src="https://img.shields.io/badge/Setup-no_Steam_password-238636?style=flat-square" alt="Setup-no Steam password"></a>
+</p>
+
+<p align="center">
   <a href="#beta-status"><img src="https://img.shields.io/badge/Status-Limited_beta-8B5CF6?style=flat-square" alt="Limited beta"></a>
   <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-View_checks-238636?style=flat-square&amp;logo=github" alt="View GitHub checks"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2980B9?style=flat-square" alt="MIT"></a>
