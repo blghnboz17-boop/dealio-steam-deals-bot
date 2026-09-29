@@ -31,6 +31,7 @@ async function fixture() {
     evidence: {
       commit: 'test-commit', ...evidence,
       termsUrl: 'https://example.test/terms', privacyUrl: 'https://example.test/privacy',
+      supportUrl: 'https://example.test/help',
     },
     fetchPage: vi.fn(async () => ({ ok: true, headers: { get: () => 'text/html; charset=utf-8' } })),
   };
@@ -83,6 +84,25 @@ describe('release evidence gate', () => {
     await expect(validateReleaseEvidence(evidence, {
       commit: 'test-commit', evidenceDirectory: directory, fetchPage,
     })).resolves.toBeUndefined();
-    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(fetchPage).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects an unavailable help page', async () => {
+    const { directory, evidence, fetchPage } = await fixture();
+    fetchPage.mockImplementation(async (...args: unknown[]) => ({
+      ok: String(args[0]) !== evidence.supportUrl,
+      headers: { get: () => 'text/html' },
+    }));
+    await expect(validateReleaseEvidence(evidence, {
+      commit: 'test-commit', evidenceDirectory: directory, fetchPage,
+    })).rejects.toThrow(/supportUrl/);
+  });
+
+  it('rejects a help page without HTTPS', async () => {
+    const { directory, evidence, fetchPage } = await fixture();
+    evidence.supportUrl = 'http://example.test/help';
+    await expect(validateReleaseEvidence(evidence, {
+      commit: 'test-commit', evidenceDirectory: directory, fetchPage,
+    })).rejects.toThrow(/HTTPS/);
   });
 });

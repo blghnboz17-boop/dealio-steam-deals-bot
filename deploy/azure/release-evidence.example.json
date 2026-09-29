@@ -7,5 +7,6 @@
   "cleanInstall": {"passed": false, "evidence": ""},
   "azureCreditVerified": {"passed": false, "evidence": ""},
   "termsUrl": "",
-  "privacyUrl": ""
+  "privacyUrl": "",
+  "supportUrl": ""
 }

@@ -1,0 +1,12 @@
+[Unit]
+Description=Dealio independent health signal
+After=network-online.target
+[Service]
+Type=oneshot
+User=dealiobot
+WorkingDirectory=/home/dealiobot/steam-wishlist-discord-bot
+ExecStart=/usr/bin/node scripts/health-ping.mjs
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+TimeoutStartSec=30

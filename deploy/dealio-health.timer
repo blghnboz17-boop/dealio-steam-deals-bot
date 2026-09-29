@@ -1,0 +1,9 @@
+[Unit]
+Description=Check Dealio health every minute
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=60
+AccuracySec=5
+Unit=dealio-health.service
+[Install]
+WantedBy=timers.target

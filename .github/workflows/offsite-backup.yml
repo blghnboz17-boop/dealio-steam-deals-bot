@@ -1,0 +1,49 @@
+name: Encrypted offsite backup
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 3 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: offsite-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Pull encrypted SQLite snapshot with a restricted key
+        env:
+          BACKUP_SSH_KEY: ${{ secrets.BACKUP_SSH_KEY }}
+          BACKUP_KNOWN_HOSTS: ${{ secrets.BACKUP_KNOWN_HOSTS }}
+          BACKUP_SSH_TARGET: ${{ vars.BACKUP_SSH_TARGET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/dealio-ssh"
+          printf '%s\n' "$BACKUP_SSH_KEY" > "$RUNNER_TEMP/dealio-ssh/key"
+          printf '%s\n' "$BACKUP_KNOWN_HOSTS" > "$RUNNER_TEMP/dealio-ssh/known_hosts"
+          timeout 150 ssh -T -i "$RUNNER_TEMP/dealio-ssh/key" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/dealio-ssh/known_hosts" "$BACKUP_SSH_TARGET" > "$RUNNER_TEMP/wishlist.encrypted.json"
+          test -s "$RUNNER_TEMP/wishlist.encrypted.json"
+          test "$(stat -c %s "$RUNNER_TEMP/wishlist.encrypted.json")" -le 24117248
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: dealio-encrypted-backup
+          path: ${{ runner.temp }}/wishlist.encrypted.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Confirm offsite storage to independent monitor
+        env:
+          BACKUP_PING_URL: ${{ secrets.HEALTHCHECKS_BACKUP_PING_URL }}
+        run: curl --fail --silent --show-error --max-time 15 --retry 2 --output /dev/null "$BACKUP_PING_URL"
+      - name: Report failure
+        if: failure()
+        env:
+          BACKUP_PING_URL: ${{ secrets.HEALTHCHECKS_BACKUP_PING_URL }}
+        run: curl --fail --silent --show-error --max-time 15 --output /dev/null "$BACKUP_PING_URL/fail"
+      - name: Remove temporary files
+        if: always()
+        run: rm -f "$RUNNER_TEMP/dealio-ssh/key" "$RUNNER_TEMP/wishlist.encrypted.json"

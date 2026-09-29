@@ -55,12 +55,12 @@ export async function validateReleaseEvidence(evidence, {
     }
   }
 
-  for (const key of ['termsUrl', 'privacyUrl']) {
+  for (const key of ['termsUrl', 'privacyUrl', 'supportUrl']) {
     const url = new URL(evidence[key]);
-    if (url.protocol !== 'https:') throw new Error('Legal page must use HTTPS');
+    if (url.protocol !== 'https:') throw new Error(`Public page must use HTTPS: ${key}`);
     const response = await fetchPage(url, { signal: AbortSignal.timeout(15_000) });
     if (!response.ok || !(response.headers.get('content-type') ?? '').includes('text/html')) {
-      throw new Error(`Legal page is unavailable: ${key}`);
+      throw new Error(`Public page is unavailable: ${key}`);
     }
   }
 }
