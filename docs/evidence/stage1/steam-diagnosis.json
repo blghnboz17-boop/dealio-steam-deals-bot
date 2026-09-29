@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "verifiedOn": "2026-09-29",
+  "transientFailure": {
+    "code": "STEAM_TIMEOUT",
+    "at": "2026-09-29T06:04:56.963Z",
+    "runDurationMs": 10018,
+    "nextSuccessfulCheckAt": "2026-09-29T06:34:57.666Z",
+    "candidateCountInFailedRun": 0
+  },
+  "repeatedItemFailure": {
+    "code": "STEAM_APP_NOT_FOUND",
+    "uniqueItemsInLatestSnapshots": 1,
+    "verification": "Fresh Steam appdetails request returned HTTP 200 with success=false in the configured country."
+  },
+  "unknownPrices": {
+    "uniqueItemsInLatestSnapshots": 7,
+    "freshRequests": 7,
+    "http200": 7,
+    "steamSuccessTrue": 7,
+    "comingSoonTrue": 7,
+    "priceOverviewAbsent": 7
+  },
+  "privacy": "No user identifiers, Steam account identifiers, tokens or message identifiers retained."
+}

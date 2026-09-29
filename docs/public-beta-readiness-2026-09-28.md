@@ -2,6 +2,8 @@
 
 Bu kayıt, yalnız belirtilen tarihte salt okunur olarak doğrulanan canlı durumu ve yerel geliştirme işini ayırır. Tarih geçtikçe canlı sonuçlar yeniden ölçülmelidir.
 
+29 Eylül'deki dağıtım, gerçek Discord ölçümleri ve 1. aşama kabulü için [güncel kabul kaydına](phase1-acceptance.tr.md) bakın. Aşağıdaki metin 28 Eylül inceleme anının tarihsel kaydıdır.
+
 ## Doğrulanan canlı durum
 
 - Azure VM'deki `/home/dealiobot/steam-wishlist-discord-bot` dizini `main` / `c40e3c62a81afbca231bf7a720e9d16bf99e2be0` revizyonundaydı. `dealio` servisi etkin, sağlık kaydı `phase=ready`, `discordReady=true`, `guildCount=3` idi.

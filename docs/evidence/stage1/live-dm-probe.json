@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-29T18:13:47.022Z",
+  "sourceCommit": "c5a2f414a298bfc59a5c1fac3570d14fea7639fc",
+  "metrics": {
+    "testDeliveries": {
+      "count": 1,
+      "p95CandidateToDeliveryMs": 815
+    },
+    "acknowledgements": {
+      "count": 1,
+      "failed": 0,
+      "overThreeSeconds": 0,
+      "p95AgeMs": 459,
+      "p95DurationMs": 351
+    },
+    "scans": {
+      "runs": 0,
+      "users": 0,
+      "completed": 0,
+      "errors": 0,
+      "checkedGames": 0,
+      "steamItemErrors": 0,
+      "unknownPrices": 0,
+      "unavailable": 0,
+      "dmSent": 0,
+      "dmFailed": 0,
+      "p95DurationMs": null
+    },
+    "deliveries": {
+      "count": 0,
+      "immediateCount": 0,
+      "quietCount": 0,
+      "digestCount": 0,
+      "p95CandidateToDeliveryMs": null,
+      "p95ImmediateCandidateToDeliveryMs": null
+    }
+  },
+  "health": {
+    "phase": "ready",
+    "discordReady": true,
+    "heartbeatAgeSeconds": 10,
+    "scanAgeSeconds": 468.236,
+    "queueAgeSeconds": 0
+  },
+  "testedBuildMatches": true,
+  "backup": {
+    "createdAt": "2026-09-29T18:11:31.664Z",
+    "sha256": "5317bcc15a61a003b47cc63e55f2aa4bd59108650e378e0d566c6ef353c9a3fc",
+    "schemaVersion": 10,
+    "restoreVerified": true,
+    "offsiteConfigured": false
+  },
+  "userConfirmedTestDmReceived": true,
+  "limitations": [
+    "Controlled test DM bypasses durable sale queue.",
+    "No natural sale delivery samples yet.",
+    "Three command samples are a baseline, not a capacity result."
+  ]
+}
