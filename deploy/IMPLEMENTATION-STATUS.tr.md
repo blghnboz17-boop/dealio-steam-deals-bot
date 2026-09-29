@@ -72,3 +72,15 @@ Kaynaklar:
 - Açılış sonrası phase=ready ve discordReady=true; kontrol edilen son günlüklerde hata yok.
 - Proje sahibi kontrol listesi sonrası “sanırım hepsi çalışıyor” geri bildirimini verdi. Bu, sınırlı beta için kullanıcı geri bildirimidir; bütün cihaz/zamanlı teslim senaryolarını geçti diye işaretlemez.
 - README'ler mevcut ürünü sınırlı beta olarak tanıtır. Herkese açık beta için yasal bağlantılar, uzak yedek, dış alarm, kredi ve dağıtık kilit doğrulaması açık kalır.
+
+
+## 29 Eylül 2026 — ücretsiz sınırlı beta işletimi
+
+Önceki Azure ücretli kaynak yaklaşımının yerine kullanıcı ek ücret istemediği
+ için GitHub şifreli yedek/restore, Healthchecks e-posta ve ayrı GitHub Pages
+sitesi kullanıldı. Gerçek uzak yedek ve restore işleri geçti, sinyal kaybı ve
+ iyileşme kaydedildi. Ayrıntılı kabul ve bekleyen kullanıcı gözlemi:
+`docs/phase3-acceptance.tr.md`; işletim: `deploy/FREE-OPERATIONS.tr.md`.
+Azure dağıtık lease kurulmadı: tek VM süreç kilidi sürer; ikinci aktif bot
+örneği açılmaz. Genel yayın kapısı dördüncü aşama kanıtları tamamlanana kadar
+kapalıdır. Bu kayıt eski Azure maddelerini tamamlandı saymaz.

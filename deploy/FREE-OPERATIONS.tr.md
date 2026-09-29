@@ -1,6 +1,6 @@
 # Ücretsiz beta işletimi
 
-Durum: hazırlık. Bu dosya kurulum talimatıdır; kurulduğu anlamına gelmez.
+Bu dosya kurulum ve kurtarma talimatıdır; her adımın canlı kabulü ayrıca kaydedilir.
 Canlı kabul kaydı: `docs/phase3-acceptance.tr.md`.
 
 ## Sınırlar ve maliyet
@@ -82,3 +82,19 @@ siteye dahil edilmez. Sayfalar sınırlı beta der ve genel Discord daveti açma
 Gizlilik/koşullar/yardım HTTPS bağlantıları ve Discord uygulama bağlantıları
 ayrıca doğrulanır. Masaüstü/mobil beta ve bir haftalık gözlem dördüncü aşamadır;
 yayın kapısında bu kanıtlar gerçek denemeler yapılmadan geçti işaretlenmez.
+
+### Site sağlayıcısı
+
+Azure öğrenci politikası yalnız Switzerland North, Germany West Central,
+Sweden Central, Italy North ve Austria East bölgelerine izin verdiği için
+Static Web Apps kurulumu reddedildi; desteklenen beş SWA bölgesiyle kesişim yok.
+Ücretli kaynak açılmadı. Site GitHub Free ile ayrı `dealio-public-pages`
+public deposundan yayımlanır; bot deposu private kalır. Yayın işi yalnız
+onaylı statik çıktıyı kopyalar. `PUBLIC_PAGES_SSH_KEY` sadece site deposuna
+write yetkili deploy key, `PUBLIC_PAGES_KNOWN_HOSTS` GitHub'ın TLS ile alınan
+resmî `/meta` SSH anahtarlarıdır. Kullanıcı yedeği bu public depoya gitmez.
+
+Bot günlükleri `LogNamespace=dealio` ve `journald@dealio.conf` ile yedi günlük
+ayrı alana yazılır. Ücretli Azure lease zorunluluğu getiren production örnek
+konfigürasyonu kurulmaz; tek VM süreç kilidi korunur. Önceki sistem günlükleri
+sistem politikasına tabidir; diğer servislerin kayıtları silinmez.

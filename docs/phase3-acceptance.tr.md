@@ -77,3 +77,36 @@ Durum: devam ediyor; genel yayın onayı verilmedi.
 - GitHub Free özel depoda ortam sırları ücretli plan gerektirdiğinden işler
   repository secrets kullanır; çalıştırma main dalıyla sınırlıdır. Ücretli
   GitHub planı veya environment koruması varsayılmaz.
+
+## Canlı işletim doğrulaması — 29 Eylül 2026
+
+- Hazırlık PR #6 main'e `f25e212c2d703b930fef69863dabf59f4ce94666` ile
+  birleştirildi; bu revizyonun GitHub CI Node 22/24 kontrolleri geçti
+  (run 36622558576). Yerelde derlenen çıktı VM'ye hash doğrulanarak
+  taşındı; VM'de derleme yapılmadı. Bot active/Discord ready, NRestarts=0.
+- RSA kurtarma anahtarı VM dışında. Ayrı yedek SSH anahtarı forced-command
+  ile yalnız şifreli dışa aktarıma bağlı. Tamamen ayrı SSH yapılandırmasıyla
+  `id` isteği şifreli zarf döndürdü; uzak port yönlendirmesi reddedildi.
+- GitHub uzak yedek run 36622820238 ikinci denemede geçti. İlk denemede
+  otomasyon anahtarındaki parola ayarı nedeniyle giriş reddedildi; düzeltildi.
+  Kullanıcı kimlikleri veya açık veritabanı Actions çıktısına yazılmadı.
+- Gerçek uzak artifact'ten restore run 36622998327 geçti; checkedAt
+  2026-09-29T19:58:49.304Z, şema 10, integrity/foreign-key/migration başarılı.
+- Healthchecks ücretsiz hesapta üç kontrol kuruldu; e-posta üçüne de bağlı.
+  Bot 1dk+3dk, yedek 1gün+2saat, restore 35gün+1gün. Bot sinyali 19:58:24Z'de
+  durduruldu, 20:02'de up→down oluştu ve sağlayıcı e-postayı Delivered gösterdi.
+  20:02:56Z'de timer/sinyal yeniden açıldı; down→up ve dakikalık sinyal görüldü.
+  Bot bu provada açık kaldı. Kullanıcı bot health ve daily offsite e-postalarını
+  aldığını, görüntülenen durumun success olduğunu bildirdi (iyileşme mesajı).
+- Bot için ayrı journald namespace ve 7 günlük saklama kuruldu; önceki ortak
+  sistem kayıtlarına dokunulmadı. Gizlilik metni tarih ayrımını açıklar.
+- Azure SWA Free isteği bölge politikasıyla reddedildi. İzinli bölgeler ile
+  SWA bölgeleri kesişmiyor. Ücretli kaynak açılmadan GitHub Pages'e geçildi.
+- Site: https://blghnboz17-boop.github.io/dealio-public-pages/ . Yalnız onaylı
+  statik dosyalar ayrı public depoda; bot deposu private. Sekiz TR/EN HTML
+  sayfası HTTPS 200 döndü. Genel Discord daveti yok; sınırlı beta erişimi e-posta.
+- Discord uygulamasında koşullar ve gizlilik bağlantıları bu siteye kaydedildi;
+  profil açıklamasına yardım bağlantısı ve /dealio başlangıcı eklendi.
+
+Dördüncü aşamadaki masaüstü/mobil kullanıcı kabulü ve bir haftalık gözlem henüz
+geçti işaretlenmez. Yayın kapısının bu alanları boş kalır; genel erişim açılmaz.
