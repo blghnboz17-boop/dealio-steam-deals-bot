@@ -2,7 +2,7 @@
   <img src="docs/assets/dealio-onboarding-banner.png" alt="Dealio — koyu zemin üzerinde mavi fiyat etiketi ve kalp" width="960">
 </p>
 
-<h1 align="center">🎮 Wishlist’in. Senin kuralların.</h1>
+<h1 align="center">🎮 Senin Wishlist’in. Senin kuralların.</h1>
 
 <p align="center">
   Discord içindeki kişisel Steam fiyat asistanın.<br>
