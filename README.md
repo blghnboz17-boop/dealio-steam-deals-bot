@@ -136,6 +136,33 @@ Notification history displays the last **30 days**; price observations are retai
 ## ❓ A few useful answers
 
 <details>
+<summary><strong>What can I do if I get a “Failed” error?</strong></summary>
+
+That message alone doesn't tell us the cause, and it doesn't necessarily mean you did anything wrong. Steam may not have returned prices, Discord may not have completed an action, or something may have gone wrong inside Dealio. Any extra detail in the message helps narrow it down.
+
+Give it a moment, then try the command once more. If a cooldown is shown, wait for it to finish. If an old panel's button isn't working, open a fresh panel with `/dealio`. Still stuck? Use the [help page](https://blghnboz17-boop.github.io/dealio-public-pages/help.html) to share the command, approximate time, and error text. Hide personal details in screenshots; you don't need to delete your setup and start over as a first step.
+
+</details>
+
+<details>
+<summary><strong>The bot works, but I'm not getting DMs. What should I check?</strong></summary>
+
+Start with `/test-notification`. If the sample doesn't arrive either, check that you haven't blocked the bot and that you allow DMs from your shared server. If alerts were paused because DMs were blocked, re-enable them in `/status` after fixing the setting.
+
+If the test arrives but a sale alert doesn't, check your notification status in `/status`, the game's target or discount threshold, its mute setting, and your quiet hours or daily digest. A test DM confirms you can receive messages; it doesn't mean every game currently qualifies for an alert.
+
+</details>
+
+<details>
+<summary><strong>My Steam profile was found, but my wishlist won't load. Why?</strong></summary>
+
+Check that the profile link is correct and your wishlist is visible to other people. Try opening your wishlist link in a browser window where you aren't signed into Steam; being able to see your profile alone may not be enough.
+
+If you've just changed your Steam privacy settings, give it a moment and try again. If the list opens while signed out but Dealio still can't read it, Steam may be temporarily unavailable. If another attempt doesn't help, [let us know](https://blghnboz17-boop.github.io/dealio-public-pages/help.html). Please don't share your Steam password or session details.
+
+</details>
+
+<details>
 <summary><strong>I set a target. Why didn't a DM arrive immediately?</strong></summary>
 
 Saving a rule establishes its starting state. An already-matching offer is visible in the panel; alerts wait for a later qualifying transition. Check the game's rule, mute state, and your notification schedule.

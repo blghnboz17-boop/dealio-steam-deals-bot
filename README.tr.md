@@ -136,6 +136,33 @@ Bildirim geçmişi son **30 günü** gösterir; fiyat gözlemleri **90 gün** tu
 ## ❓ Sık sorulanlar
 
 <details>
+<summary><strong>“Failed” veya “Başarısız” hatası aldım. Ne yapabilirim?</strong></summary>
+
+Bu mesaj tek başına nedenini söylemez; yanlış bir şey yaptığın anlamına da gelmez. Steam fiyatlara yanıt verememiş, Discord işlemi tamamlayamamış veya Dealio tarafında bir sorun çıkmış olabilir. Varsa mesajdaki ayrıntı bize daha çok şey söyler.
+
+Biraz bekleyip komutu bir kez daha dene; bekleme süresi gösteriliyorsa dolmasını bekle. Eski paneldeki düğme çalışmıyorsa `/dealio` ile yeni bir panel aç. Sorun devam ederse [yardım sayfasından](https://blghnboz17-boop.github.io/dealio-public-pages/help-tr.html) kullandığın komutu, yaklaşık saati ve hata metnini paylaş. Ekran görüntüsündeki kişisel bilgileri gizlemen yeterli; kurulumu hemen silip baştan yapmana gerek yok.
+
+</details>
+
+<details>
+<summary><strong>Bot çalışıyor ama DM gelmiyor. Neyi kontrol etmeliyim?</strong></summary>
+
+Önce `/test-notification` ile bir örnek mesaj iste. O da gelmiyorsa botu engellemediğini ve ortak sunucudan DM almaya izin verdiğini kontrol et. Bildirimler DM engeli nedeniyle duraklatılmışsa ayarı düzelttikten sonra `/status` üzerinden yeniden aç.
+
+Test mesajı geliyor ama indirim bildirimi gelmiyorsa `/status` içindeki bildirim durumuna, oyunun hedef fiyatına veya indirim eşiğine, susturma seçeneğine ve sessiz saat/günlük özet ayarlarına bak. Test DM’si mesaj alabileceğini gösterir; her oyunun o anda bildirim koşulunu karşıladığı anlamına gelmez.
+
+</details>
+
+<details>
+<summary><strong>Steam profilim bulundu ama wishlist’im açılmıyor. Neden?</strong></summary>
+
+Profil bağlantısının doğru olduğundan ve wishlist’inin dışarıdan görülebildiğinden emin ol. Bunu Steam hesabına giriş yapmadığın bir tarayıcı penceresinde kendi wishlist bağlantını açarak kontrol edebilirsin; profilin görünmesi tek başına yeterli olmayabilir.
+
+Steam gizlilik ayarlarını değiştirdiysen biraz bekleyip yeniden dene. Liste dışarıdan açıldığı hâlde Dealio hâlâ okuyamıyorsa Steam geçici olarak yanıt vermiyor olabilir. Tekrar denediğinde de düzelmiyorsa [bize haber ver](https://blghnboz17-boop.github.io/dealio-public-pages/help-tr.html); Steam şifreni veya oturum bilgilerini paylaşma.
+
+</details>
+
+<details>
 <summary><strong>Hedef belirledim. Neden hemen DM gelmedi?</strong></summary>
 
 Kural kaydı başlangıç durumunu belirler. Zaten uygun olan teklif panelde gösterilir; bildirim, daha sonraki uygun geçişi bekler. Oyunun kuralını, susturma durumunu ve bildirim zamanını kontrol et.
