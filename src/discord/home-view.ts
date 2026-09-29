@@ -1,6 +1,7 @@
+import { addArtwork } from './ui/game-artwork.js';
 import {
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder,
-  MediaGalleryBuilder, MediaGalleryItemBuilder, SectionBuilder,
+  SectionBuilder,
   SeparatorBuilder, SeparatorSpacingSize, TextDisplayBuilder,
 } from 'discord.js';
 import type { StatusDashboardResult } from '../application/status-service.js';
@@ -58,9 +59,7 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
     root.addTextDisplayComponents(display('-# ' + (options.featuredDeal
       ? t('KURALINA UYGUN FIRSAT', 'A DEAL THAT MATCHES YOUR RULE')
       : t('WISHLIST’İNDEN', 'FROM YOUR WISHLIST'))));
-    root.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder()
-      .setURL('https://cdn.akamai.steamstatic.com/steam/apps/' + hero.appId + '/header.jpg')
-      .setDescription(hero.name.slice(0, 100))));
+    addArtwork(root, hero);
     const currentPrice = formatMinorPrice(price.finalMinor, price.currency!, language);
     const previousPrice = price.initialMinor > price.finalMinor
       ? '  ~~' + formatMinorPrice(price.initialMinor, price.currency!, language) + '~~' : '';
@@ -69,6 +68,10 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
       '](https://store.steampowered.com/app/' + hero.appId + ')\n**' + currentPrice + '**' + previousPrice + discount +
       '\n-# ' + t('Fiyat gözlemi: ', 'Price observed: ') +
       relative(hero.priceObservedAt ?? options.capturedAt, t('Zaman bilgisi yok', 'Time unavailable'))));
+  } else if (hero) {
+    addArtwork(root, hero);
+    root.addTextDisplayComponents(display('## [' + sanitizeGameName(hero.name).slice(0, 100) +
+      '](https://store.steampowered.com/app/' + hero.appId + ')\n' + t('Fiyat doğrulanamadı', 'Price unavailable')));
   } else {
     root.addTextDisplayComponents(display('## ' + (checkState?.lastSuccessOnSaleCount == null
       ? t('İlk kontrol bekleniyor', 'Waiting for the first check')

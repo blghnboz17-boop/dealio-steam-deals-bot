@@ -12,6 +12,7 @@ const candidate: NotificationCandidate = {
   configVersion: 1,
   storeCountryCode: 'TR',
   appId: 10,
+  headerImageUrl: 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/10/header.jpg',
   gameName: 'Test Game',
   saleEpisodeId: 'episode-1',
   saleKey: 'TRY:12345:9876:20',

@@ -4,6 +4,7 @@ import type { CheckService } from './check-service.js';
 import { isDiscordDmBlocked } from './notification-service.js';
 
 export interface InitialWishlistSale {
+  readonly headerImageUrl?: string;
   readonly appId: number;
   readonly gameName: string;
   readonly currency: string;
@@ -85,6 +86,7 @@ export class InitialWishlistSummaryService {
       return [{
         appId: item.appId,
         gameName: item.name,
+        ...(item.headerImageUrl ? { headerImageUrl: item.headerImageUrl } : {}),
         currency: price.currency,
         normalPriceMinor: price.initialMinor,
         finalPriceMinor: price.finalMinor,

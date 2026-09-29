@@ -1,3 +1,4 @@
+import { artworkEmbed } from './ui/game-artwork.js';
 import { defaultPollIntervalHours } from '../config/environment.js';
 import {
   ButtonStyle,
@@ -168,9 +169,7 @@ export function buildInitialWishlistSaleEmbed(
       name: '\u200b',
       value: `[${messages.openSteamStore}](${storeUrl})`,
     }],
-    image: {
-      url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${sale.appId}/header.jpg`,
-    },
+    ...artworkEmbed(sale),
     footer: { text: messages.initialSummaryFooter },
     timestamp: summary.capturedAt,
   };

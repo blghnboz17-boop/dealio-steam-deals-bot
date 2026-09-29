@@ -1,3 +1,4 @@
+import { artworkEmbed } from './ui/game-artwork.js';
 import type { APIEmbed } from 'discord.js';
 import type {
   NotificationSendOptions,
@@ -79,9 +80,7 @@ export function buildSaleNotificationEmbed(
       { name: messages.salePriceLabel, value: `**${finalPrice}**`, inline: true },
       { name: '\u200b', value: `[${messages.openSteamStore}](${storeUrl})` },
     ],
-    image: {
-      url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${notification.appId}/header.jpg`,
-    },
+    ...artworkEmbed(notification),
     footer: {
       text: `${messages.notificationFooter} · ${storeCountryLabel(
         notification.storeCountryCode,

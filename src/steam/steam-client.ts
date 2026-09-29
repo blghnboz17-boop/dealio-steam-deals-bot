@@ -224,6 +224,7 @@ export class SteamClient {
             appId: entry.appId,
             priceObservedAt: cached.observedAt,
             name: appDetails.name,
+            ...(appDetails.headerImageUrl ? { headerImageUrl: appDetails.headerImageUrl } : {}),
             priority: entry.priority,
             dateAdded: entry.dateAdded,
             price: appDetails.price,

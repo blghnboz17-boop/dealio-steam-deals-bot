@@ -1,3 +1,4 @@
+import { artworkAccessory, addArtwork } from './ui/game-artwork.js';
 import { defaultPollIntervalHours } from '../config/environment.js';
 import {
   ActionRowBuilder,
@@ -76,12 +77,7 @@ export function buildSaleNotificationPanel(
     const display = new TextDisplayBuilder().setContent(`## [${name}](${storeUrl})\n${details}`);
     gameTexts.push({ display, name, storeUrl, details });
     container.addSectionComponents(
-      new SectionBuilder().addTextDisplayComponents(display)
-        .setThumbnailAccessory(
-          new ThumbnailBuilder()
-            .setURL(`https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${notification.appId}/header.jpg`)
-            .setDescription(notification.gameName.slice(0, 100)),
-        ),
+      artworkAccessory(new SectionBuilder().addTextDisplayComponents(display), notification),
     );
   }
   container
@@ -154,14 +150,8 @@ export function buildInitialWishlistV2Page(
 
   if (sale) {
     container
-      .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-      .addMediaGalleryComponents(
-        new MediaGalleryBuilder().addItems(
-          new MediaGalleryItemBuilder()
-            .setURL(`https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${sale.appId}/header.jpg`)
-            .setDescription(sale.gameName.slice(0, 100)),
-        ),
-      )
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+    addArtwork(container, sale)
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(initialSaleText(sale, summary)));
   } else {
     container.addTextDisplayComponents(

@@ -11,6 +11,7 @@ import { WishlistStateRepository } from '../src/persistence/wishlist-state-repos
 function item(appId: number, discountPercent: number): WishlistItem {
   return {
     appId,
+    headerImageUrl: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/hash/header.jpg`,
     name: `Game ${appId}`,
     priority: null,
     dateAdded: null,
@@ -91,7 +92,7 @@ describe('InitialWishlistSummaryService', () => {
       discordUserId: 'discord-user',
       storeCountryCode: 'US',
       sales: [
-        expect.objectContaining({ appId: 10, currency: 'USD', discountPercent: 50 }),
+        expect.objectContaining({ appId: 10, currency: 'USD', discountPercent: 50, headerImageUrl: item(10, 50).headerImageUrl }),
         expect.objectContaining({ appId: 20, currency: 'USD', discountPercent: 10 }),
       ],
     }));

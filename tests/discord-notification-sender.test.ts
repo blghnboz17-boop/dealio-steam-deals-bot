@@ -128,6 +128,7 @@ const candidate: NotificationCandidate = {
   configVersion: 1,
   storeCountryCode: 'TR',
   appId: 10,
+  headerImageUrl: 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/10/header.jpg',
   gameName: 'Test Game',
   saleEpisodeId: 'episode-1',
   saleKey: 'TRY:1000:500:50',
@@ -276,6 +277,7 @@ describe('DiscordNotificationSender', () => {
     const second = {
       ...candidate,
       appId: 20,
+      headerImageUrl: 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/20/header.jpg',
       gameName: 'Second Game',
       saleEpisodeId: 'episode-2',
     };
@@ -346,6 +348,7 @@ describe('DiscordNotificationSender', () => {
     const sender = new DiscordNotificationSender({ rest: { post } } as never);
     const sales = Array.from({ length: 3 }, (_, index) => ({
       appId: 10 + index,
+      headerImageUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${10 + index}/header.jpg`,
       gameName: `Setup Game ${index + 1}`,
       currency: 'USD',
       normalPriceMinor: 2_000,
@@ -421,6 +424,7 @@ describe('DiscordNotificationSender', () => {
     });
     const sales = Array.from({ length: 11 }, (_, index) => ({
       appId: 10 + index,
+      headerImageUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${10 + index}/header.jpg`,
       gameName: `Setup Game ${index + 1}`,
       currency: 'TRY',
       normalPriceMinor: 2_000,

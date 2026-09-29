@@ -108,6 +108,33 @@ function addCandidate(
 }
 
 describe('NotificationService', () => {
+  it('enriches durable deliveries from snapshots without changing batch identity or prices', async () => {
+    const sender = createSender();
+    const services = createService('en', sender);
+    const headerImageUrl = 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/10/hash/header.jpg';
+    try {
+      services.repository.assistant.saveSnapshot(services.config, {
+        items: [{ ...saleItem, price: null, onSale: null, headerImageUrl }], errors: [],
+      }, '2026-08-21T00:02:00.000Z');
+      await expect(services.service.deliverPending('discord-user')).resolves.toMatchObject({ sentCount: 1 });
+      const delivered = sender.send.mock.calls[0]![0];
+      expect(delivered.batchId).toEqual(expect.any(String));
+      expect(delivered.notifications[0]).toMatchObject({ ...services.candidate, headerImageUrl });
+      await expect(services.service.deliverPending('discord-user')).resolves.toMatchObject({ sentCount: 0 });
+      expect(sender.send).toHaveBeenCalledOnce();
+    } finally { services.database.close(); }
+  });
+
+  it('does not lose a queued sale when optional artwork metadata cannot be read', async () => {
+    const sender = createSender();
+    const services = createService('en', sender);
+    vi.spyOn(services.repository.assistant, 'snapshot').mockImplementation(() => { throw new Error('bad snapshot'); });
+    try {
+      await expect(services.service.deliverPending('discord-user')).resolves.toMatchObject({ sentCount: 1 });
+      expect(sender.send.mock.calls[0]![0].notifications[0]).toMatchObject(services.candidate);
+    } finally { services.database.close(); }
+  });
+
   it('records accepted candidate-to-DM latency without user or game identifiers', async () => {
     const sender = createSender(vi.fn());
     const services = createService('en', sender);
