@@ -43,8 +43,8 @@ Her oyun için ayrı hedef belirleyebilir, gece bildirim istemiyorsan sessiz saa
 
 <table>
   <tr>
-    <td width="44%" valign="top"><strong>🎮 Wishlist · oyunlar ve fiyat kuralları</strong><br><br><a href="docs/assets/screenshots/wishlist-desktop.png"><img src="docs/assets/screenshots/wishlist-desktop.png" alt="Discord masaüstünde Dealio wishlist paneli: üç oyun, fiyatları, arama ve bildirim kontrolleri" width="380"></a></td>
-    <td width="56%" valign="top"><strong>📬 İndirim geldiğinde DM kutunda</strong><br><br><a href="docs/assets/screenshots/sale-dm-example.png"><img src="docs/assets/screenshots/sale-dm-example.png" alt="Outbound için önceki bir indirim DM örneği: fiyat, indirim yüzdesi ve tasarruf" width="480"></a></td>
+    <td width="50%" valign="top"><strong>🏠 Dealio · ana panel</strong><br><br><a href="docs/assets/screenshots/dealio-home-desktop.png"><img src="docs/assets/screenshots/dealio-home-desktop.png" alt="Dealio ana paneli: Black Flag oyun kapağı, kurala uygun indirim ve wishlist, bildirim zamanı, geçmiş kontrolleri" width="380"></a></td>
+    <td width="50%" valign="top"><strong>🎮 Wishlist · oyunlar ve fiyat kuralları</strong><br><br><a href="docs/assets/screenshots/wishlist-desktop.png"><img src="docs/assets/screenshots/wishlist-desktop.png" alt="Discord masaüstünde Dealio wishlist paneli: oyunlar, fiyatlar ve bildirim kontrolleri" width="300"></a><br><br><strong>📬 İndirim geldiğinde DM kutunda</strong><br><br><a href="docs/assets/screenshots/sale-dm-example.png"><img src="docs/assets/screenshots/sale-dm-example.png" alt="Outbound için önceki bir indirim DM örneği: fiyat, indirim yüzdesi ve tasarruf" width="380"></a></td>
   </tr>
 </table>
 

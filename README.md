@@ -43,8 +43,8 @@ Set a different target for each game, or use one discount threshold across your 
 
 <table>
   <tr>
-    <td width="44%" valign="top"><strong>🎮 Wishlist · games and price rules</strong><br><br><a href="docs/assets/screenshots/wishlist-desktop.png"><img src="docs/assets/screenshots/wishlist-desktop.png" alt="Dealio desktop wishlist panel with three games, prices, search and alert controls" width="380"></a></td>
-    <td width="56%" valign="top"><strong>📬 A sale alert in your DMs</strong><br><br><a href="docs/assets/screenshots/sale-dm-example.png"><img src="docs/assets/screenshots/sale-dm-example.png" alt="An earlier Outbound sale DM showing price, discount and savings" width="480"></a></td>
+    <td width="50%" valign="top"><strong>🏠 Dealio · your home panel</strong><br><br><a href="docs/assets/screenshots/dealio-home-desktop.png"><img src="docs/assets/screenshots/dealio-home-desktop.png" alt="Dealio home panel with Black Flag artwork, a matching deal, and wishlist, schedule and history controls" width="380"></a></td>
+    <td width="50%" valign="top"><strong>🎮 Wishlist · games and price rules</strong><br><br><a href="docs/assets/screenshots/wishlist-desktop.png"><img src="docs/assets/screenshots/wishlist-desktop.png" alt="Dealio desktop wishlist with games, prices and alert controls" width="300"></a><br><br><strong>📬 A sale alert in your DMs</strong><br><br><a href="docs/assets/screenshots/sale-dm-example.png"><img src="docs/assets/screenshots/sale-dm-example.png" alt="An earlier Outbound sale DM showing price, discount and savings" width="380"></a></td>
   </tr>
 </table>
 
