@@ -35,8 +35,8 @@ import { handleStatus } from './status.js';
 
 export const dealioCommand = new SlashCommandBuilder()
   .setName('dealio')
-  .setDescription('Open the Dealio control center')
-  .setDescriptionLocalizations({ tr: 'Dealio kontrol merkezini aç' });
+  .setDescription('Open your Dealio panel: deals, games, alerts and settings')
+  .setDescriptionLocalizations({ tr: 'Dealio panelini aç: fırsatlar, oyunlar, bildirimler ve ayarlar' });
 
 export interface DealioCommandServices {
   readonly setupService: SetupService;
@@ -175,6 +175,7 @@ export async function handleDealio(
         services.setupService,
         services.lifecycleSignal,
         services.setupPresentation,
+        { navigate },
       ).catch((error: unknown) => safeLogger.error('Dealio home setup navigation failed', error));
       return;
     }

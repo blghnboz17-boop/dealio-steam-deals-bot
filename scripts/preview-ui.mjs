@@ -2,7 +2,9 @@ import { buildAssistantView } from '../dist/discord/assistant-view.js';
 // Local design review from the production component builders. All values are demo fixtures.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { buildStatusV2Panel } from '../dist/discord/status-view-v2.js';
-import { buildSaleNotificationPanel } from '../dist/discord/notification-components-v2.js';
+import { buildSaleNotificationPanel, buildInitialWishlistV2Page } from '../dist/discord/notification-components-v2.js';
+import { buildCountryRangePanel } from '../dist/discord/ui/country-picker.js';
+import { buildSetupConfirmationPanel } from '../dist/discord/setup-view.js';
 const date = '2026-09-12T14:00:00.000Z';
 const games = [[620, 'Portal 2', 1999, 199, 90], [1091500, 'Cyberpunk 2077', 5999, 2099, 65], [1086940, 'Baldur’s Gate 3', 5999, 4499, 25]];
 const items = games.map(([appId, name, initialMinor, finalMinor, discountPercent]) => ({
@@ -55,6 +57,11 @@ for (const language of ['tr', 'en']) {
     partial: [buildStatusV2Panel({ ...dashboard, checkState: { ...dashboard.checkState, lastStatus: 'unavailable', lastSuccessUnknownPriceCount: 4 } }, 'preview', { mode: 'home' }).toJSON()],
     empty: personal('wishlist', { ...assistantData, items: [] }),
     expired: [buildStatusV2Panel(dashboard, 'preview', { mode: 'home', disabled: true }).toJSON()],
+    region: [buildCountryRangePanel(language, 'preview', { selected: 'TR' }).toJSON()],
+    setup: [buildSetupConfirmationPanel({ discordUserId: 'preview-user', steamId64: '76561198000000000', language, storeCountryCode: 'TR' }, 'preview', { regionSelectionSource: 'discord-locale' }).toJSON()],
+    summary: buildInitialWishlistV2Page({ discordUserId: 'preview-user', steamId64: '76561198000000000', language, storeCountryCode: 'TR',
+      minimumDiscountPercent: 30, totalGameCount: 24, failedItemCount: 0, capturedAt: date,
+      sales: notifications.map((n) => ({ ...n, normalPriceMinor: n.normalPriceMinor, headerImageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${n.appId}/header.jpg` })) }, {}, 'preview', 0).components.map((c) => c.toJSON()),
   };
 }
 const data = JSON.stringify(panels).replaceAll('<', '\\u003c');

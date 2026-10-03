@@ -28,15 +28,19 @@ describe('notification messages', () => {
   it('formats minor unit prices using the selected locale and currency', () => {
     expect(formatMinorPrice(12_345, 'TRY', 'tr')).toContain('123,45');
     expect(formatMinorPrice(12_345, 'TRY', 'en')).toContain('123.45');
-    expect(formatMinorPrice(12_345, 'TRY', 'tr')).toContain('TRY');
+    expect(formatMinorPrice(12_345, 'TRY', 'tr')).toBe('₺123,45');
+    expect(formatMinorPrice(399, 'USD', 'tr')).toBe('$3,99');
+    // Dollars other than USD keep a distinct prefix rather than a bare "$".
+    expect(formatMinorPrice(399, 'CAD', 'tr')).toBe('CA$3,99');
+    expect(formatMinorPrice(399, 'CNY', 'en')).toBe('CN¥3.99');
   });
 
-  it('displays the Steam currency code without conversion', () => {
+  it('displays the Steam currency without conversion', () => {
     const embed = buildSaleNotificationEmbed({ ...candidate, currency: 'EUR' }, 'en');
     const serialized = JSON.stringify(embed);
 
-    expect(serialized).toContain('EUR');
-    expect(serialized).not.toContain('TRY');
+    expect(serialized).toContain('€');
+    expect(serialized).not.toContain('₺');
     expect(serialized).toContain('123.45');
   });
 
@@ -50,7 +54,7 @@ describe('notification messages', () => {
     expect(serialized).toContain('%20');
     expect(serialized).toContain('123,45');
     expect(serialized).toContain('98,76');
-    expect(serialized).toContain('TRY');
+    expect(serialized).toContain('₺');
     expect(serialized).toContain('İndirimli fiyat');
   });
 
@@ -62,7 +66,7 @@ describe('notification messages', () => {
     expect(serialized).toContain('20%');
     expect(serialized).toContain('123.45');
     expect(serialized).toContain('98.76');
-    expect(serialized).toContain('TRY');
+    expect(serialized).toContain('₺');
     expect(serialized).toContain('https://store.steampowered.com/app/10/');
     expect(serialized).toContain('Sale price');
   });

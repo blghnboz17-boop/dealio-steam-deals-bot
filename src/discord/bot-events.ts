@@ -169,6 +169,7 @@ async function handleInteraction(
         services.setupService,
         lifecycleSignal,
         services.setupPresentation,
+        ui,
       );
       return;
     case 'region':

@@ -122,9 +122,9 @@ describe('game detail price history',()=>{
  it('replaces Dealio observations with Steam price history from IsThereAnyDeal',()=>{
   const text=render({status:'ready',history});
   expect(text).toContain('Steam fiyat geçmişi');
-  expect(text).toContain('Şubat 2024 sonrası en düşük: **USD 0,57** (%90 · Kasım 2024)');
-  expect(text).toContain(`<t:${Date.parse('2026-10-01T18:26:44.000Z')/1000}:d> · **USD 1,15** · %80`);
-  expect(text).toContain(`<t:${Date.parse('2026-07-09T17:17:12.000Z')/1000}:d> · **USD 5,79**"`);
+  expect(text).toContain('Şubat 2024 sonrası en düşük: **$0,57** (%90 · Kasım 2024)');
+  expect(text).toContain(`<t:${Date.parse('2026-10-01T18:26:44.000Z')/1000}:d> · **$1,15** · %80`);
+  expect(text).toContain(`<t:${Date.parse('2026-07-09T17:17:12.000Z')/1000}:d> · **$5,79**"`);
   expect(text).toContain('[IsThereAnyDeal](https://isthereanydeal.com/)');
   expect(text).not.toMatch(/gözlem|observation/i);
  });

@@ -273,7 +273,7 @@ describe('bot wiring', () => {
     ['setup', mocks.setup, [expect.any(SetupService), expect.any(AbortSignal), {
       bannerUrl: undefined,
       pollIntervalHours: 6,
-    }]],
+    }, { navigate: mocks.navigate }]],
     ['region', mocks.region, [expect.any(UserConfigurationService)]],
     ['status', mocks.status, [expect.any(StatusService), expect.any(UserConfigurationService), expect.any(AbortSignal), expect.any(DiscountThresholdService), expect.any(TestNotificationService), { navigate: mocks.navigate }]],
     ['check', mocks.check, [expect.any(CheckService), expect.any(StatusService), expect.any(NotificationService), { navigate: mocks.navigate, lifecycleSignal: expect.any(AbortSignal) }]],

@@ -139,7 +139,7 @@ describe('Discord slash commands', () => {
     await handleRegion(interaction as never, service as never);
 
     expect(service.setStoreCountry).toHaveBeenCalledWith('discord-user', 'DE');
-    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0])).toContain('Germany (DE)');
+    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0])).toContain('🇩🇪 Germany');
   });
 
   it('explains an inaccessible wishlist after a manual check', async () => {

@@ -1,3 +1,4 @@
+import { storeCountryName, type StoreCountryCode } from '../../domain/store-country.js';
 import type { Language } from '../../domain/user-config.js';
 import { formatMinorPrice } from '../notification-messages.js';
 import { dealioBrand } from './brand.js';
@@ -27,6 +28,11 @@ export function panelHeader(tab: DealioTab, language: Language, title: string, s
   return `-# ${section.emoji} DEALIO · ${language === 'tr' ? section.tr : section.en}\n# ${title}${subtitle ? `\n${subtitle}` : ''}`;
 }
 
+/** "🇹🇷 Türkiye": the one way a Store country is shown. */
+export function countryDisplay(countryCode: StoreCountryCode, language: Language): string {
+  return `${flagEmoji(countryCode)} ${storeCountryName(countryCode, language)}`;
+}
+
 /** The country's flag from its two-letter code (regional indicator symbols). */
 export function flagEmoji(countryCode: string): string {
   return /^[A-Z]{2}$/.test(countryCode)
@@ -34,12 +40,17 @@ export function flagEmoji(countryCode: string): string {
     : '🌍';
 }
 
-/** An inline-code pill such as `−%90`, which Discord draws as a small badge. */
-export function discountBadge(percent: number, language: Language): string {
-  return language === 'tr' ? `\`−%${percent}\`` : `\`−${percent}%\``;
+/** How strong a discount is at a glance: 🟢 big (70%+), 🟡 good (40%+), 🟠 small. */
+export function discountTier(percent: number): string {
+  return percent >= 70 ? '🟢' : percent >= 40 ? '🟡' : '🟠';
 }
 
-/** "**USD 1,99**  ~~USD 19,99~~  `−%90`", or the price alone when there is no discount. */
+/** "🟢 `−%90`": the tier dot and an inline-code pill, which Discord draws as a small badge. */
+export function discountBadge(percent: number, language: Language): string {
+  return `${discountTier(percent)} ${language === 'tr' ? `\`−%${percent}\`` : `\`−${percent}%\``}`;
+}
+
+/** "**$1,99**  ~~$19,99~~  🟢 `−%90`", or the price alone when there is no discount. */
 export function priceLine(
   price: { readonly finalMinor: number; readonly initialMinor: number; readonly discountPercent: number; readonly currency: string },
   language: Language,
@@ -50,7 +61,7 @@ export function priceLine(
     : final;
 }
 
-/** "💰 USD 18,00 tasarruf" for a discounted price, else null. */
+/** "💰 $18,00 tasarruf" for a discounted price, else null. */
 export function savingsLine(
   price: { readonly finalMinor: number; readonly initialMinor: number; readonly currency: string },
   language: Language,

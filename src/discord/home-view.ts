@@ -5,11 +5,10 @@ import {
 } from 'discord.js';
 import type { StatusDashboardResult } from '../application/status-service.js';
 import type { StatusV2Options } from './status-view-v2.js';
-import { storeCountryLabel } from '../domain/store-country.js';
 import { sanitizeGameName } from './notification-messages.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { dealioBrand } from './ui/brand.js';
-import { flagEmoji, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
+import { countryDisplay, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
@@ -47,7 +46,7 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
   root.addTextDisplayComponents(display(
     panelHeader('home', language, t('Wishlist’in. Senin kuralların.', 'Your wishlist. Your rules.'),
       t('İstediğin oyunu, istediğin fiyata yakala.', 'Get the games you want at the price you choose.')) +
-    '\n-# ' + tracking + '　' + flagEmoji(config.storeCountryCode) + ' ' + storeCountryLabel(config.storeCountryCode, language) +
+    '\n-# ' + tracking + '　' + countryDisplay(config.storeCountryCode, language) +
     '　' + timing,
   ));
   divider(true);

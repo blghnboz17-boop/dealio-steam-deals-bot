@@ -8,7 +8,7 @@ import {
   InvalidUserConfigurationError,
   UserConfigurationService,
 } from '../../application/user-configuration-service.js';
-import { storeCountryLabel } from '../../domain/store-country.js';
+import { countryDisplay } from '../ui/design.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
 import {
@@ -63,7 +63,7 @@ export async function handleRegion(
       }));
       return;
     }
-    const label = storeCountryLabel(updated.storeCountryCode, updated.language);
+    const label = countryDisplay(updated.storeCountryCode, updated.language);
     const unchanged = updated.configVersion === existing.configVersion;
     await measureDiscordOperation(interaction, 'region.render', () => interaction.editReply({
       flags: dealioV2Flags,

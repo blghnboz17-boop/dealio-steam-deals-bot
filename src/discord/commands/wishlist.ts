@@ -6,8 +6,8 @@ import { handleAssistant } from './assistant.js';
 
 export const wishlistCommand = new SlashCommandBuilder()
   .setName('wishlist')
-  .setDescription('Show your live Steam wishlist')
-  .setDescriptionLocalizations({ tr: 'Güncel Steam wishlistini göster' });
+  .setDescription('Open your games, price targets and price history')
+  .setDescriptionLocalizations({ tr: 'Oyunlarını, hedef fiyatlarını ve fiyat geçmişini aç' });
 
 /** /wishlist opens the Dealio panel at its My games tab. */
 export async function handleWishlist(
