@@ -19,7 +19,11 @@ import type {
 } from '../application/initial-wishlist-summary-service.js';
 import type { NotificationSendOptions, SaleNotification } from '../application/notification-service.js';
 import { historicalLowLine, priceHistoryCredit } from './price-history-text.js';
-import { countryDisplay, hotDealPercent, hotPrefix, openPanelButton, priceLine, savingsLine } from './ui/design.js';
+import {
+  countryDisplay, freeToKeepLine, hotDealPercent, hotPrefix, openPanelButton, platformText, priceLine, reviewLine,
+  saleEndLine, savingsLine, steamAppLink,
+} from './ui/design.js';
+import { historicalLowStanding } from '../domain/price-history.js';
 import type { Language } from '../domain/user-config.js';
 import { sanitizeGameName } from './notification-messages.js';
 import { sortInitialWishlistSales, type InitialSummaryPresentationOptions } from './initial-wishlist-summary-messages.js';
@@ -40,10 +44,19 @@ function messageActionRow(language: Language): ActionRowBuilder<ButtonBuilder> {
 function saleHeader(notifications: readonly SaleNotification[], language: Language, options: NotificationSendOptions): string {
   const tr = language === 'tr';
   const target = notifications.some((notification) => notification.reason?.startsWith('target:'));
-  const emoji = options.digest ? '📬' : target ? '🎯'
+  const free = notifications.every((notification) => notification.finalPriceMinor === 0);
+  const lowest = notifications.every((notification) => {
+    const standing = notification.historicalLow
+      && historicalLowStanding(notification.finalPriceMinor, notification.currency, notification.historicalLow);
+    return standing === 'new-low' || standing === 'matches-low';
+  });
+  const emoji = options.digest ? '📬' : free ? '🎁' : target ? '🎯' : lowest ? '🏆'
     : notifications.some((notification) => notification.discountPercent >= hotDealPercent) ? '🔥' : '🔔';
-  const kind = options.digest ? (tr ? 'GÜNLÜK ÖZET' : 'DAILY DIGEST') : (tr ? 'İNDİRİM' : 'SALE');
+  const kind = options.digest ? (tr ? 'GÜNLÜK ÖZET' : 'DAILY DIGEST')
+    : free ? (tr ? 'ÜCRETSİZ' : 'FREE TO KEEP')
+    : lowest ? (tr ? 'EN DÜŞÜK FİYAT' : 'LOWEST PRICE') : (tr ? 'İNDİRİM' : 'SALE');
   const title = options.digest ? (tr ? 'Günlük wishlist özetin' : 'Your daily wishlist digest')
+    : free ? freeTitle(language, notifications.length)
     : target ? (tr ? 'Beklediğin fiyat geldi' : 'Your price target was reached')
     : saleTitle(language, notifications.length);
   // A test is the real alert with a TEST tag, so the user sees exactly what will arrive.
@@ -69,7 +82,9 @@ export function buildSaleNotificationPanel(
     )
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
 
-  const gameTexts: Array<{ display: TextDisplayBuilder; name: string; heading: (title: string) => string; details: string }> = [];
+  const gameTexts: Array<{
+    display: TextDisplayBuilder; name: string; heading: (title: string) => string; details: string; compact: string;
+  }> = [];
   for (const notification of notifications) {
     const storeUrl = `https://store.steampowered.com/app/${notification.appId}/`;
     const name = sanitizeGameName(notification.gameName);
@@ -79,17 +94,24 @@ export function buildSaleNotificationPanel(
       discountPercent: notification.discountPercent,
       currency: notification.currency,
     };
-    const savings = savingsLine(price, language);
-    const details = [
+    const lines = (compact: boolean) => [
       priceLine(price, language),
-      ...(notification.reason?.startsWith('target:') ? [language==='tr'?'🎯 Hedef fiyatına ulaştı.':'🎯 Your target price was reached.']:[]),
+      freeToKeepLine(price, language),
+      notification.reason?.startsWith('target:') ? (language==='tr'?'🎯 Hedef fiyatına ulaştı.':'🎯 Your target price was reached.') : null,
       ...historicalLowLines(notification, language),
-      ...(savings ? [savings] : []),
-      `-# ${countryDisplay(notification.storeCountryCode, language)}`,
-    ].join('\n');
+      savingsLine(price, language),
+      saleEndLine(notification.storeFacts, language),
+      compact ? null : reviewLine(notification.storeFacts, language),
+      '-# ' + [
+        countryDisplay(notification.storeCountryCode, language),
+        compact ? null : platformText(notification.storeFacts),
+        compact ? null : steamAppLink(notification.appId, language),
+      ].filter(Boolean).join(' · '),
+    ].filter(Boolean).join('\n');
     const heading = (title: string) => `## ${hotPrefix(notification.discountPercent)}[${title}](${storeUrl})`;
+    const details = lines(false);
     const display = new TextDisplayBuilder().setContent(`${heading(name)}\n${details}`);
-    gameTexts.push({ display, name, heading, details });
+    gameTexts.push({ display, name, heading, details, compact: lines(true) });
     container.addSectionComponents(
       artworkAccessory(new SectionBuilder().addTextDisplayComponents(display), notification),
     );
@@ -102,7 +124,14 @@ export function buildSaleNotificationPanel(
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(dealioFooter(language)))
     .addActionRowComponents(messageActionRow(language));
   // Legacy durable batches retain all their games and their delivery identity.
-  // Shorten only titles when necessary to fit Discord's combined text budget.
+  // Over Discord's combined text budget, drop the optional Store context first,
+  // then shorten titles.
+  if (componentsV2TextLength([container]) > 4000) {
+    for (const game of gameTexts) {
+      game.details = game.compact;
+      game.display.setContent(`${game.heading(game.name)}\n${game.details}`);
+    }
+  }
   let excess = componentsV2TextLength([container]) - 4000;
   for (const game of [...gameTexts].sort((a, b) => b.name.length - a.name.length)) {
     if (excess <= 0) break;
@@ -208,17 +237,31 @@ function initialSaleText(sale: InitialWishlistSale, summary: InitialWishlistSumm
     discountPercent: sale.discountPercent,
     currency: sale.currency,
   };
-  const savings = savingsLine(price, summary.language);
+  const language = summary.language;
   return [
     `## ${hotPrefix(sale.discountPercent)}[${sanitizeGameName(sale.gameName)}](${storeUrl})`,
-    priceLine(price, summary.language),
-    ...(savings ? [savings] : []),
-    `-# ${countryDisplay(summary.storeCountryCode, summary.language)} · [${messages.openSteamStore}](${storeUrl})`,
-  ].join('\n');
+    priceLine(price, language),
+    freeToKeepLine(price, language),
+    savingsLine(price, language),
+    saleEndLine(sale.storeFacts, language),
+    reviewLine(sale.storeFacts, language),
+    '-# ' + [
+      countryDisplay(summary.storeCountryCode, language),
+      platformText(sale.storeFacts),
+      `[🛒 ${messages.openSteamStore}](${storeUrl})`,
+      steamAppLink(sale.appId, language),
+    ].filter(Boolean).join(' · '),
+  ].filter(Boolean).join('\n');
 }
 
 function maskSteamId(steamId64: string): string {
   return `${steamId64.slice(0, 5)}••••••••${steamId64.slice(-4)}`;
+}
+
+function freeTitle(language: Language, count: number): string {
+  return language === 'tr'
+    ? count === 1 ? 'Wishlistindeki bir oyun ücretsiz!' : `Wishlistinde ${count} oyun ücretsiz!`
+    : count === 1 ? 'A wishlist game is free to keep!' : `${count} wishlist games are free to keep!`;
 }
 
 function saleTitle(language: Language, count: number): string {

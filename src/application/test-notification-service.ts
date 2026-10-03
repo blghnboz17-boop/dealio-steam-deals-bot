@@ -54,6 +54,7 @@ export async function wishlistTestSale(
     discountPercent: best.price.discountPercent,
     storeCountryCode: config.storeCountryCode,
     ...(best.headerImageUrl ? { headerImageUrl: best.headerImageUrl } : {}),
+    ...(best.storeFacts ? { storeFacts: best.storeFacts } : {}),
     ...(historicalLow ? { historicalLow } : {}),
   };
 }

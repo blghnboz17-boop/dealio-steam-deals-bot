@@ -11,6 +11,8 @@ const items = games.map(([appId, name, initialMinor, finalMinor, discountPercent
   appId, name, priority: null, dateAdded: null, onSale: true, priceObservedAt: date,
   headerImageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
   price: { currency: 'USD', initialMinor, finalMinor, discountPercent, isFree: false },
+  storeFacts: { reviewLabel: 'Very Positive', reviewPercent: 94, reviewCount: 120000, steamDeck: 'verified',
+    platforms: { windows: true, mac: appId === 620, linux: appId === 620 }, saleEndsAt: '2030-01-01T00:00:00.000Z' },
 }));
 const panels = {};
 for (const language of ['tr', 'en']) {
@@ -37,7 +39,7 @@ for (const language of ['tr', 'en']) {
   const notifications = items.map((item) => ({
     discordUserId: 'preview-user', appId: item.appId, saleEpisodeId: 'preview', gameName: item.name,
     currency: 'USD', normalPriceMinor: item.price.initialMinor, finalPriceMinor: item.price.finalMinor,
-    discountPercent: item.price.discountPercent, createdAt: date, storeCountryCode: 'TR',
+    discountPercent: item.price.discountPercent, createdAt: date, storeCountryCode: 'TR', storeFacts: item.storeFacts,
   }));
   const assistantData={config,items,capturedAt:date,rules:new Map([[620,{mode:'target',targetMinor:299,currency:'USD',percent:null,muted:false,revision:1}]]),
     preference:{mode:'quiet',timezone:'Europe/Istanbul',quietStart:1380,quietEnd:480,digestMinute:null},
@@ -56,6 +58,7 @@ for (const language of ['tr', 'en']) {
     test: [buildSaleNotificationPanel([{ ...notifications[0], headerImageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${notifications[0].appId}/header.jpg` }],
       language, { test: true, testSource: 'wishlist' }).toJSON()],
     welcome: [buildSetupWelcomePanel(language, 'preview').toJSON()],
+    free: [buildSaleNotificationPanel([{ ...notifications[1], finalPriceMinor: 0, discountPercent: 100 }], language).toJSON()],
     blocked: [buildStatusV2Panel({ ...dashboard, config: { ...config, enabled: false, dmDeliveryBlockedAt: date } }, 'preview', { mode: 'home' }).toJSON()],
     partial: [buildStatusV2Panel({ ...dashboard, checkState: { ...dashboard.checkState, lastStatus: 'unavailable', lastSuccessUnknownPriceCount: 4 } }, 'preview', { mode: 'home' }).toJSON()],
     empty: personal('wishlist', { ...assistantData, items: [] }),

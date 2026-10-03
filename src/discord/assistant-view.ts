@@ -12,7 +12,10 @@ import { messagesFor } from './messages.js';
 import { defaultPollIntervalHours } from '../config/environment.js';
 import { historicalLowLine, priceChangeLine, priceHistoryCredit } from './price-history-text.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
-import { countryDisplay, hotDealPercent, hotPrefix, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
+import {
+  countryDisplay, freeToKeepLine, hotDealPercent, hotPrefix, panelHeader, platformText, priceLine, reviewLine, saleEndLine,
+  savingsLine, steamAppUrl, tabAccent,
+} from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 import { defaultTimezone, timezoneChoices, timezoneLabel } from '../domain/timezone.js';
 
@@ -112,9 +115,13 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       const p=pricedItem(item),rule=data.rules.get(item.appId);
       add('-# 🎮 DEALIO · '+(tr?'OYUNLARIM':'MY GAMES'));
       addArtwork(root, item);
-      const savings=p&&savingsLine(p,lang);
-      add('# '+escapeMarkdown(item.name).slice(0,120)+'\n'+(p?priceLine(p,lang):(tr?'Fiyat doğrulanamadı':'Price unavailable'))+
-        (savings?'\n'+savings:'')+'\n-# 🕒 '+(tr?'Steam fiyatı alındı: ':'Steam price fetched: ')+relative(item.priceObservedAt??data.capturedAt));
+      const facts=item.storeFacts;
+      add(['# '+hotPrefix(p?.discountPercent)+escapeMarkdown(item.name).slice(0,120),
+        p?priceLine(p,lang):(tr?'Fiyat doğrulanamadı':'Price unavailable'),
+        p&&freeToKeepLine(p,lang), p&&savingsLine(p,lang), item.onSale?saleEndLine(facts,lang):null, reviewLine(facts,lang),
+        '-# '+['🕒 '+(tr?'Steam fiyatı alındı: ':'Steam price fetched: ')+relative(item.priceObservedAt??data.capturedAt),
+          platformText(facts)].filter(Boolean).join(' · '),
+      ].filter(Boolean).join('\n'));
       notice();
       divider();
       const eligible=matchesRule(item,rule,data.config.minimumDiscountPercent);
@@ -122,11 +129,14 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
         (rule?.mode==='target'&&p?.currency!==rule.currency?(tr?' · ⚠️ Para birimi değişmiş; hedefi yeniden kaydet.':' · ⚠️ Currency changed; save a new target.'):'')+'\n'+
         (eligible?(tr?'✅ Şu anki fiyat kuralına uygun. Kural kaydı ayrıca DM göndermez.':'✅ The current price matches your rule. Saving a rule does not send an initial DM.')
           :(tr?'⏳ Kuralına uyan bir fiyat gelince DM ile haber vereceğiz.':'⏳ We will DM you when a price meets your rule.')));
+      const history=data.priceHistory;
+      const low=history?.status==='ready'?history.history?.low:undefined;
       root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
         button(prefix+'inherit',tr?'Genel kural':'Global rule','♻️'),
         button(prefix+'percent',tr?'İndirim yüzdesi':'Discount %','🏷️'),
-        button(prefix+'target',tr?'Hedef fiyat':'Target price','🎯',true).setDisabled(disabled||!p)));
-      const history=data.priceHistory;
+        button(prefix+'target',tr?'Hedef fiyat':'Target price','🎯',true).setDisabled(disabled||!p),
+        // One tap: a target at the recorded Steam low in the current currency.
+        ...(low&&p&&low.currency===p.currency?[button(prefix+'low',tr?'En düşükte haber ver':'Alert at the lowest','🏆')]:[])));
       if(history&&p){
         divider();
         add('### 📈 '+(tr?'Steam fiyat geçmişi':'Steam price history'));
@@ -145,7 +155,8 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
         button(prefix+'wishlist',tr?'Listeye dön':'Back to list','◀️'),
         button(prefix+'mute',rule?.muted?(tr?'Sesi aç':'Unmute'):(tr?'Oyunu sustur':'Mute game'),rule?.muted?'🔔':'🔕')));
       root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://store.steampowered.com/app/'+item.appId).setEmoji('🛒').setLabel(tr?'Steam’de aç':'Open on Steam')));
+        new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://store.steampowered.com/app/'+item.appId).setEmoji('🛒').setLabel(tr?'Steam’de aç':'Open on Steam'),
+        new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(steamAppUrl(item.appId)).setEmoji('🖥️').setLabel(tr?'Steam uygulamasında aç':'Open in the Steam app')));
     }
   } else if(view.screen==='history'){
     add(panelHeader('alerts',lang,tr?'Bildirim geçmişin':'Your alert history',

@@ -1,6 +1,7 @@
 import { ButtonBuilder, ButtonStyle } from 'discord.js';
 import { storeCountryName, type StoreCountryCode } from '../../domain/store-country.js';
 import type { Language } from '../../domain/user-config.js';
+import type { StoreFacts } from '../../domain/steam.js';
 import { formatMinorPrice } from '../notification-messages.js';
 import { dealioBrand } from './brand.js';
 import { openPanelCustomId } from './components-v2.js';
@@ -50,9 +51,9 @@ export function discountTier(percent: number): string {
   return percent >= hotDealPercent ? '🟢' : percent >= 30 ? '🟡' : '🟠';
 }
 
-/** "🔥 " before a hot deal's name, nothing otherwise, so the flame keeps its meaning. */
+/** "🎁 " for a free-to-keep game, "🔥 " for a hot deal, nothing otherwise, so each keeps its meaning. */
 export function hotPrefix(percent: number | null | undefined): string {
-  return (percent ?? 0) >= hotDealPercent ? '🔥 ' : '';
+  return (percent ?? 0) >= 100 ? '🎁 ' : (percent ?? 0) >= hotDealPercent ? '🔥 ' : '';
 }
 
 /** "🟢 `−%90`": the tier dot and an inline-code pill, which Discord draws as a small badge. */
@@ -65,7 +66,8 @@ export function priceLine(
   price: { readonly finalMinor: number; readonly initialMinor: number; readonly discountPercent: number; readonly currency: string },
   language: Language,
 ): string {
-  const final = `**${formatMinorPrice(price.finalMinor, price.currency, language)}**`;
+  const freeToKeep = price.finalMinor === 0 && price.initialMinor > 0;
+  const final = `**${freeToKeep ? (language === 'tr' ? 'Ücretsiz' : 'Free') : formatMinorPrice(price.finalMinor, price.currency, language)}**`;
   return price.discountPercent > 0 && price.initialMinor > price.finalMinor
     ? `${final}  ~~${formatMinorPrice(price.initialMinor, price.currency, language)}~~  ${discountBadge(price.discountPercent, language)}`
     : final;
@@ -87,4 +89,59 @@ export function savingsLine(
 export function openPanelButton(language: Language, style: ButtonStyle = ButtonStyle.Primary): ButtonBuilder {
   return new ButtonBuilder().setCustomId(openPanelCustomId).setStyle(style).setEmoji('🏠')
     .setLabel(language === 'tr' ? 'Dealio paneli' : 'Dealio panel');
+}
+
+const steamDeckLabels = {
+  verified: { tr: 'Doğrulandı', en: 'Verified' },
+  playable: { tr: 'Oynanabilir', en: 'Playable' },
+  unsupported: { tr: 'Desteklenmiyor', en: 'Unsupported' },
+} as const;
+
+/** "⭐ Son Derece Olumlu · %98　🎮 Steam Deck: Doğrulandı", or null when Steam gave neither. */
+export function reviewLine(facts: StoreFacts | undefined, language: Language): string | null {
+  const parts: string[] = [];
+  if (facts?.reviewLabel || facts?.reviewPercent !== undefined) {
+    const percent = facts.reviewPercent === undefined ? null
+      : language === 'tr' ? `%${facts.reviewPercent}` : `${facts.reviewPercent}%`;
+    parts.push(`⭐ ${[facts.reviewLabel ? `**${facts.reviewLabel}**` : null, percent].filter(Boolean).join(' · ')}`);
+  }
+  if (facts?.steamDeck) parts.push(`🎮 Steam Deck: ${steamDeckLabels[facts.steamDeck][language]}`);
+  return parts.length > 0 ? parts.join('　') : null;
+}
+
+/** "💻 Windows · macOS · Linux", or null. */
+export function platformText(facts: StoreFacts | undefined): string | null {
+  const platforms = facts?.platforms;
+  if (!platforms) return null;
+  const names = [platforms.windows && 'Windows', platforms.mac && 'macOS', platforms.linux && 'Linux'].filter(Boolean);
+  return names.length > 0 ? `💻 ${names.join(' · ')}` : null;
+}
+
+/** "⏳ İndirim 3 gün içinde bitiyor" (a Discord relative time), only for a future end. */
+export function saleEndLine(facts: StoreFacts | undefined, language: Language, now = Date.now()): string | null {
+  const end = facts?.saleEndsAt ? Date.parse(facts.saleEndsAt) : Number.NaN;
+  if (!Number.isFinite(end) || end <= now) return null;
+  const at = `<t:${Math.floor(end / 1000)}:R>`;
+  return language === 'tr' ? `⏳ İndirim ${at} bitiyor` : `⏳ Sale ends ${at}`;
+}
+
+/** "🎁 Sınırlı süre: şimdi alırsan oyun sonsuza kadar senin." for a 100% discount, else null. */
+export function freeToKeepLine(price: { readonly finalMinor: number; readonly initialMinor: number }, language: Language): string | null {
+  if (price.finalMinor !== 0 || price.initialMinor <= 0) return null;
+  return language === 'tr'
+    ? '🎁 **Sınırlı süre ücretsiz:** şimdi kütüphanene eklersen oyun sonsuza kadar senin.'
+    : '🎁 **Free for a limited time:** add it to your library now and it is yours to keep.';
+}
+
+/**
+ * Opens the game in the Steam app. Discord links accept only http(s), so a tiny
+ * page on Dealio's public site forwards to steam://store/<appId>.
+ */
+export function steamAppUrl(appId: number): string {
+  return `https://blghnboz17-boop.github.io/dealio-public-pages/open.html?app=${appId}`;
+}
+
+/** "[🖥️ Steam uygulamasında aç](…)" for inline use in alert text. */
+export function steamAppLink(appId: number, language: Language): string {
+  return `[🖥️ ${language === 'tr' ? 'Steam uygulamasında aç' : 'Open in the Steam app'}](${steamAppUrl(appId)})`;
 }

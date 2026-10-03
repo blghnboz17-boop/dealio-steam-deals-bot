@@ -2,6 +2,7 @@ import { steamArtworkUrl } from '../domain/steam-artwork.js';
 import {
   SteamWishlistError,
   type SalePrice,
+  type StoreFacts,
 } from '../domain/steam.js';
 
 interface ParsedWishlistEntry {
@@ -12,6 +13,7 @@ interface ParsedWishlistEntry {
 
 export interface ParsedStoreItem {
   readonly headerImageUrl?: string;
+  readonly storeFacts?: StoreFacts;
   readonly name: string;
   readonly isFree: boolean;
 }
@@ -135,11 +137,54 @@ function parseStoreItem(item: JsonObject | undefined, appId: number): ParsedStor
   }
 
   const headerImageUrl = storeItemArtworkUrl(item.assets, appId);
+  const storeFacts = parseStoreFacts(item);
   return {
     name: item.name,
     isFree: item.is_free === true,
     ...(headerImageUrl ? { headerImageUrl } : {}),
+    ...(storeFacts ? { storeFacts } : {}),
   };
+}
+
+const steamDeckCategories = { 1: 'unsupported', 2: 'playable', 3: 'verified' } as const;
+
+/**
+ * Reviews, platforms, Steam Deck support and the discount end from a GetItems
+ * entry. This is optional context: malformed or missing parts are left out and
+ * never fail the item.
+ */
+export function parseStoreFacts(item: JsonObject): StoreFacts | undefined {
+  const facts: { -readonly [K in keyof StoreFacts]: StoreFacts[K] } = {};
+  const reviews = isObject(item.reviews) && isObject(item.reviews.summary_filtered)
+    ? item.reviews.summary_filtered : undefined;
+  if (reviews && Number.isSafeInteger(reviews.review_count) && (reviews.review_count as number) > 0) {
+    facts.reviewCount = reviews.review_count as number;
+    if (Number.isSafeInteger(reviews.percent_positive)
+      && (reviews.percent_positive as number) >= 0 && (reviews.percent_positive as number) <= 100) {
+      facts.reviewPercent = reviews.percent_positive as number;
+    }
+    if (typeof reviews.review_score_label === 'string' && reviews.review_score_label.trim() !== '') {
+      facts.reviewLabel = reviews.review_score_label.trim().slice(0, 60);
+    }
+  }
+  const platforms = isObject(item.platforms) ? item.platforms : undefined;
+  if (platforms) {
+    const supported = {
+      windows: platforms.windows === true,
+      mac: platforms.mac === true,
+      linux: platforms.steamos_linux === true,
+    };
+    if (supported.windows || supported.mac || supported.linux) facts.platforms = supported;
+    const deck = steamDeckCategories[platforms.steam_deck_compat_category as keyof typeof steamDeckCategories];
+    if (deck) facts.steamDeck = deck;
+  }
+  const discounts = isObject(item.best_purchase_option) && Array.isArray(item.best_purchase_option.active_discounts)
+    ? item.best_purchase_option.active_discounts : [];
+  const ends = discounts
+    .map((discount) => (isObject(discount) ? discount.discount_end_date : undefined))
+    .filter((end): end is number => Number.isSafeInteger(end) && (end as number) > 0);
+  if (ends.length > 0) facts.saleEndsAt = new Date(Math.min(...ends) * 1000).toISOString();
+  return Object.keys(facts).length > 0 ? facts : undefined;
 }
 
 function storeItemArtworkUrl(assets: unknown, appId: number): string | undefined {

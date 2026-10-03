@@ -265,6 +265,7 @@ export class SteamClient {
         priceObservedAt: priced.observedAt,
         name: details.value.name,
         ...(details.value.headerImageUrl ? { headerImageUrl: details.value.headerImageUrl } : {}),
+        ...(details.value.storeFacts ? { storeFacts: details.value.storeFacts } : {}),
         priority: entry.priority,
         dateAdded: entry.dateAdded,
         price,
@@ -310,7 +311,7 @@ export class SteamClient {
             country_code: storeCountryCode,
             steam_realm: 1,
           },
-          data_request: { include_assets: true },
+          data_request: { include_assets: true, include_platforms: true, include_reviews: true, include_all_purchase_options: true },
         });
         return parseStoreItemsResponse(
           await this.requestJson(`${storeItemsEndpoint}?input_json=${encodeURIComponent(input)}`),

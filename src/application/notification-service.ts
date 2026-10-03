@@ -1,6 +1,7 @@
 import { redactSecrets, safeLogger } from './safe-logger.js';
 import { deliveryAllowed } from '../domain/notification-preference.js';
 import type { HistoricalLow } from '../domain/price-history.js';
+import type { StoreFacts } from '../domain/steam.js';
 import type { Language } from '../domain/user-config.js';
 import type { StoreCountryCode } from '../domain/store-country.js';
 import type {
@@ -31,6 +32,8 @@ export interface NotificationSender {
 
 export interface SaleNotification {
   readonly headerImageUrl?: string;
+  /** Presentation-only Store context (reviews, platforms, sale end) from the latest snapshot. */
+  readonly storeFacts?: StoreFacts;
   readonly reason?: string;
   readonly discordUserId: string;
   readonly appId: number;
@@ -281,10 +284,14 @@ export class NotificationService {
       const config = this.userConfigRepository.findByDiscordUserId(batch.notifications[0].discordUserId);
       if (!config) return batch;
       const snapshot = this.wishlistStateRepository.assistant.snapshot(config);
-      const images = new Map(snapshot?.items.map(item => [item.appId, item.headerImageUrl]));
+      const metadata = new Map(snapshot?.items.map(item => [item.appId, item]));
       const enrich = (item: NotificationCandidate): NotificationCandidate => {
-        const headerImageUrl = images.get(item.appId);
-        return headerImageUrl ? { ...item, headerImageUrl } : item;
+        const { headerImageUrl, storeFacts } = metadata.get(item.appId) ?? {};
+        return {
+          ...item,
+          ...(headerImageUrl ? { headerImageUrl } : {}),
+          ...(storeFacts ? { storeFacts } : {}),
+        };
       };
       const [first, ...rest] = batch.notifications;
       return { ...batch, notifications: [enrich(first), ...rest.map(enrich)] };

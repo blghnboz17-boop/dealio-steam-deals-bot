@@ -2,6 +2,7 @@
 import { ChatInputCommandInteraction, LabelBuilder, MessageFlags, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import type { AssistantService } from '../../application/assistant-service.js';
 import type { WishlistViewService } from '../../application/wishlist-view-service.js';
+import { formatMinorPrice } from '../notification-messages.js';
 import { buildAssistantView, effectiveTimezone, type AssistantView, type AssistantViewData, type GameHistoryState, filteredAssistantItems } from '../assistant-view.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { buildNoticePanel, dealioV2Flags, dealioEphemeralV2Flags, dealioUiSessionTimeoutMs } from '../ui/components-v2.js';
@@ -227,6 +228,18 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
         const p=savedPreference(service.repository.preference(user));
         await service.preference(user,config.configurationId,{...p,timezone:component.values[0]??p.timezone},config.configVersion);
         view.notice=tr?'Saat dilimin kaydedildi.':'Time zone saved.';
+      }
+      else if(action==='low'&&view.selectedAppId){
+        const selected=items.find(i=>i.appId===view.selectedAppId), currency=selected?.price?.currency;
+        const state=currency?histories.get(`${config.storeCountryCode}:${view.selectedAppId}:${currency}`):undefined;
+        const low=state?.status==='ready'?state.history?.low:undefined;
+        if(selected&&currency&&low&&low.currency===currency){
+          const existing=service.repository.rule(config,selected.appId);
+          await service.rule(user,config.configurationId,selected.appId,
+            {mode:'target',targetMinor:low.amountMinor,currency,percent:null,muted:existing?.muted??false},config.configVersion);
+          view.notice=tr?`🏆 Fiyat ${formatMinorPrice(low.amountMinor,currency,'tr')} veya altına inince haber vereceğiz.`
+            :`🏆 We will DM you when the price reaches ${formatMinorPrice(low.amountMinor,currency,'en')} or less.`;
+        }
       }
       else if((action==='inherit'||action==='mute')&&view.selectedAppId){
         const existing=service.repository.rule(config,view.selectedAppId)??{mode:'inherit',percent:null,targetMinor:null,currency:null,muted:false,revision:0};
