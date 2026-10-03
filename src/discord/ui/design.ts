@@ -1,7 +1,7 @@
 import { ButtonBuilder, ButtonStyle } from 'discord.js';
 import { storeCountryName, type StoreCountryCode } from '../../domain/store-country.js';
 import type { Language } from '../../domain/user-config.js';
-import type { StoreFacts } from '../../domain/steam.js';
+import type { StoreFacts, UpcomingRelease, WishlistItem, WishlistItemError } from '../../domain/steam.js';
 import { formatMinorPrice } from '../notification-messages.js';
 import { dealioBrand } from './brand.js';
 import { openPanelCustomId } from './components-v2.js';
@@ -144,4 +144,50 @@ export function steamAppUrl(appId: number): string {
 /** "[🖥️ Steam uygulamasında aç](…)" for inline use in alert text. */
 export function steamAppLink(appId: number, language: Language): string {
   return `[🖥️ ${language === 'tr' ? 'Steam uygulamasında aç' : 'Open in the Steam app'}](${steamAppUrl(appId)})`;
+}
+
+/** "12 Ekim 2026", "Ekim 2026", "2027 Ç4", "2027", or Steam's own text, as precise as Steam states it. */
+export function releaseDateText(upcoming: UpcomingRelease, language: Language): string {
+  const locale = language === 'tr' ? 'tr-TR' : 'en-US';
+  const date = upcoming.date ? new Date(upcoming.date) : null;
+  if (date && !Number.isNaN(date.getTime())) {
+    const year = date.getUTCFullYear();
+    if (upcoming.precision === 'day') return new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(date);
+    if (upcoming.precision === 'month') return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
+    if (upcoming.precision === 'quarter') {
+      const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
+      return language === 'tr' ? `${year} ${quarter}. çeyrek` : `Q${quarter} ${year}`;
+    }
+    if (upcoming.precision === 'year') return String(year);
+  }
+  return upcoming.message ?? (language === 'tr' ? 'tarih açıklanmadı' : 'date not announced');
+}
+
+/** "🗓️ Yakında · 12 Ekim 2026": an unreleased game has no price yet, and that is not an error. */
+export function upcomingLine(upcoming: UpcomingRelease, language: Language): string {
+  return `🗓️ ${language === 'tr' ? 'Yakında' : 'Coming soon'} · ${releaseDateText(upcoming, language)}`;
+}
+
+/** What to show instead of a price: the release for an unreleased game, else an honest "unavailable". */
+export function noPriceText(item: Pick<WishlistItem, 'upcoming'>, language: Language): string {
+  return item.upcoming ? upcomingLine(item.upcoming, language)
+    : language === 'tr' ? '❔ Fiyat şu an doğrulanamadı' : '❔ Price could not be confirmed right now';
+}
+
+/** "🚫 1 oyun Türkiye mağazasında satılmıyor · 🗑️ 1 oyun Steam'den kaldırılmış", or null. */
+export function unavailableGamesLine(
+  errors: readonly Pick<WishlistItemError, 'code'>[] | undefined,
+  countryCode: StoreCountryCode,
+  language: Language,
+): string | null {
+  const regionLocked = errors?.filter((error) => error.code === 'STEAM_APP_REGION_UNAVAILABLE').length ?? 0;
+  const delisted = errors?.filter((error) => error.code === 'STEAM_APP_NOT_FOUND').length ?? 0;
+  const country = storeCountryName(countryCode, language);
+  const parts = [
+    regionLocked > 0 ? (language === 'tr' ? `🚫 ${regionLocked} oyun ${country} mağazasında satılmıyor`
+      : `🚫 ${regionLocked} ${regionLocked === 1 ? 'game is' : 'games are'} not sold in ${country}`) : null,
+    delisted > 0 ? (language === 'tr' ? `🗑️ ${delisted} oyun Steam'den kaldırılmış`
+      : `🗑️ ${delisted} ${delisted === 1 ? 'game was' : 'games were'} removed from Steam`) : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : null;
 }

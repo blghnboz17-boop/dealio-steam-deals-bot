@@ -52,6 +52,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       result.status==='cooldown'?cooldownNotice(result.retryAfterSeconds):(tr?'Steam’e erişilemiyor. Biraz sonra yeniden dene.':'Steam is unavailable. Try again shortly.'))]});return;
   }
   let items:AssistantViewData['items']=result?.items??[],capturedAt=result?.capturedAt??new Date().toISOString();
+  let errors:AssistantViewData['errors']=result?.errors??[];
   let loaded=result!==null;
   const view:AssistantView={screen,page:0,query:'',eligibleOnly:false};
   const data=():AssistantViewData=>{
@@ -60,7 +61,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       throw new Error('Configuration changed');
     const selected=items.find(i=>i.appId===view.selectedAppId);
     const historyKey=selected?.price?.currency?`${current.storeCountryCode}:${selected.appId}:${selected.price.currency}`:null;
-    return {config:current,items,capturedAt,
+    return {config:current,items,errors,capturedAt,
       rules:view.screen==='wishlist'||view.screen==='detail'?service.repository.rules(current):new Map(),
       preference:service.repository.preference(user),history:view.screen==='history'?service.repository.history(user):[],
       ...(view.screen==='detail'&&service.priceHistory&&historyKey?{priceHistory:histories.get(historyKey)??{status:'loading'}}:{})};
@@ -112,7 +113,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       fresh=>operations.enqueue(Promise.resolve(),async()=>{
         view.refreshing=false;
         if(collector.ended||signal?.aborted)return;
-        if(fresh.status==='success'){items=fresh.items;capturedAt=fresh.capturedAt;loaded=true;}
+        if(fresh.status==='success'){items=fresh.items;errors=fresh.errors;capturedAt=fresh.capturedAt;loaded=true;}
         else if(fresh.status==='cooldown')view.notice=cooldownNotice(fresh.retryAfterSeconds);
         else view.notice=tr?'Steam yenilemesi başarısız. Son kayıtlı liste gösteriliyor.':'Steam refresh failed. Showing the last saved wishlist.';
         await render();

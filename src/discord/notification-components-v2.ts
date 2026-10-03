@@ -20,7 +20,7 @@ import type {
 import type { NotificationSendOptions, SaleNotification } from '../application/notification-service.js';
 import { historicalLowLine, priceHistoryCredit } from './price-history-text.js';
 import {
-  countryDisplay, freeToKeepLine, hotDealPercent, hotPrefix, openPanelButton, platformText, priceLine, reviewLine,
+  countryDisplay, freeToKeepLine, unavailableGamesLine, hotDealPercent, hotPrefix, openPanelButton, platformText, priceLine, reviewLine,
   saleEndLine, savingsLine, steamAppLink,
 } from './ui/design.js';
 import { historicalLowStanding } from '../domain/price-history.js';
@@ -195,6 +195,11 @@ export function buildInitialWishlistV2Page(
       `👤 [${maskSteamId(summary.steamId64)}](${profileUrl})　${countryDisplay(summary.storeCountryCode, summary.language)}　🌐 ${tr ? 'Türkçe' : 'English'}`,
       `🎮 **${summary.totalGameCount}** ${tr ? 'oyun' : 'games'}${summary.failedItemCount > 0 ? ` · ${messages.wishlistFailedItems(summary.failedItemCount)}` : ''}` +
         `　🔔 ${tr ? `%${summary.minimumDiscountPercent} ve üzeri indirimlerde DM` : `DMs for ${summary.minimumDiscountPercent}%+ off`}`,
+      ...[[
+        summary.upcomingCount ? `🗓️ ${tr ? `${summary.upcomingCount} oyun henüz çıkmadı; çıkınca fiyatı takip edilir`
+          : `${summary.upcomingCount} ${summary.upcomingCount === 1 ? 'game is' : 'games are'} not released yet; tracked once released`}` : null,
+        unavailableGamesLine(summary.unavailableItems, summary.storeCountryCode, summary.language),
+      ].filter(Boolean).join(' · ')].filter(Boolean).map((line) => `-# ${line}`),
       `-# 🔄 ${messages.setupWizardFrequency(options.pollIntervalHours ?? defaultPollIntervalHours)} · ${tr ? 'Oyun kuralları, bildirim saatleri ve ayarlar Dealio panelinde.' : 'Game rules, alert timing and settings live in the Dealio panel.'}`,
     ].join('\n')),
   );

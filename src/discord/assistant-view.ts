@@ -2,7 +2,7 @@ import { artworkAccessory, addArtwork } from './ui/game-artwork.js';
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, SectionBuilder, SeparatorBuilder,
   SeparatorSpacingSize, StringSelectMenuBuilder, TextDisplayBuilder, escapeMarkdown } from 'discord.js';
-import type { WishlistItem } from '../domain/steam.js';
+import type { WishlistItem, WishlistItemError } from '../domain/steam.js';
 import type { UserConfig } from '../domain/user-config.js';
 import type { GameRule, HistoryEntry } from '../persistence/assistant-repository.js';
 import type { NotificationPreference } from '../domain/notification-preference.js';
@@ -13,8 +13,8 @@ import { defaultPollIntervalHours } from '../config/environment.js';
 import { historicalLowLine, priceChangeLine, priceHistoryCredit } from './price-history-text.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import {
-  countryDisplay, freeToKeepLine, hotDealPercent, hotPrefix, panelHeader, platformText, priceLine, reviewLine, saleEndLine,
-  savingsLine, steamAppUrl, tabAccent,
+  countryDisplay, freeToKeepLine, hotDealPercent, hotPrefix, noPriceText, panelHeader, platformText, priceLine, releaseDateText,
+  reviewLine, saleEndLine, savingsLine, steamAppUrl, tabAccent, unavailableGamesLine,
 } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 import { defaultTimezone, timezoneChoices, timezoneLabel } from '../domain/timezone.js';
@@ -28,6 +28,8 @@ export interface AssistantViewData {
   rules:ReadonlyMap<number,GameRule>; preference:NotificationPreference; history:HistoryEntry[];
   /** Absent when price history is not configured; the detail panel then omits the section. */
   priceHistory?:GameHistoryState;
+  /** Steam's item errors from the same wishlist read; region-locked and removed games are listed as facts. */
+  errors?:readonly WishlistItemError[];
 }
 export type GameHistoryState={status:'loading'}|{status:'ready';history:GameHistory|null};
 const text=(value:string)=>new TextDisplayBuilder().setContent(value);
@@ -72,8 +74,10 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
     const items=filteredAssistantItems(data,view), pages=Math.max(1,Math.ceil(items.length/3));
     const page=Math.min(Math.max(0,view.page),pages-1), visible=items.slice(page*3,page*3+3);
     const count=data.items.filter(i=>matchesRule(i,data.rules.get(i.appId),data.config.minimumDiscountPercent)).length;
+    const upcoming=data.items.filter(i=>i.upcoming&&!i.price).length;
     add(panelHeader('games',lang,tr?'Oyunların ve hedeflerin':'Your games & targets',
-      `✅ **${count}** ${tr?'uygun fırsat':'matching deals'}　🎮 **${data.items.length}** ${tr?'oyun':'games'}　${countryDisplay(data.config.storeCountryCode,lang)}`)+
+      `✅ **${count}** ${tr?'uygun fırsat':'matching deals'}　🎮 **${data.items.length}** ${tr?'oyun':'games'}`+
+      (upcoming?`　🗓️ **${upcoming}** ${tr?'yakında':'coming soon'}`:'')+`　${countryDisplay(data.config.storeCountryCode,lang)}`)+
       '\n-# 🕒 '+(tr?'Fiyatlar ':'Prices ')+relative(data.items.map(i=>i.priceObservedAt??data.capturedAt).sort()[0]??data.capturedAt)+
       (view.refreshing?(tr?' · Steam’den yenileniyor…':' · Refreshing from Steam…'):''));
     notice();
@@ -84,9 +88,11 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       const rule=data.rules.get(item.appId), p=pricedItem(item);
       const matches=matchesRule(item,rule,data.config.minimumDiscountPercent);
       root.addSectionComponents(artworkAccessory(new SectionBuilder().addTextDisplayComponents(text(
-        `### ${hotPrefix(p?.discountPercent)}${escapeMarkdown(item.name).slice(0,100)}\n${p?priceLine(p,lang):(tr?'Fiyat doğrulanamadı':'Price unavailable')}\n`+
+        `### ${hotPrefix(p?.discountPercent)}${escapeMarkdown(item.name).slice(0,100)}\n${p?priceLine(p,lang):noPriceText(item,lang)}\n`+
         `-# ${ruleText(rule)}${matches?(tr?' · ✅ Kuralına uygun':' · ✅ Matches your rule'):''}`)), item));
     });
+    const unavailable=unavailableGamesLine(data.errors,data.config.storeCountryCode,lang);
+    if(unavailable&&!view.query&&!view.eligibleOnly&&page===pages-1) { gap(); add('-# '+unavailable); }
     if(!visible.length) add('🫥 '+(tr?'Bu görünümde oyun yok. Aramayı veya filtreyi temizleyebilirsin.':'No games here. Clear the search or filter.'));
     divider();
     if(visible.length) root.addActionRowComponents(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
@@ -94,8 +100,9 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
         .setDisabled(disabled).addOptions(visible.map(item=>{
           const p=pricedItem(item);
           return {label:item.name.slice(0,100),value:String(item.appId),
-            emoji:(p?.discountPercent??0)>=hotDealPercent?'🔥':matchesRule(item,data.rules.get(item.appId),data.config.minimumDiscountPercent)?'🎯':item.onSale?'🏷️':'🎮',
-            ...(p?{description:(price(p.finalMinor,p.currency)+(p.discountPercent>0?(tr?` · %${p.discountPercent} indirim`:` · ${p.discountPercent}% off`):'')).slice(0,100)}:{})};
+            emoji:!p&&item.upcoming?'🗓️':(p?.discountPercent??0)>=hotDealPercent?'🔥':matchesRule(item,data.rules.get(item.appId),data.config.minimumDiscountPercent)?'🎯':item.onSale?'🏷️':'🎮',
+            ...(p?{description:(price(p.finalMinor,p.currency)+(p.discountPercent>0?(tr?` · %${p.discountPercent} indirim`:` · ${p.discountPercent}% off`):'')).slice(0,100)}
+              :item.upcoming?{description:((tr?'Yakında · ':'Coming soon · ')+releaseDateText(item.upcoming,lang)).slice(0,100)}:{})};
         }))));
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
       button(prefix+'search',tr?'Oyun ara':'Search','🔍'),
@@ -117,7 +124,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       addArtwork(root, item);
       const facts=item.storeFacts;
       add(['# '+hotPrefix(p?.discountPercent)+escapeMarkdown(item.name).slice(0,120),
-        p?priceLine(p,lang):(tr?'Fiyat doğrulanamadı':'Price unavailable'),
+        p?priceLine(p,lang):noPriceText(item,lang),
         p&&freeToKeepLine(p,lang), p&&savingsLine(p,lang), item.onSale?saleEndLine(facts,lang):null, reviewLine(facts,lang),
         '-# '+['🕒 '+(tr?'Steam fiyatı alındı: ':'Steam price fetched: ')+relative(item.priceObservedAt??data.capturedAt),
           platformText(facts)].filter(Boolean).join(' · '),

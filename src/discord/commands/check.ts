@@ -180,8 +180,13 @@ function checkPresentation(
       { emoji: '🎮', label: language === 'tr' ? 'oyun işlendi' : 'games processed', value: result.checkedCount },
       { emoji: '🎯', label: language === 'tr' ? 'indirim adayı' : 'sale candidates', value: result.notificationCandidates.length },
       { emoji: '📨', label: language === 'tr' ? 'DM gönderildi' : 'DMs sent', value: delivery.sentCount },
-      { emoji: '❔', label: language === 'tr' ? 'fiyatı bilinmeyen' : 'unknown prices', value: result.unknownPriceCount },
-      { emoji: '⚠️', label: language === 'tr' ? 'ayrıntı hatası' : 'detail errors', value: result.failedItems.length },
+      // Problems only when they happened; unreleased and unavailable games are facts, not errors.
+      ...[
+        { emoji: '🗓️', label: language === 'tr' ? 'henüz çıkmadı' : 'not released yet', value: result.upcomingCount },
+        { emoji: '🚫', label: language === 'tr' ? 'satılmıyor / kaldırıldı' : 'not sold / removed', value: result.unavailableItems.length },
+        { emoji: '❔', label: language === 'tr' ? 'fiyatı alınamadı' : 'price not confirmed', value: result.unknownPriceCount },
+        { emoji: '⚠️', label: language === 'tr' ? 'Steam hatası' : 'Steam errors', value: result.failedItems.length },
+      ].filter((metric) => metric.value > 0),
     ],
   };
 }

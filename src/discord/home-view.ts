@@ -8,7 +8,7 @@ import type { StatusV2Options } from './status-view-v2.js';
 import { sanitizeGameName } from './notification-messages.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { dealioBrand } from './ui/brand.js';
-import { countryDisplay, hotPrefix, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
+import { countryDisplay, hotPrefix, noPriceText, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
@@ -61,7 +61,7 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
     const savings = price && savingsLine(price, language);
     root.addTextDisplayComponents(display('## ' + hotPrefix(price?.discountPercent) + '[' + sanitizeGameName(hero.name).slice(0, 100) +
       '](https://store.steampowered.com/app/' + hero.appId + ')\n' +
-      (price ? priceLine(price, language) : t('Fiyat doğrulanamadı', 'Price unavailable')) +
+      (price ? priceLine(price, language) : noPriceText(hero, language)) +
       (savings ? '\n' + savings : '') +
       (price ? '\n-# ' + t('Steam fiyatı alındı: ', 'Steam price fetched: ') +
         relative(hero.priceObservedAt ?? options.capturedAt, t('Zaman bilgisi yok', 'Time unavailable')) : '')));

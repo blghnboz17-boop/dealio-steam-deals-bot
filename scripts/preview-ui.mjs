@@ -58,6 +58,13 @@ for (const language of ['tr', 'en']) {
     test: [buildSaleNotificationPanel([{ ...notifications[0], headerImageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${notifications[0].appId}/header.jpg` }],
       language, { test: true, testSource: 'wishlist' }).toJSON()],
     welcome: [buildSetupWelcomePanel(language, 'preview').toJSON()],
+    upcoming: personal('wishlist', { ...assistantData,
+      items: [{ appId: 2719590, name: 'Light No Fire', priority: null, dateAdded: null, onSale: null, price: null,
+        headerImageUrl: 'https://cdn.akamai.steamstatic.com/steam/apps/2719590/header.jpg', upcoming: { message: language === 'tr' ? 'Duyurulacak' : 'To be announced' } },
+        { appId: 4080520, name: 'Horns of Deliverance', priority: null, dateAdded: null, onSale: null, price: null,
+        headerImageUrl: 'https://cdn.akamai.steamstatic.com/steam/apps/4080520/header.jpg', upcoming: { date: '2026-10-12T17:00:00.000Z', precision: 'day' } },
+        items[0]],
+      errors: [{ appId: 1287290, code: 'STEAM_APP_REGION_UNAVAILABLE' }, { appId: 3510750, code: 'STEAM_APP_NOT_FOUND' }] }),
     free: [buildSaleNotificationPanel([{ ...notifications[1], finalPriceMinor: 0, discountPercent: 100 }], language).toJSON()],
     blocked: [buildStatusV2Panel({ ...dashboard, config: { ...config, enabled: false, dmDeliveryBlockedAt: date } }, 'preview', { mode: 'home' }).toJSON()],
     partial: [buildStatusV2Panel({ ...dashboard, checkState: { ...dashboard.checkState, lastStatus: 'unavailable', lastSuccessUnknownPriceCount: 4 } }, 'preview', { mode: 'home' }).toJSON()],
@@ -66,7 +73,8 @@ for (const language of ['tr', 'en']) {
     region: [buildCountryRangePanel(language, 'preview', { selected: 'TR' }).toJSON()],
     setup: [buildSetupConfirmationPanel({ discordUserId: 'preview-user', steamId64: '76561198000000000', language, storeCountryCode: 'TR' }, 'preview', { regionSelectionSource: 'discord-locale' }).toJSON()],
     summary: buildInitialWishlistV2Page({ discordUserId: 'preview-user', steamId64: '76561198000000000', language, storeCountryCode: 'TR',
-      minimumDiscountPercent: 30, totalGameCount: 24, failedItemCount: 0, capturedAt: date,
+      minimumDiscountPercent: 30, totalGameCount: 24, failedItemCount: 0, capturedAt: date, upcomingCount: 8,
+      unavailableItems: [{ appId: 1287290, code: 'STEAM_APP_REGION_UNAVAILABLE' }],
       sales: notifications.map((n) => ({ ...n, normalPriceMinor: n.normalPriceMinor, headerImageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${n.appId}/header.jpg` })) }, {}, 'preview', 0).components.map((c) => c.toJSON()),
   };
 }

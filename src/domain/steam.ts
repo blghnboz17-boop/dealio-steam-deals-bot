@@ -8,6 +8,7 @@ export type SteamWishlistErrorCode =
   | 'STEAM_INVALID_RESPONSE'
   | 'STEAM_SCHEMA_INVALID'
   | 'STEAM_APP_NOT_FOUND'
+  | 'STEAM_APP_REGION_UNAVAILABLE'
   | 'STEAM_WISHLIST_INACCESSIBLE'
   | 'STEAM_CANCELLED';
 
@@ -32,6 +33,28 @@ export interface SalePrice {
   readonly isFree: boolean;
 }
 
+/**
+ * Item errors that describe the app itself, not a failed request: the app is not
+ * sold in the user's Store region, or Steam no longer lists it. They are shown as
+ * facts, never as an incomplete check.
+ */
+export const permanentItemErrorCodes: ReadonlySet<SteamWishlistErrorCode> = new Set([
+  'STEAM_APP_NOT_FOUND', 'STEAM_APP_REGION_UNAVAILABLE',
+]);
+
+export function isTransientItemError(error: { readonly code: SteamWishlistErrorCode }): boolean {
+  return !permanentItemErrorCodes.has(error.code);
+}
+
+/** An unreleased game: Steam sells it only after release, so it has no price yet. */
+export interface UpcomingRelease {
+  /** Steam's planned release date (ISO), read with `precision`. */
+  readonly date?: string;
+  readonly precision?: 'day' | 'month' | 'quarter' | 'year';
+  /** Steam's localized text when there is no date, such as "To be announced". */
+  readonly message?: string;
+}
+
 export type SteamDeckCompatibility = 'verified' | 'playable' | 'unsupported';
 
 /**
@@ -52,6 +75,8 @@ export interface StoreFacts {
 export interface WishlistItem {
   readonly headerImageUrl?: string;
   readonly storeFacts?: StoreFacts;
+  /** Present only while the game is not released yet. */
+  readonly upcoming?: UpcomingRelease;
   readonly priceObservedAt?: string;
   readonly appId: number;
   readonly name: string;

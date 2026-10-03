@@ -1,4 +1,4 @@
-import type { StoreFacts } from '../domain/steam.js';
+import type { StoreFacts, WishlistItemError } from '../domain/steam.js';
 import type { StoreCountryCode } from '../domain/store-country.js';
 import type { Language } from '../domain/user-config.js';
 import type { CheckService } from './check-service.js';
@@ -21,7 +21,12 @@ export interface InitialWishlistSummary {
   readonly language: Language;
   readonly storeCountryCode: StoreCountryCode;
   readonly totalGameCount: number;
+  /** Games Steam could not return this time, or released games without a confirmed price. */
   readonly failedItemCount: number;
+  /** Unreleased games; they have no price yet by design. */
+  readonly upcomingCount?: number;
+  /** Games not sold in the Store region or removed from Steam. */
+  readonly unavailableItems?: readonly WishlistItemError[];
   readonly minimumDiscountPercent: number;
   readonly capturedAt: string;
   readonly sales: readonly InitialWishlistSale[];
@@ -103,8 +108,10 @@ export class InitialWishlistSummaryService {
         steamId64: result.steamId64,
         language: result.language,
         storeCountryCode: result.storeCountryCode,
-        totalGameCount: result.wishlistItems.length + result.failedItems.length,
+        totalGameCount: result.wishlistItems.length + result.failedItems.length + result.unavailableItems.length,
         failedItemCount: result.failedItems.length + result.unknownPriceCount,
+        upcomingCount: result.upcomingCount,
+        unavailableItems: result.unavailableItems,
         minimumDiscountPercent: result.minimumDiscountPercent,
         capturedAt: result.capturedAt,
         sales,

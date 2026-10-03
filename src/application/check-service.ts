@@ -1,6 +1,7 @@
 import { createSaleKey } from '../domain/sale.js';
 import {
   SteamWishlistError,
+  isTransientItemError,
   type WishlistItem,
   type WishlistItemError,
 } from '../domain/steam.js';
@@ -22,8 +23,13 @@ export type CheckResult =
       readonly status: 'success';
       readonly checkedCount: number;
       readonly notificationCandidates: readonly NotificationCandidate[];
+      /** Items Steam could not return this time; retried on the next check. */
       readonly failedItems: readonly WishlistItemError[];
+      /** Items not sold in the Store region or no longer listed: facts, not failures. */
+      readonly unavailableItems: readonly WishlistItemError[];
+      /** Released games whose price could not be confirmed; unreleased games are not counted. */
       readonly unknownPriceCount: number;
+      readonly upcomingCount: number;
       readonly wishlistItems: readonly WishlistItem[];
       readonly steamId64: string;
       readonly language: import('../domain/user-config.js').Language;
@@ -188,8 +194,10 @@ export class CheckService {
 
     try {
       const completedAt = this.now().toISOString();
-      if (steamResult.items.length === 0 && steamResult.errors.length > 0) {
-        const errorCode = steamResult.errors[0]?.code ?? 'STEAM_UPSTREAM_ERROR';
+      const failedItems = steamResult.errors.filter(isTransientItemError);
+      const unavailableItems = steamResult.errors.filter((error) => !isTransientItemError(error));
+      if (steamResult.items.length === 0 && failedItems.length > 0) {
+        const errorCode = failedItems[0]?.code ?? 'STEAM_UPSTREAM_ERROR';
         await this.persistenceQueue.run(() => this.wishlistStateRepository.runInImmediateTransaction(() => {
           const failedAppIds = steamResult.errors.map((error) => error.appId);
           this.wishlistStateRepository.markObservationStatus(
@@ -217,6 +225,9 @@ export class CheckService {
       const unknownAppIds = steamResult.items
         .filter((item) => !knownItems.includes(item))
         .map((item) => item.appId);
+      // Unreleased games have no price by design; they are not an incomplete check.
+      const upcomingCount = steamResult.items.filter((item) => !knownItems.includes(item) && item.upcoming).length;
+      const unknownPriceCount = unknownAppIds.length - upcomingCount;
       const seenAppIds = [
         ...steamResult.items.map((item) => item.appId),
         ...steamResult.errors.map((error) => error.appId),
@@ -257,8 +268,8 @@ export class CheckService {
             checkedCount: steamResult.items.length,
             onSaleCount: steamResult.items.filter((item) => item.onSale === true).length,
             freeCount: steamResult.items.filter((item) => item.price?.isFree === true).length,
-            unknownPriceCount: unknownAppIds.length,
-            failedItemCount: steamResult.errors.length,
+            unknownPriceCount,
+            failedItemCount: failedItems.length,
           },
         );
         return candidates;
@@ -268,8 +279,10 @@ export class CheckService {
         status: 'success',
         checkedCount: steamResult.items.length,
         notificationCandidates,
-        failedItems: steamResult.errors,
-        unknownPriceCount: unknownAppIds.length,
+        failedItems,
+        unavailableItems,
+        unknownPriceCount,
+        upcomingCount,
         wishlistItems: steamResult.items,
         steamId64: config.steamId64,
         language: config.language,
