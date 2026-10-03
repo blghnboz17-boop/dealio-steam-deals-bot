@@ -1,7 +1,4 @@
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   ContainerBuilder,
   SeparatorBuilder,
   SeparatorSpacingSize,
@@ -10,7 +7,7 @@ import {
 import type { Language } from '../domain/user-config.js';
 import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
-import { uiCopy } from './ui/copy.js';
+import { buildTabBar } from './ui/tab-bar.js';
 
 export interface CheckResultPresentation {
   readonly kind: 'success' | 'warning' | 'danger' | 'info';
@@ -25,7 +22,6 @@ export function buildCheckPanel(
   sessionId?: string,
   disabled = false,
 ): ContainerBuilder {
-  const text = uiCopy(language);
   const colors = {
     success: dealioBrand.colors.success,
     warning: dealioBrand.colors.warning,
@@ -47,12 +43,8 @@ export function buildCheckPanel(
       ));
   }
   if (sessionId) {
-    container.addActionRowComponents(
-      new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId(`check-v2:${sessionId}:wishlist`).setLabel(text.openWishlist).setEmoji('🎮').setStyle(ButtonStyle.Primary).setDisabled(disabled),
-        new ButtonBuilder().setCustomId(`check-v2:${sessionId}:status`).setLabel(text.openStatus).setEmoji('📊').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
-      ),
-    );
+    // The check runs from Home; no tab is its own, so all four lead onward.
+    container.addActionRowComponents(buildTabBar('check-v2', sessionId, language, { disabled }));
   }
   container
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))

@@ -190,7 +190,8 @@ describe('Dealio Components V2 UI', () => {
     expect(serialized).toContain(mode === 'home' ? 'Wishlist’in. Senin kuralların.' : 'Dealio Durum ve Ayarlar');
     expect(serialized).toContain('İlk kontrol bekleniyor');
     const rows = panel.toJSON().components.filter((component) => component.type === 1);
-    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [3] : [2, 3]);
+    // Home: check + refresh, then the four tabs.
+    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [2, 4] : [2, 3]);
     expect(serialized).not.toContain('↻');
   });
 

@@ -19,7 +19,7 @@ import { handleSetup } from './commands/setup.js';
 import { handleStatus } from './commands/status.js';
 import { handleTestNotification } from './commands/test-notification.js';
 import { handleWishlist } from './commands/wishlist.js';
-import { handleDealio } from './commands/dealio.js';
+import { createDealioNavigator, handleDealio } from './commands/dealio.js';
 import { handleStoreCountryAutocomplete } from './store-country-options.js';
 import type { SetupPresentationOptions } from './setup-view.js';
 import { buildExpiredPanel, buildNoticePanel, dealioEphemeralV2Flags } from './ui/components-v2.js';
@@ -154,12 +154,14 @@ async function handleInteraction(
   services: BotCommandServices,
   lifecycleSignal?: AbortSignal,
 ): Promise<void> {
+  // Panels opened by any command share one in-place navigator for their tabs.
+  const ui = { navigate: createDealioNavigator({ ...services, lifecycleSignal }) };
   switch (interaction.commandName) {
     case 'dealio':
       await handleDealio(interaction, {
         ...services,
         lifecycleSignal,
-      });
+      }, ui);
       return;
     case 'setup':
       await handleSetup(
@@ -180,6 +182,7 @@ async function handleInteraction(
         lifecycleSignal,
         services.discountThresholdService,
         services.testNotificationService,
+        ui,
       );
       return;
     case 'check':
@@ -188,13 +191,7 @@ async function handleInteraction(
         services.checkService,
         services.statusService,
         services.notificationService,
-        {
-          wishlistViewService: services.wishlistViewService,
-          userConfigurationService: services.userConfigurationService,
-          discountThresholdService: services.discountThresholdService,
-          testNotificationService: services.testNotificationService,
-          lifecycleSignal,
-        },
+        { ...ui, lifecycleSignal },
       );
       return;
     case 'wishlist':
@@ -203,6 +200,7 @@ async function handleInteraction(
         services.wishlistViewService,
         lifecycleSignal,
         services.discountThresholdService,
+        ui,
       );
       return;
     case 'test-notification':

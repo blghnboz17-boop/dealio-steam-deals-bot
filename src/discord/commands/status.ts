@@ -20,6 +20,7 @@ import {
 import type { UserConfigurationService } from '../../application/user-configuration-service.js';
 import type { Language } from '../../domain/user-config.js';
 import { parseStoreCountryCode } from '../../domain/store-country.js';
+import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-bar.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
 import { buildStatusV2Panel } from '../status-view-v2.js';
@@ -57,8 +58,12 @@ export async function handleStatus(
   lifecycleSignal?: AbortSignal,
   thresholdService?: DiscountThresholdService,
   testNotificationService?: TestNotificationService,
+  ui: PanelNavigation = {},
 ): Promise<void> {
-  await measureDiscordOperation(interaction, 'status-v2.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
+  if (!ui.inPlace) {
+    await measureDiscordOperation(interaction, 'status-v2.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
+  }
+  const tabs = ui.navigate !== undefined;
   const fallbackLanguage = languageFromDiscordLocale(interaction.locale);
   const initial = statusService.getDashboard(interaction.user.id, fallbackLanguage);
   if (initial.status !== 'ready') {
@@ -86,7 +91,7 @@ export async function handleStatus(
   }
   const message = await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
     flags: dealioV2Flags,
-    components: [buildStatusV2Panel(current, interaction.id, { avatarUrl })],
+    components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, tabs })],
   }));
   const closeUiSession = dealioUiSessions.open(
     interaction.id,
@@ -104,6 +109,7 @@ export async function handleStatus(
   let modalSequence = 0;
   let controlsRemoved = false;
   let sessionActive = true;
+  let handedOff = false;
   const operations = new PanelOperationQueue(async (error) => {
     safeLogger.error('Discord panel update failed', error);
     await interaction.followUp({
@@ -137,12 +143,25 @@ export async function handleStatus(
     }
     current = refreshed;
     await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
-      components: [buildStatusV2Panel(current, interaction.id, { avatarUrl })],
+      components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, tabs })],
     }));
     return true;
   };
 
   collector.on('collect', (component) => {
+    const tab = parseTabAction(component.customId.slice(`status-v2:${interaction.id}:`.length));
+    if (tab && component.customId.startsWith(`status-v2:${interaction.id}:`)) {
+      if (ui.navigate && tab !== 'settings') {
+        handedOff = true;
+        handOffPanel({
+          component, target: tab, navigate: ui.navigate,
+          stop: () => collector.stop('handoff'), settle: () => operations.drain(),
+        });
+      } else {
+        void operations.enqueue(measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate()), async () => undefined);
+      }
+      return;
+    }
     if (component.customId === `country:${interaction.id}:range` && component.isStringSelectMenu()) {
       const rangeIndex = Number(component.values[0]);
       const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
@@ -297,9 +316,9 @@ export async function handleStatus(
     await ended;
     sessionActive = false;
     await operations.drain();
-    if (!controlsRemoved) {
+    if (!controlsRemoved && !handedOff) {
       await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
-        components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, disabled: true })],
+        components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, tabs, disabled: true })],
       })).catch((error: unknown) => safeLogger.error('Discord status V2 cleanup failed', error));
     }
   } finally {

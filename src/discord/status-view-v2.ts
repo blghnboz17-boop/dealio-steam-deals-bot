@@ -23,6 +23,7 @@ import { storeCountryLabel } from '../domain/store-country.js';
 import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { uiCopy } from './ui/copy.js';
+import { buildTabBar } from './ui/tab-bar.js';
 
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
 
@@ -37,6 +38,8 @@ export interface StatusV2Options {
   readonly bannerUrl?: string;
   readonly avatarUrl?: string;
   readonly disabled?: boolean;
+  /** Show the shared tab row (the panel was opened with navigation). */
+  readonly tabs?: boolean;
 }
 
 function buildPreferencesPanel(
@@ -199,6 +202,9 @@ function buildPreferencesPanel(
         new ButtonBuilder().setCustomId(`${prefix}:${sessionId}:test`).setLabel(language === 'tr' ? 'Test DM' : 'Test DM').setEmoji('✉️').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
       ),
     );
+    if (options.tabs) {
+      container.addActionRowComponents(buildTabBar(prefix, sessionId, language, { active: 'settings', disabled }));
+    }
   }
   container
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))

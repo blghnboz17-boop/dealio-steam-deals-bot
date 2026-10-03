@@ -28,7 +28,7 @@ it.each(['tr', 'en'] as const)('fits the complete home panel and disables nested
   });
   expect(() => assertComponentsV2Limit([panel])).not.toThrow();
   const serialized = JSON.stringify(panel.toJSON());
-  for (const action of ['wishlist', 'rhythm', 'history', 'check', 'settings', 'refresh']) {
+  for (const action of ['tab-home', 'tab-games', 'tab-alerts', 'tab-settings', 'check', 'refresh']) {
     expect(serialized).toContain('dealio:session:' + action);
   }
   const controls: {disabled?:boolean}[] = [];

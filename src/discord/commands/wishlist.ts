@@ -1,5 +1,6 @@
 import { measureDiscordOperation } from '../interaction-timing.js';
 import { handleAssistant } from './assistant.js';
+import type { PanelNavigation } from '../ui/tab-bar.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import {
   ChatInputCommandInteraction,
@@ -35,8 +36,9 @@ export async function handleWishlist(
   service: WishlistViewService,
   lifecycleSignal?: AbortSignal,
   thresholdService?: DiscountThresholdService,
+  ui: PanelNavigation = {},
 ): Promise<void> {
-  if (service.assistantService) return handleAssistant(interaction, service.assistantService, service, lifecycleSignal);
+  if (service.assistantService) return handleAssistant(interaction, service.assistantService, service, lifecycleSignal, 'wishlist', ui);
   await measureDiscordOperation(interaction, 'wishlist.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
   const result = await service.load(
     interaction.user.id,

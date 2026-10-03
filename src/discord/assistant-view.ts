@@ -10,6 +10,7 @@ import type { GameHistory } from '../domain/price-history.js';
 import { formatMinorPrice } from './notification-messages.js';
 import { historicalLowLine, priceChangeLine, priceHistoryCredit } from './price-history-text.js';
 import { assertComponentsV2Limit } from './ui/components-v2.js';
+import { buildTabBar } from './ui/tab-bar.js';
 import { dealioBrand } from './ui/brand.js';
 
 export interface AssistantView {
@@ -105,8 +106,10 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
         button(prefix+'inherit',tr?'Genel ayarı kullan':'Use global rule'),button(prefix+'percent',tr?'İndirim yüzdesi':'Discount %'),
         button(prefix+'target',tr?'Hedef fiyat':'Target price',true).setDisabled(disabled||!p?.currency)));
       root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-        button(prefix+'mute',rule?.muted?(tr?'Sesi aç':'Unmute'):(tr?'Oyunu sustur':'Mute game')),
-        new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://store.steampowered.com/app/'+item.appId).setLabel(tr?'Steam’de aç':'Open on Steam')));
+        button(prefix+'wishlist','‹ '+(tr?'Listeye dön':'Back to list')),
+        button(prefix+'mute',rule?.muted?(tr?'Sesi aç':'Unmute'):(tr?'Oyunu sustur':'Mute game'))));
+      root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://store.steampowered.com/app/'+item.appId).setEmoji('🛒').setLabel(tr?'Steam’de aç':'Open on Steam')));
     }
   } else if(view.screen==='history'){
     add(tr?'Son 30 gün. “Discord’a iletildi”, mesajın okunduğu anlamına gelmez.':'Last 30 days. “Delivered to Discord” does not mean read.');
@@ -119,7 +122,8 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       add(`**${escapeMarkdown(h.game_name).slice(0,100)}** · ${label}\n${why} · <t:${Math.floor(Date.parse(h.created_at)/1000)}:R>`);
     }
     if(!entries.length) add(tr?'Henüz bildirim kaydı yok.':'No alerts yet.');
-    root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(button(prefix+'prev','‹').setDisabled(disabled||view.page===0),
+    root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(button(prefix+'rhythm','‹ '+(tr?'Bildirim zamanı':'Alert timing')),
+      button(prefix+'prev','‹').setDisabled(disabled||view.page===0),
       button(prefix+'next','›').setDisabled(disabled||start+5>=data.history.length),button(prefix+'retry',tr?'DM erişimini dene':'Retry DM access')));
   }else{
     const p=data.preference;
@@ -133,9 +137,12 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
       button(prefix+'instant',tr?'Tespit edilince':'When detected'),button(prefix+'quiet',tr?'Sessiz saatler':'Quiet hours'),
       button(prefix+'digest',tr?'Günlük özet':'Daily digest')));
+    root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
+      button(prefix+'history','📜 '+(tr?'Bildirim geçmişi':'Alert history'))));
   }
-  root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-    button(prefix+'wishlist',tr?'Wishlist':'Wishlist'),button(prefix+'history',tr?'Geçmiş':'History'),button(prefix+'rhythm',tr?'Bildirim ritmi':'Alert timing')));
+  const games=view.screen==='wishlist'||view.screen==='detail';
+  root.addActionRowComponents(buildTabBar('assistant',session,lang,{active:games?'games':'alerts',
+    activeIsRoot:view.screen==='wishlist'||view.screen==='rhythm',disabled}));
   if(disabled) for(const c of root.components) if(c instanceof ActionRowBuilder) for(const control of c.components)
     if('setDisabled' in control) control.setDisabled(true);
   add('-# '+(tr?'Açık beta · Fiyatlar Steam mağaza para birimindedir.':'Open beta · Prices use your Steam store currency.'));
