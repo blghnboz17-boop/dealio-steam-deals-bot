@@ -1,598 +1,46 @@
+import { measureDiscordOperation } from '../interaction-timing.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import {
-  ButtonStyle,
-  ActionRowBuilder,
-  ComponentType,
+  LabelBuilder,
   MessageFlags,
   ModalBuilder,
+  RadioGroupBuilder,
+  RadioGroupOptionBuilder,
   SlashCommandBuilder,
   TextInputBuilder,
   TextInputStyle,
-  type APIActionRowComponent,
-  type APIButtonComponent,
-  type APIEmbed,
   type ChatInputCommandInteraction,
 } from 'discord.js';
+import type { DiscountThresholdService } from '../../application/discount-threshold-service.js';
+import type { StatusService, StatusDashboardResult } from '../../application/status-service.js';
 import {
-  StatusService,
-  type StatusDashboardResult,
-} from '../../application/status-service.js';
-import { UserConfigurationService } from '../../application/user-configuration-service.js';
-import { DiscountThresholdService } from '../../application/discount-threshold-service.js';
-import type { CheckStatus } from '../../domain/check-state.js';
-import type { Language, UserConfig } from '../../domain/user-config.js';
-import { storeCountryLabel } from '../../domain/store-country.js';
+  TestNotificationCooldownError,
+  type TestNotificationService,
+} from '../../application/test-notification-service.js';
+import type { UserConfigurationService } from '../../application/user-configuration-service.js';
+import type { Language } from '../../domain/user-config.js';
+import { parseStoreCountryCode } from '../../domain/store-country.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
-import { dealioBrand } from '../ui/brand.js';
+import { buildStatusV2Panel } from '../status-view-v2.js';
+import {
+  buildNoticePanel,
+  buildExpiredPanel,
+  dealioEphemeralV2Flags,
+  dealioUiSessionTimeoutMs,
+  dealioV2Flags,
+} from '../ui/components-v2.js';
+import { buildCountryListPanel, buildCountryRangePanel } from '../ui/country-picker.js';
+import { uiCopy } from '../ui/copy.js';
+import { PanelOperationQueue } from '../ui/operation-queue.js';
+import { dealioUiSessions } from '../ui/session-manager.js';
+
+type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
 
 export const statusCommand = new SlashCommandBuilder()
   .setName('status')
   .setDescription('Show your Steam wishlist dashboard')
   .setDescriptionLocalizations({ tr: 'Steam wishlist dashboardunu göster' });
-
-export const statusEmbedColors = {
-  healthy: dealioBrand.colors.success,
-  pending: dealioBrand.colors.warning,
-  unhealthy: dealioBrand.colors.danger,
-  disabled: dealioBrand.colors.muted,
-} as const;
-const statusSessionTimeoutMs = 2 * 60 * 1_000;
-export type StatusToggleAction = 'enable' | 'disable';
-export type StatusAction = StatusToggleAction | 'minimum-discount' | 'region';
-
-function displayTime(value: string | null, emptyValue: string): string {
-  if (!value) {
-    return emptyValue;
-  }
-  const timestamp = Math.floor(new Date(value).getTime() / 1_000);
-  return Number.isSafeInteger(timestamp)
-    ? `<t:${timestamp}:f> (<t:${timestamp}:R>)`
-    : emptyValue;
-}
-
-function displayCount(value: number | null, emptyValue: string): string {
-  return value === null ? emptyValue : String(value);
-}
-
-function maskSteamId(steamId64: string): string {
-  if (steamId64.length <= 9) {
-    return '*'.repeat(steamId64.length);
-  }
-  return `${steamId64.slice(0, 5)}${'*'.repeat(steamId64.length - 9)}${steamId64.slice(-4)}`;
-}
-
-function localizedCheckStatus(status: CheckStatus | null, language: Language): string {
-  const messages = messagesFor(language);
-  switch (status) {
-    case 'success': return messages.statusResultSuccess;
-    case 'unavailable': return messages.statusResultUnavailable;
-    case 'failed': return messages.statusResultFailed;
-    case 'pending':
-    case null: return messages.statusResultPending;
-  }
-}
-
-function safeErrorMessage(errorCode: string | null, language: Language): string | null {
-  if (!errorCode) {
-    return null;
-  }
-  const messages = messagesFor(language);
-  const value = errorCode === 'STEAM_WISHLIST_INACCESSIBLE'
-    ? messages.wishlistInaccessible
-    : errorCode.startsWith('STEAM_')
-      ? messages.statusSteamUnavailable
-      : messages.statusCheckFailed;
-  return value.length > 400 ? `${value.slice(0, 397)}...` : value;
-}
-
-export function buildStatusDashboardEmbed(
-  result: Extract<StatusDashboardResult, { status: 'ready' }>,
-  botAvatarUrl?: string,
-): APIEmbed {
-  const { config, checkState, notificationQueue, language } = result;
-  const messages = messagesFor(language);
-  const profileUrl = `https://steamcommunity.com/profiles/${config.steamId64}`;
-  const errorMessage = safeErrorMessage(checkState?.lastErrorCode ?? null, language);
-  const color = !config.enabled
-    ? statusEmbedColors.disabled
-    : checkState?.lastStatus === 'success'
-      ? statusEmbedColors.healthy
-      : checkState?.lastStatus === 'unavailable' || checkState?.lastStatus === 'failed'
-        ? statusEmbedColors.unhealthy
-        : statusEmbedColors.pending;
-
-  return {
-    title: messages.statusTitle,
-    color,
-    thumbnail: botAvatarUrl ? { url: botAvatarUrl } : undefined,
-    fields: [
-      {
-        name: messages.statusAccountSection,
-        value: [
-          `${messages.statusSteamIdLabel}: \`${maskSteamId(config.steamId64)}\``,
-          `[${messages.statusOpenProfile}](${profileUrl})`,
-          `${messages.statusLanguageLabel}: **${language === 'tr' ? 'Türkçe' : 'English'}**`,
-          `${messages.statusStoreRegionLabel}: **${storeCountryLabel(config.storeCountryCode, language)}**`,
-          `${messages.statusLatestCurrencyLabel}: **${result.latestPriceCurrencies.length > 0
-            ? result.latestPriceCurrencies.join(' / ')
-            : messages.statusNever}**`,
-          `${messages.statusEnabledLabel}: **${config.enabled ? messages.statusEnabled : messages.statusDisabled}**`,
-          `${messages.statusDmDeliveryLabel}: **${config.dmDeliveryBlockedAt
-            ? messages.statusDmBlocked
-            : messages.statusDmHealthy}**`,
-          `${messages.statusMinimumDiscountLabel}: **${config.minimumDiscountPercent}%**`,
-          `${messages.statusGameOverridesLabel}: **${result.gameDiscountOverrideCount ?? 0}**`,
-          `${messages.statusUpdatedAtLabel}: ${displayTime(config.updatedAt, messages.statusNever)}`,
-        ].join('\n'),
-      },
-      {
-        name: messages.statusWishlistSection,
-        value: [
-          `${messages.statusLastSuccessLabel}: ${displayTime(checkState?.lastSuccessCompletedAt ?? null, messages.statusNever)}`,
-          `${messages.statusCheckedCountLabel}: **${displayCount(checkState?.lastSuccessCheckedCount ?? null, messages.statusNever)}**`,
-          `${messages.statusOnSaleCountLabel}: **${displayCount(checkState?.lastSuccessOnSaleCount ?? null, messages.statusNever)}**`,
-          `${messages.statusFreeCountLabel}: **${displayCount(checkState?.lastSuccessFreeCount ?? null, messages.statusNever)}**`,
-          `${messages.statusUnknownPriceCountLabel}: **${displayCount(checkState?.lastSuccessUnknownPriceCount ?? null, messages.statusNever)}**`,
-          `${messages.statusFailedItemCountLabel}: **${displayCount(checkState?.lastSuccessFailedItemCount ?? null, messages.statusNever)}**`,
-        ].join('\n'),
-      },
-      {
-        name: messages.statusCheckSection,
-        value: [
-          `${messages.statusStartedAtLabel}: ${displayTime(checkState?.lastStartedAt ?? null, messages.statusNever)}`,
-          `${messages.statusCompletedAtLabel}: ${displayTime(checkState?.lastCompletedAt ?? null, messages.statusNever)}`,
-          `${messages.statusResultLabel}: **${localizedCheckStatus(checkState?.lastStatus ?? null, language)}**`,
-          `${messages.statusNextCheckLabel}: ${displayTime(checkState?.nextScheduledAt ?? null, messages.statusNever)}`,
-          ...(errorMessage ? [`${messages.statusErrorLabel}: ${errorMessage}`] : []),
-        ].join('\n'),
-      },
-      {
-        name: messages.statusNotificationSection,
-        value: [
-          `${messages.statusQueuePendingLabel}: **${notificationQueue.pending}**`,
-          `${messages.statusQueueRetryLabel}: **${notificationQueue.retry}**`,
-          `${messages.statusQueueSendingLabel}: **${notificationQueue.sending}**`,
-          `${messages.statusQueueSentLabel}: **${notificationQueue.sent}**`,
-          `${messages.statusQueueTerminalLabel}: **${notificationQueue.terminalFailed}**`,
-          `${messages.statusQueueExpiredLabel}: **${notificationQueue.expired}**`,
-        ].join('\n'),
-      },
-    ],
-  };
-}
-
-export function buildStatusComponents(
-  sessionId: string,
-  language: Language,
-  enabled: boolean,
-  disabled = false,
-): APIActionRowComponent<APIButtonComponent>[] {
-  const messages = messagesFor(language);
-  const action: StatusToggleAction = enabled ? 'disable' : 'enable';
-  return [{
-    type: ComponentType.ActionRow,
-    components: [{
-      type: ComponentType.Button,
-      style: enabled ? ButtonStyle.Danger : ButtonStyle.Success,
-      custom_id: `status:${sessionId}:${action}`,
-      label: enabled
-        ? messages.statusDisableNotifications
-        : messages.statusEnableNotifications,
-      disabled,
-    }, {
-      type: ComponentType.Button,
-      style: ButtonStyle.Secondary,
-      custom_id: `status:${sessionId}:minimum-discount`,
-      label: messages.statusEditMinimumDiscount,
-      disabled,
-    }, {
-      type: ComponentType.Button,
-      style: ButtonStyle.Secondary,
-      custom_id: `status:${sessionId}:region`,
-      label: messages.statusChangeRegion,
-      emoji: { name: '🌍' },
-      disabled,
-    }],
-  }];
-}
-
-export function parseStatusToggleAction(
-  customId: string,
-  sessionId: string,
-): StatusToggleAction | null {
-  const prefix = `status:${sessionId}:`;
-  if (!customId.startsWith(prefix)) {
-    return null;
-  }
-  const action = customId.slice(prefix.length);
-  return action === 'enable' || action === 'disable' ? action : null;
-}
-
-export function canUseStatusComponent(
-  customId: string,
-  componentUserId: string,
-  ownerUserId: string,
-  sessionId: string,
-): boolean {
-  return componentUserId === ownerUserId
-    && parseStatusAction(customId, sessionId) !== null;
-}
-
-export function parseStatusAction(customId: string, sessionId: string): StatusAction | null {
-  const toggle = parseStatusToggleAction(customId, sessionId);
-  if (toggle) {
-    return toggle;
-  }
-  if (customId === `status:${sessionId}:minimum-discount`) {
-    return 'minimum-discount';
-  }
-  return customId === `status:${sessionId}:region` ? 'region' : null;
-}
-
-export async function handleStatus(
-  interaction: ChatInputCommandInteraction,
-  statusService: StatusService,
-  userConfigurationService: UserConfigurationService,
-  lifecycleSignal?: AbortSignal,
-  thresholdService?: DiscountThresholdService,
-): Promise<void> {
-  const fallbackLanguage = languageFromDiscordLocale(interaction.locale);
-  const result = statusService.getDashboard(
-    interaction.user.id,
-    fallbackLanguage,
-  );
-  const messages = messagesFor(result.language);
-
-  if (result.status !== 'ready') {
-    await interaction.reply({
-      content: result.status === 'not-configured'
-        ? messages.statusNotConfigured
-        : messages.statusDashboardUnavailable,
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
-  let botAvatarUrl: string | undefined;
-  try {
-    botAvatarUrl = interaction.client.user?.displayAvatarURL({ extension: 'png', size: 128 });
-  } catch (_error: unknown) {
-    botAvatarUrl = undefined;
-  }
-
-  let currentResult = result;
-  let controlsRemoved = false;
-  const response = await interaction.reply({
-    embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
-    components: buildStatusComponents(
-      interaction.id,
-      currentResult.language,
-      currentResult.config.enabled,
-    ),
-    flags: MessageFlags.Ephemeral,
-  });
-  const collector = response.createMessageComponentCollector({
-    componentType: ComponentType.Button,
-    time: statusSessionTimeoutMs,
-    filter: (component) => canUseStatusComponent(
-      component.customId,
-      component.user.id,
-      interaction.user.id,
-      interaction.id,
-    ),
-  });
-  const sessionExpiresAt = Date.now() + statusSessionTimeoutMs;
-  let operations = Promise.resolve();
-  let modalSequence = 0;
-  const modalTasks = new Set<Promise<void>>();
-  const modalAbortController = new AbortController();
-
-  collector.on('collect', (component) => {
-    const action = parseStatusAction(component.customId, interaction.id);
-    if (action === 'region') {
-      const modalCustomId = `status-region:${interaction.id}:${interaction.user.id}:${++modalSequence}`;
-      const modalTask = (async () => {
-        try {
-          await component.showModal(buildStatusRegionModal(
-            modalCustomId,
-            currentResult.language,
-            currentResult.config.storeCountryCode,
-          ));
-          let cancelModal = (): void => undefined;
-          const cancelled = new Promise<null>((resolve) => {
-            cancelModal = () => resolve(null);
-            if (modalAbortController.signal.aborted) {
-              resolve(null);
-              return;
-            }
-            modalAbortController.signal.addEventListener('abort', cancelModal, { once: true });
-          });
-          const modal = await Promise.race([
-            component.awaitModalSubmit({
-              time: Math.max(1, sessionExpiresAt - Date.now()),
-              filter: (submission) => submission.customId === modalCustomId
-                && submission.user.id === interaction.user.id,
-            }),
-            cancelled,
-          ]).catch(() => null);
-          modalAbortController.signal.removeEventListener('abort', cancelModal);
-          if (!modal || modalAbortController.signal.aborted) {
-            return;
-          }
-          const rawCountry = modal.fields.getTextInputValue('store-country').trim();
-          await modal.deferUpdate();
-          operations = operations.then(async () => {
-            if (modalAbortController.signal.aborted) {
-              return;
-            }
-            const updatedConfig = await userConfigurationService.setStoreCountry(
-              interaction.user.id,
-              rawCountry,
-            );
-            if (!updatedConfig) {
-              controlsRemoved = true;
-              collector.stop('not-configured');
-              await interaction.editReply({
-                content: messagesFor(currentResult.language).statusNotConfigured,
-                embeds: [],
-                components: [],
-              });
-              return;
-            }
-            const refreshed = statusService.getDashboard(interaction.user.id, fallbackLanguage);
-            if (refreshed.status !== 'ready') {
-              controlsRemoved = true;
-              collector.stop('unavailable');
-              await interaction.editReply({
-                content: messagesFor(refreshed.language).statusDashboardUnavailable,
-                embeds: [],
-                components: [],
-              });
-              return;
-            }
-            currentResult = refreshed;
-            await interaction.editReply({
-              content: messagesFor(currentResult.language).statusRegionSaved(
-                storeCountryLabel(updatedConfig.storeCountryCode, currentResult.language),
-              ),
-              embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
-              components: buildStatusComponents(
-                interaction.id,
-                currentResult.language,
-                currentResult.config.enabled,
-              ),
-            });
-          }).catch(async (error: unknown) => {
-            safeLogger.error('Discord status region update failed', error);
-            await interaction.editReply({
-              content: messagesFor(currentResult.language).statusRegionSaveFailed,
-              embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
-              components: buildStatusComponents(
-                interaction.id,
-                currentResult.language,
-                currentResult.config.enabled,
-              ),
-            }).catch(() => undefined);
-          });
-          await operations;
-        } catch (error: unknown) {
-          if (!modalAbortController.signal.aborted) {
-            safeLogger.error('Discord status region modal failed', error);
-          }
-        }
-      })();
-      modalTasks.add(modalTask);
-      void modalTask.finally(() => modalTasks.delete(modalTask));
-      return;
-    }
-    if (action === 'minimum-discount') {
-      if (!thresholdService) {
-        void component.deferUpdate();
-        return;
-      }
-      const modalCustomId = `status-threshold:${interaction.id}:${interaction.user.id}:${++modalSequence}`;
-      const configurationId = currentResult.config.configurationId;
-      const modalTask = (async () => {
-        try {
-          await component.showModal(buildStatusThresholdModal(
-            modalCustomId,
-            currentResult.language,
-            currentResult.config.minimumDiscountPercent,
-          ));
-          let cancelModal = (): void => undefined;
-          const cancelled = new Promise<null>((resolve) => {
-            cancelModal = () => resolve(null);
-            if (modalAbortController.signal.aborted) {
-              resolve(null);
-              return;
-            }
-            modalAbortController.signal.addEventListener('abort', cancelModal, { once: true });
-          });
-          const modal = await Promise.race([
-            component.awaitModalSubmit({
-              time: Math.max(1, sessionExpiresAt - Date.now()),
-              filter: (submission) => submission.customId === modalCustomId
-                && submission.user.id === interaction.user.id,
-            }),
-            cancelled,
-          ]).catch(() => null);
-          modalAbortController.signal.removeEventListener('abort', cancelModal);
-          if (!modal || modalAbortController.signal.aborted) {
-            return;
-          }
-          const rawValue = modal.fields.getTextInputValue('minimum-discount-percent').trim();
-          const percent = parseDiscountPercent(rawValue);
-          if (percent === null) {
-            await modal.reply({
-              content: messagesFor(currentResult.language).discountThresholdInvalid,
-              flags: MessageFlags.Ephemeral,
-            });
-            return;
-          }
-          await modal.deferUpdate();
-          operations = operations.then(async () => {
-            if (modalAbortController.signal.aborted) {
-              return;
-            }
-            const updatedConfig = await thresholdService.setGlobal(
-              interaction.user.id,
-              percent,
-              configurationId,
-            );
-            if (!updatedConfig) {
-              await interaction.editReply({
-                content: messagesFor(currentResult.language).statusNotConfigured,
-                embeds: [],
-                components: [],
-              });
-              controlsRemoved = true;
-              collector.stop('not-configured');
-              return;
-            }
-            const refreshed = statusService.getDashboard(interaction.user.id, fallbackLanguage);
-            if (refreshed.status !== 'ready') {
-              await interaction.editReply({
-                content: messagesFor(refreshed.language).statusDashboardUnavailable,
-                embeds: [],
-                components: [],
-              });
-              controlsRemoved = true;
-              collector.stop('unavailable');
-              return;
-            }
-            currentResult = refreshed;
-            await interaction.editReply({
-              content: messagesFor(currentResult.language).statusMinimumDiscountSaved(percent),
-              embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
-              components: buildStatusComponents(
-                interaction.id,
-                currentResult.language,
-                currentResult.config.enabled,
-              ),
-            });
-          }).catch(async (error: unknown) => {
-            safeLogger.error('Discord status minimum discount update failed', error);
-            try {
-              await interaction.editReply({
-                content: messagesFor(currentResult.language).discountThresholdSaveFailed,
-              });
-            } catch (_replyError: unknown) {
-              // The original interaction may have expired while the modal was open.
-            }
-          });
-          await operations;
-        } catch (error: unknown) {
-          if (!modalAbortController.signal.aborted) {
-            safeLogger.error('Discord status modal failed', error);
-          }
-        }
-      })();
-      modalTasks.add(modalTask);
-      void modalTask.finally(() => modalTasks.delete(modalTask));
-      return;
-    }
-    const acknowledgement = component.deferUpdate();
-    operations = operations.then(async () => {
-      await acknowledgement;
-      if (action === null) {
-        return;
-      }
-
-      let updatedConfig: UserConfig | null;
-      try {
-        updatedConfig = await userConfigurationService.setEnabled(
-          interaction.user.id,
-          action === 'enable',
-        );
-      } catch (error: unknown) {
-        safeLogger.error('Discord status notification toggle failed', error);
-        await interaction.editReply({
-          content: messagesFor(currentResult.language).statusToggleFailed,
-          embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
-          components: buildStatusComponents(
-            interaction.id,
-            currentResult.language,
-            currentResult.config.enabled,
-          ),
-        });
-        return;
-      }
-
-      if (!updatedConfig) {
-        controlsRemoved = true;
-        collector.stop('not-configured');
-        await interaction.editReply({
-          content: messagesFor(currentResult.language).statusNotConfigured,
-          embeds: [],
-          components: [],
-        });
-        return;
-      }
-
-      const refreshed = statusService.getDashboard(interaction.user.id, fallbackLanguage);
-      if (refreshed.status !== 'ready') {
-        controlsRemoved = true;
-        collector.stop('unavailable');
-        await interaction.editReply({
-          content: refreshed.status === 'not-configured'
-            ? messagesFor(refreshed.language).statusNotConfigured
-            : messagesFor(refreshed.language).statusDashboardUnavailable,
-          embeds: [],
-          components: [],
-        });
-        return;
-      }
-
-      currentResult = refreshed;
-      await interaction.editReply({
-        content: null,
-        embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
-        components: buildStatusComponents(
-          interaction.id,
-          currentResult.language,
-          currentResult.config.enabled,
-        ),
-      });
-    }).catch((error: unknown) => {
-      safeLogger.error('Discord status component update failed', error);
-    });
-  });
-
-  const endReason = new Promise<void>((resolve) => {
-    collector.once('end', () => resolve());
-  });
-  const stopForShutdown = (): void => collector.stop('shutdown');
-  lifecycleSignal?.addEventListener('abort', stopForShutdown, { once: true });
-  if (lifecycleSignal?.aborted) {
-    collector.stop('shutdown');
-  }
-
-  try {
-    await endReason;
-    modalAbortController.abort();
-    await Promise.allSettled([...modalTasks]);
-    await operations;
-    if (!controlsRemoved) {
-      try {
-        await interaction.editReply({
-          content: null,
-          embeds: [buildStatusDashboardEmbed(currentResult, botAvatarUrl)],
-          components: buildStatusComponents(
-            interaction.id,
-            currentResult.language,
-            currentResult.config.enabled,
-            true,
-          ),
-        });
-      } catch (error: unknown) {
-        safeLogger.error('Discord status component cleanup failed', error);
-      }
-    }
-  } finally {
-    lifecycleSignal?.removeEventListener('abort', stopForShutdown);
-  }
-}
 
 export function parseDiscountPercent(value: string): number | null {
   if (!/^\d+$/.test(value)) {
@@ -602,42 +50,300 @@ export function parseDiscountPercent(value: string): number | null {
   return Number.isSafeInteger(percent) && percent <= 100 ? percent : null;
 }
 
-function buildStatusThresholdModal(
-  customId: string,
-  language: Language,
-  currentPercent: number,
-): ModalBuilder {
+export async function handleStatus(
+  interaction: ChatInputCommandInteraction,
+  statusService: StatusService,
+  userConfigurationService: UserConfigurationService,
+  lifecycleSignal?: AbortSignal,
+  thresholdService?: DiscountThresholdService,
+  testNotificationService?: TestNotificationService,
+): Promise<void> {
+  await measureDiscordOperation(interaction, 'status-v2.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
+  const fallbackLanguage = languageFromDiscordLocale(interaction.locale);
+  const initial = statusService.getDashboard(interaction.user.id, fallbackLanguage);
+  if (initial.status !== 'ready') {
+    const messages = messagesFor(initial.language);
+    await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+      flags: dealioV2Flags,
+      components: [buildNoticePanel(
+        initial.language,
+        initial.status === 'not-configured' ? 'warning' : 'danger',
+        initial.status === 'not-configured'
+          ? (initial.language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured')
+          : (initial.language === 'tr' ? 'Durum bilgisi alınamadı' : 'Status unavailable'),
+        initial.status === 'not-configured' ? messages.statusNotConfigured : messages.statusDashboardUnavailable,
+      )],
+    }));
+    return;
+  }
+  let current: ReadyStatus = initial;
+
+  let avatarUrl: string | undefined;
+  try {
+    avatarUrl = interaction.client.user?.displayAvatarURL({ extension: 'png', size: 128 });
+  } catch (_error: unknown) {
+    avatarUrl = undefined;
+  }
+  const message = await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+    flags: dealioV2Flags,
+    components: [buildStatusV2Panel(current, interaction.id, { avatarUrl })],
+  }));
+  const closeUiSession = dealioUiSessions.open(
+    interaction.id,
+    interaction.user.id,
+    ['status-v2', 'country'],
+    dealioUiSessionTimeoutMs,
+  );
+  const collector = message.createMessageComponentCollector({
+    time: dealioUiSessionTimeoutMs,
+    filter: (component) => component.user.id === interaction.user.id
+      && (component.customId.startsWith(`status-v2:${interaction.id}:`)
+        || component.customId.startsWith(`country:${interaction.id}:`)),
+  });
+  const sessionExpiresAt = Date.now() + dealioUiSessionTimeoutMs;
+  let modalSequence = 0;
+  let controlsRemoved = false;
+  let sessionActive = true;
+  const operations = new PanelOperationQueue(async (error) => {
+    safeLogger.error('Discord panel update failed', error);
+    await interaction.followUp({
+      flags: dealioEphemeralV2Flags,
+      components: [buildNoticePanel(
+        current.language, 'warning',
+        current.language === 'tr' ? 'İşlem tamamlanamadı' : 'Action could not be completed',
+        current.language === 'tr'
+          ? 'İşlem sonucu gösterilemedi. Güncel durumu görmek için paneli yeniden açabilirsin.'
+          : 'The result could not be displayed. Reopen the panel to check the current state.',
+      )],
+    });
+  });
+
+  const refresh = async (): Promise<boolean> => {
+    const refreshed = statusService.getDashboard(interaction.user.id, fallbackLanguage);
+    if (refreshed.status !== 'ready') {
+      controlsRemoved = true;
+      collector.stop('unavailable');
+      await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+        components: [buildNoticePanel(
+          refreshed.language,
+          refreshed.status === 'not-configured' ? 'warning' : 'danger',
+          refreshed.language === 'tr' ? 'Panel kapatıldı' : 'Panel closed',
+          refreshed.status === 'not-configured'
+            ? messagesFor(refreshed.language).statusNotConfigured
+            : messagesFor(refreshed.language).statusDashboardUnavailable,
+        )],
+      }));
+      return false;
+    }
+    current = refreshed;
+    await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+      components: [buildStatusV2Panel(current, interaction.id, { avatarUrl })],
+    }));
+    return true;
+  };
+
+  collector.on('collect', (component) => {
+    if (component.customId === `country:${interaction.id}:range` && component.isStringSelectMenu()) {
+      const rangeIndex = Number(component.values[0]);
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
+      void operations.enqueue(acknowledgement, async () => {
+        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+          components: [buildCountryListPanel(current.language, interaction.id, rangeIndex, current.config.storeCountryCode)],
+        }));
+      });
+      return;
+    }
+    if (component.customId === `country:${interaction.id}:back` && component.isButton()) {
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
+      void operations.enqueue(acknowledgement, async () => {
+        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id)] }));
+      });
+      return;
+    }
+    if (component.customId === `country:${interaction.id}:select` && component.isStringSelectMenu()) {
+      const country = parseStoreCountryCode(component.values[0] ?? '');
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
+      void operations.enqueue(acknowledgement, async () => {
+        if (country) {
+          await userConfigurationService.setStoreCountry(interaction.user.id, country);
+        }
+        await refresh();
+      });
+      return;
+    }
+    if (!component.isButton()) {
+      void operations.enqueue(measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate()), async () => undefined);
+      return;
+    }
+    const action = component.customId.slice(`status-v2:${interaction.id}:`.length);
+    if (action === 'region') {
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
+      void operations.enqueue(acknowledgement, async () => {
+        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id)] }));
+      });
+      return;
+    }
+    if (action === 'language') {
+      const modalId = `status-language:${interaction.id}:${++modalSequence}`;
+      void (async () => {
+        await measureDiscordOperation(component, 'status-v2.modal', () => component.showModal(buildLanguageModal(modalId, current.language)));
+        const modal = await component.awaitModalSubmit({
+          time: Math.max(1, sessionExpiresAt - Date.now()),
+          filter: (submission) => submission.customId === modalId
+            && submission.user.id === interaction.user.id,
+        }).catch(() => null);
+        if (!modal) return;
+        if (!sessionActive) {
+          await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.reply({
+            flags: dealioEphemeralV2Flags,
+            components: [buildExpiredPanel(current.language)],
+          }));
+          return;
+        }
+        const language = modal.fields.getRadioGroup('notification-language', true);
+        await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate());
+        if (language === 'tr' || language === 'en') {
+          await userConfigurationService.setLanguage(interaction.user.id, language);
+        }
+        await refresh();
+      })().catch((error: unknown) => safeLogger.error('Discord status language update failed', error));
+      return;
+    }
+    if (action === 'minimum-discount' && thresholdService) {
+      const modalId = `status-threshold-v2:${interaction.id}:${++modalSequence}`;
+      const configurationId = current.config.configurationId;
+      void (async () => {
+        await measureDiscordOperation(component, 'status-v2.modal', () => component.showModal(buildThresholdModal(modalId, current.language, current.config.minimumDiscountPercent)));
+        const modal = await component.awaitModalSubmit({
+          time: Math.max(1, sessionExpiresAt - Date.now()),
+          filter: (submission) => submission.customId === modalId
+            && submission.user.id === interaction.user.id,
+        }).catch(() => null);
+        if (!modal) return;
+        if (!sessionActive) {
+          await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.reply({
+            flags: dealioEphemeralV2Flags,
+            components: [buildExpiredPanel(current.language)],
+          }));
+          return;
+        }
+        const value = parseDiscountPercent(modal.fields.getTextInputValue('minimum-discount-percent').trim());
+        if (value === null) {
+          await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.reply({
+            flags: dealioEphemeralV2Flags,
+            components: [buildNoticePanel(current.language, 'warning',
+              current.language === 'tr' ? 'Geçersiz değer' : 'Invalid value',
+              messagesFor(current.language).discountThresholdInvalid)],
+          }));
+          return;
+        }
+        await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate());
+        await thresholdService.setGlobal(interaction.user.id, value, configurationId);
+        await refresh();
+      })().catch((error: unknown) => safeLogger.error('Discord status threshold update failed', error));
+      return;
+    }
+    if (action === 'test' && testNotificationService) {
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferReply({ flags: MessageFlags.Ephemeral }));
+      void operations.enqueue(acknowledgement, async () => {
+        const text = uiCopy(current.language);
+        try {
+          await testNotificationService.send(
+            interaction.user.id,
+            current.language,
+            current.config.storeCountryCode,
+          );
+          await measureDiscordOperation(component, 'status-v2.render', () => component.editReply({
+            flags: dealioV2Flags,
+            components: [buildNoticePanel(current.language, 'success', text.testSentTitle, text.testSentDescription)],
+          }));
+        } catch (error: unknown) {
+          const cooldown = error instanceof TestNotificationCooldownError;
+          await measureDiscordOperation(component, 'status-v2.render', () => component.editReply({
+            flags: dealioV2Flags,
+            components: [buildNoticePanel(
+              current.language,
+              cooldown ? 'warning' : 'danger',
+              cooldown ? text.testCooldownTitle : text.testFailedTitle,
+              cooldown
+                ? messagesFor(current.language).testNotificationCooldown(error.retryAfterSeconds)
+                : messagesFor(current.language).testNotificationFailed,
+            )],
+          }));
+        }
+        await refresh();
+      });
+      return;
+    }
+    if (action === 'enable' || action === 'disable') {
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
+      void operations.enqueue(acknowledgement, async () => {
+        await userConfigurationService.setEnabled(interaction.user.id, action === 'enable');
+        await refresh();
+      });
+      return;
+    }
+    void operations.enqueue(measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate()), async () => undefined);
+  });
+
+  const ended = new Promise<void>((resolve) => collector.once('end', () => {
+    sessionActive = false;
+    resolve();
+  }));
+  const stopForShutdown = (): void => collector.stop('shutdown');
+  lifecycleSignal?.addEventListener('abort', stopForShutdown, { once: true });
+  if (lifecycleSignal?.aborted) collector.stop('shutdown');
+  try {
+    await ended;
+    sessionActive = false;
+    await operations.drain();
+    if (!controlsRemoved) {
+      await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+        components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, disabled: true })],
+      })).catch((error: unknown) => safeLogger.error('Discord status V2 cleanup failed', error));
+    }
+  } finally {
+    sessionActive = false;
+    closeUiSession();
+    lifecycleSignal?.removeEventListener('abort', stopForShutdown);
+  }
+}
+
+function buildLanguageModal(customId: string, language: Language): ModalBuilder {
+  return new ModalBuilder()
+    .setCustomId(customId)
+    .setTitle(language === 'tr' ? 'Bildirim dili' : 'Notification language')
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel(language === 'tr' ? 'Kullanmak istediğin dili seç' : 'Choose your preferred language')
+        .setRadioGroupComponent(
+          new RadioGroupBuilder()
+            .setCustomId('notification-language')
+            .setRequired(true)
+            .addOptions(
+              new RadioGroupOptionBuilder().setLabel('Türkçe').setValue('tr').setDefault(language === 'tr'),
+              new RadioGroupOptionBuilder().setLabel('English').setValue('en').setDefault(language === 'en'),
+            ),
+        ),
+    );
+}
+
+function buildThresholdModal(customId: string, language: Language, currentPercent: number): ModalBuilder {
   const messages = messagesFor(language);
-  const input = new TextInputBuilder()
-    .setCustomId('minimum-discount-percent')
-    .setLabel(messages.statusMinimumDiscountInputLabel)
-    .setPlaceholder(messages.statusMinimumDiscountPlaceholder)
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(3)
-    .setValue(String(currentPercent));
   return new ModalBuilder()
     .setCustomId(customId)
     .setTitle(messages.statusMinimumDiscountModalTitle)
-    .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
-}
-
-function buildStatusRegionModal(
-  customId: string,
-  language: Language,
-  currentStoreCountry: string,
-): ModalBuilder {
-  const messages = messagesFor(language);
-  const input = new TextInputBuilder()
-    .setCustomId('store-country')
-    .setLabel(messages.statusRegionInputLabel)
-    .setPlaceholder(messages.statusRegionInputPlaceholder)
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true)
-    .setMaxLength(80)
-    .setValue(currentStoreCountry);
-  return new ModalBuilder()
-    .setCustomId(customId)
-    .setTitle(messages.statusRegionModalTitle)
-    .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));
+    .addLabelComponents(
+      new LabelBuilder()
+        .setLabel(messages.statusMinimumDiscountInputLabel)
+        .setTextInputComponent(
+          new TextInputBuilder()
+            .setCustomId('minimum-discount-percent')
+            .setPlaceholder(messages.statusMinimumDiscountPlaceholder)
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMaxLength(3)
+            .setValue(String(currentPercent)),
+        ),
+    );
 }

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { handleDealio } from '../src/discord/commands/dealio.js';
-import { handleStatusV2 } from '../src/discord/commands/status-v2.js';
+import { handleStatus } from '../src/discord/commands/status.js';
 import { dealioUiSessions } from '../src/discord/ui/session-manager.js';
 
 const dashboard = {
@@ -43,7 +43,7 @@ describe('dashboard recovery', () => {
     const setEnabled = vi.fn().mockRejectedValueOnce(new Error('database busy')).mockResolvedValue(null);
     const handling = kind === 'dealio'
       ? handleDealio(f.interaction as never, { statusService: f.statusService } as never)
-      : handleStatusV2(f.interaction as never, f.statusService as never, { setEnabled } as never);
+      : handleStatus(f.interaction as never, f.statusService as never, { setEnabled } as never);
     try {
       await vi.waitFor(() => expect(f.createMessageComponentCollector).toHaveBeenCalledOnce());
       if (kind === 'dealio') f.interaction.editReply.mockRejectedValueOnce(new Error('Discord unavailable'));
@@ -65,7 +65,7 @@ describe('dashboard recovery', () => {
     lifecycle.abort();
     const handling = kind === 'dealio'
       ? handleDealio(f.interaction as never, { statusService: f.statusService, lifecycleSignal: lifecycle.signal } as never)
-      : handleStatusV2(f.interaction as never, f.statusService as never, {} as never, lifecycle.signal);
+      : handleStatus(f.interaction as never, f.statusService as never, {} as never, lifecycle.signal);
     await handling;
     expect(f.interaction.editReply).toHaveBeenCalledTimes(2);
     expect(dealioUiSessions.resolve(kind + ':recovery-session:refresh', 'owner')).toBe('expired');

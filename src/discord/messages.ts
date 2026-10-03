@@ -49,9 +49,6 @@ interface MessageCatalog {
   readonly initialSummaryThreshold: string;
   readonly initialSummaryWishlist: string;
   readonly initialSummaryFooter: string;
-  readonly statusDmDeliveryLabel: string;
-  readonly statusDmHealthy: string;
-  readonly statusDmBlocked: string;
   readonly invalidSetup: string;
   readonly invalidSteamProfile: string;
   readonly invalidStoreCountry: string;
@@ -82,53 +79,9 @@ interface MessageCatalog {
   readonly statusNotConfigured: string;
   readonly statusTitle: string;
   readonly statusDashboardUnavailable: string;
-  readonly statusAccountSection: string;
-  readonly statusWishlistSection: string;
-  readonly statusCheckSection: string;
-  readonly statusNotificationSection: string;
-  readonly statusSteamIdLabel: string;
-  readonly statusOpenProfile: string;
-  readonly statusLanguageLabel: string;
   readonly statusStoreRegionLabel: string;
-  readonly statusLatestCurrencyLabel: string;
-  readonly statusEnabledLabel: string;
-  readonly statusUpdatedAtLabel: string;
-  readonly statusEnabled: string;
   readonly statusDisabled: string;
-  readonly statusNever: string;
-  readonly statusCheckedCountLabel: string;
-  readonly statusOnSaleCountLabel: string;
-  readonly statusFreeCountLabel: string;
-  readonly statusUnknownPriceCountLabel: string;
-  readonly statusFailedItemCountLabel: string;
-  readonly statusLastSuccessLabel: string;
-  readonly statusStartedAtLabel: string;
-  readonly statusCompletedAtLabel: string;
-  readonly statusResultLabel: string;
-  readonly statusNextCheckLabel: string;
-  readonly statusErrorLabel: string;
-  readonly statusResultSuccess: string;
-  readonly statusResultPending: string;
-  readonly statusResultUnavailable: string;
-  readonly statusResultFailed: string;
-  readonly statusSteamUnavailable: string;
-  readonly statusCheckFailed: string;
-  readonly statusQueuePendingLabel: string;
-  readonly statusQueueRetryLabel: string;
-  readonly statusQueueSendingLabel: string;
-  readonly statusQueueSentLabel: string;
-  readonly statusQueueTerminalLabel: string;
-  readonly statusQueueExpiredLabel: string;
-  readonly statusDisableNotifications: string;
-  readonly statusEnableNotifications: string;
   readonly statusToggleFailed: string;
-  readonly statusMinimumDiscountLabel: string;
-  readonly statusGameOverridesLabel: string;
-  readonly statusEditMinimumDiscount: string;
-  readonly statusChangeRegion: string;
-  readonly statusRegionModalTitle: string;
-  readonly statusRegionInputLabel: string;
-  readonly statusRegionInputPlaceholder: string;
   readonly statusRegionSaved: (country: string) => string;
   readonly statusRegionSaveFailed: string;
   readonly statusMinimumDiscountModalTitle: string;
@@ -242,9 +195,6 @@ const catalog: Record<Language, MessageCatalog> = {
     initialSummaryThreshold: 'Minimum indirim',
     initialSummaryWishlist: 'Wishlist özeti',
     initialSummaryFooter: 'Dealio · Kişisel Steam indirim asistanı',
-    statusDmDeliveryLabel: 'DM teslimatı',
-    statusDmHealthy: 'Hazır',
-    statusDmBlocked: 'Discord tarafından engellendi — DM ayarını düzelt, /test-notification çalıştır ve yeniden etkinleştir',
     invalidSetup: 'Dil Türkçe veya English olmalı.',
     invalidSteamProfile: 'Geçerli bir SteamID64, Steam profil bağlantısı veya vanity adı girmelisin.',
     invalidStoreCountry: 'Geçerli bir Steam mağaza ülkesi seçmelisin.',
@@ -277,53 +227,9 @@ const catalog: Record<Language, MessageCatalog> = {
     statusNotConfigured: 'Henüz bir Steam wishlist ayarın yok. /setup komutunu kullanabilirsin.',
     statusTitle: 'Steam wishlist dashboardun',
     statusDashboardUnavailable: 'Durum bilgilerin şu anda güvenli şekilde okunamıyor. Daha sonra tekrar dene.',
-    statusAccountSection: '👤 Hesap',
-    statusWishlistSection: '🎮 Wishlist özeti',
-    statusCheckSection: '🔄 Kontrol durumu',
-    statusNotificationSection: '🔔 Bildirim kuyruğu',
-    statusSteamIdLabel: 'SteamID64',
-    statusOpenProfile: 'Steam profilini aç',
-    statusLanguageLabel: 'Bildirim dili',
     statusStoreRegionLabel: 'Steam mağaza bölgesi',
-    statusLatestCurrencyLabel: 'Son fiyat para birimi',
-    statusEnabledLabel: 'Yapılandırma',
-    statusUpdatedAtLabel: 'Güncellendi',
-    statusEnabled: 'Aktif',
     statusDisabled: 'Pasif',
-    statusNever: 'Henüz yok',
-    statusCheckedCountLabel: 'İşlenen oyun',
-    statusOnSaleCountLabel: 'İndirimde',
-    statusFreeCountLabel: 'Ücretsiz',
-    statusUnknownPriceCountLabel: 'Fiyatı bilinmeyen',
-    statusFailedItemCountLabel: 'Ayrıntısı alınamayan',
-    statusLastSuccessLabel: 'Son başarılı kontrol',
-    statusStartedAtLabel: 'Başlangıç',
-    statusCompletedAtLabel: 'Tamamlanma',
-    statusResultLabel: 'Sonuç',
-    statusNextCheckLabel: 'Sonraki otomatik kontrol',
-    statusErrorLabel: 'Açıklama',
-    statusResultSuccess: 'Başarılı',
-    statusResultPending: 'Bekliyor',
-    statusResultUnavailable: 'Steam kullanılamıyor',
-    statusResultFailed: 'Başarısız',
-    statusSteamUnavailable: 'Steam wishlist veya oyun ayrıntıları son kontrolde alınamadı.',
-    statusCheckFailed: 'Son kontrol uygulama veya yerel veri sorunu nedeniyle tamamlanamadı.',
-    statusQueuePendingLabel: 'Bekleyen',
-    statusQueueRetryLabel: 'Tekrar denenecek',
-    statusQueueSendingLabel: 'Gönderiliyor',
-    statusQueueSentLabel: 'Gönderildi',
-    statusQueueTerminalLabel: 'Kalıcı başarısız',
-    statusQueueExpiredLabel: 'Süresi doldu',
-    statusDisableNotifications: 'Bildirimleri Kapat',
-    statusEnableNotifications: 'Bildirimleri Aç',
     statusToggleFailed: 'Bildirim ayarın değiştirilemedi. Daha sonra tekrar dene.',
-    statusMinimumDiscountLabel: 'Global minimum indirim',
-    statusGameOverridesLabel: 'Oyuna özel kural',
-    statusEditMinimumDiscount: 'Minimum İndirimi Değiştir',
-    statusChangeRegion: 'Bölgeyi Değiştir',
-    statusRegionModalTitle: 'Steam Store bölgesi',
-    statusRegionInputLabel: 'Ülke kodu veya adı',
-    statusRegionInputPlaceholder: 'TR, Türkiye veya Turkey',
     statusRegionSaved: (country) => `Steam Store bölgen ${country} olarak kaydedildi. Fiyat başlangıç kaydı güvenli biçimde yenilendi.`,
     statusRegionSaveFailed: 'Mağaza bölgen kaydedilemedi. Geçerli bir ülke girip tekrar dene.',
     statusMinimumDiscountModalTitle: 'Global minimum indirim',
@@ -436,9 +342,6 @@ const catalog: Record<Language, MessageCatalog> = {
     initialSummaryThreshold: 'Minimum discount',
     initialSummaryWishlist: 'Wishlist summary',
     initialSummaryFooter: 'Dealio · Personal Steam sale assistant',
-    statusDmDeliveryLabel: 'DM delivery',
-    statusDmHealthy: 'Ready',
-    statusDmBlocked: 'Blocked by Discord — fix DMs, run /test-notification, then re-enable',
     invalidSetup: 'Language must be Turkish or English.',
     invalidSteamProfile: 'Enter a valid SteamID64, Steam profile link, or vanity name.',
     invalidStoreCountry: 'Select a valid Steam Store country.',
@@ -471,53 +374,9 @@ const catalog: Record<Language, MessageCatalog> = {
     statusNotConfigured: 'You do not have a Steam wishlist configured yet. Use /setup first.',
     statusTitle: 'Your Steam wishlist dashboard',
     statusDashboardUnavailable: 'Your status data cannot be read safely right now. Try again later.',
-    statusAccountSection: '👤 Account',
-    statusWishlistSection: '🎮 Wishlist summary',
-    statusCheckSection: '🔄 Check status',
-    statusNotificationSection: '🔔 Notification queue',
-    statusSteamIdLabel: 'SteamID64',
-    statusOpenProfile: 'Open Steam profile',
-    statusLanguageLabel: 'Notification language',
     statusStoreRegionLabel: 'Steam Store region',
-    statusLatestCurrencyLabel: 'Latest price currency',
-    statusEnabledLabel: 'Configuration',
-    statusUpdatedAtLabel: 'Updated',
-    statusEnabled: 'Active',
     statusDisabled: 'Disabled',
-    statusNever: 'Not yet available',
-    statusCheckedCountLabel: 'Games processed',
-    statusOnSaleCountLabel: 'On sale',
-    statusFreeCountLabel: 'Free',
-    statusUnknownPriceCountLabel: 'Unknown price',
-    statusFailedItemCountLabel: 'Details unavailable',
-    statusLastSuccessLabel: 'Last successful check',
-    statusStartedAtLabel: 'Started',
-    statusCompletedAtLabel: 'Completed',
-    statusResultLabel: 'Result',
-    statusNextCheckLabel: 'Next automatic check',
-    statusErrorLabel: 'Details',
-    statusResultSuccess: 'Successful',
-    statusResultPending: 'Pending',
-    statusResultUnavailable: 'Steam unavailable',
-    statusResultFailed: 'Failed',
-    statusSteamUnavailable: 'The Steam wishlist or game details were unavailable during the last check.',
-    statusCheckFailed: 'The last check could not complete because of an application or local data problem.',
-    statusQueuePendingLabel: 'Pending',
-    statusQueueRetryLabel: 'Scheduled for retry',
-    statusQueueSendingLabel: 'Sending',
-    statusQueueSentLabel: 'Sent',
-    statusQueueTerminalLabel: 'Permanently failed',
-    statusQueueExpiredLabel: 'Expired',
-    statusDisableNotifications: 'Disable notifications',
-    statusEnableNotifications: 'Enable notifications',
     statusToggleFailed: 'Your notification setting could not be changed. Try again later.',
-    statusMinimumDiscountLabel: 'Global minimum discount',
-    statusGameOverridesLabel: 'Game-specific rules',
-    statusEditMinimumDiscount: 'Edit minimum discount',
-    statusChangeRegion: 'Change region',
-    statusRegionModalTitle: 'Steam Store region',
-    statusRegionInputLabel: 'Country code or name',
-    statusRegionInputPlaceholder: 'US, United States, TR, or Turkey',
     statusRegionSaved: (country) => `Your Steam Store region was saved as ${country}. The price baseline was refreshed safely.`,
     statusRegionSaveFailed: 'Your Store region could not be saved. Enter a valid country and try again.',
     statusMinimumDiscountModalTitle: 'Global minimum discount',
