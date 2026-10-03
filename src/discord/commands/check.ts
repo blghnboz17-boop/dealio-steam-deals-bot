@@ -17,7 +17,7 @@ import { messagesFor } from '../messages.js';
 import { dealioUiSessionTimeoutMs, dealioV2Flags } from '../ui/components-v2.js';
 import { uiCopy } from '../ui/copy.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
-import { handleStatusV2 } from './status-v2.js';
+import { handleStatus } from './status.js';
 import { handleWishlist } from './wishlist.js';
 
 export const checkCommand = new SlashCommandBuilder()
@@ -113,7 +113,7 @@ export async function handleCheck(
       return;
     }
     if (action === 'status') {
-      void handleStatusV2(
+      void handleStatus(
         component as unknown as ChatInputCommandInteraction,
         statusService,
         navigation.userConfigurationService,

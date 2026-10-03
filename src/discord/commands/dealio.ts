@@ -30,7 +30,7 @@ import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
 import { handleCheck } from './check.js';
 import { handleSetup } from './setup.js';
-import { handleStatusV2 } from './status-v2.js';
+import { handleStatus } from './status.js';
 import { handleTestNotification } from './test-notification.js';
 import { handleWishlist } from './wishlist.js';
 
@@ -175,7 +175,7 @@ export async function handleDealio(
       return;
     }
     if (action === 'settings' || action === 'region') {
-      void handleStatusV2(
+      void handleStatus(
         component as unknown as ChatInputCommandInteraction,
         services.statusService,
         services.userConfigurationService,

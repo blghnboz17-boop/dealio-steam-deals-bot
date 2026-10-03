@@ -5,7 +5,7 @@ import { handleCheck } from '../src/discord/commands/check.js';
 import { handleDealio } from '../src/discord/commands/dealio.js';
 import { handleDeleteData } from '../src/discord/commands/delete-data.js';
 import { handleRegion } from '../src/discord/commands/region.js';
-import { handleStatusV2 } from '../src/discord/commands/status-v2.js';
+import { handleStatus } from '../src/discord/commands/status.js';
 import { handleTestNotification } from '../src/discord/commands/test-notification.js';
 
 class EndingCollector extends EventEmitter {
@@ -66,7 +66,7 @@ describe('Discord command acknowledgement order', () => {
       editReply: vi.fn().mockResolvedValue(undefined),
     };
 
-    await handleStatusV2(interaction as never, { getDashboard } as never, {} as never);
+    await handleStatus(interaction as never, { getDashboard } as never, {} as never);
 
     expectAcknowledgedBefore(deferReply, getDashboard);
     expect(interaction.reply).not.toHaveBeenCalled();

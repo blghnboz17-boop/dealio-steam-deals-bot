@@ -36,7 +36,6 @@ vi.mock('../src/discord/register-commands.js', () => ({ registerCommands: mocks.
 vi.mock('../src/discord/commands/setup.js', () => ({ handleSetup: mocks.setup }));
 vi.mock('../src/discord/commands/region.js', () => ({ handleRegion: mocks.region }));
 vi.mock('../src/discord/commands/status.js', () => ({ handleStatus: mocks.status }));
-vi.mock('../src/discord/commands/status-v2.js', () => ({ handleStatusV2: mocks.status }));
 vi.mock('../src/discord/commands/dealio.js', () => ({ handleDealio: mocks.dealio }));
 vi.mock('../src/discord/commands/check.js', () => ({ handleCheck: mocks.check }));
 vi.mock('../src/discord/commands/wishlist.js', () => ({ handleWishlist: mocks.wishlist }));

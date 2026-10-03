@@ -20,7 +20,6 @@ import { handleStatus } from './commands/status.js';
 import { handleTestNotification } from './commands/test-notification.js';
 import { handleWishlist } from './commands/wishlist.js';
 import { handleDealio } from './commands/dealio.js';
-import { handleStatusV2 } from './commands/status-v2.js';
 import { handleStoreCountryAutocomplete } from './store-country-options.js';
 import type { SetupPresentationOptions } from './setup-view.js';
 import { buildExpiredPanel, buildNoticePanel, dealioEphemeralV2Flags } from './ui/components-v2.js';
@@ -174,7 +173,7 @@ async function handleInteraction(
       await handleRegion(interaction, services.userConfigurationService);
       return;
     case 'status':
-      await handleStatusV2(
+      await handleStatus(
         interaction,
         services.statusService,
         services.userConfigurationService,
