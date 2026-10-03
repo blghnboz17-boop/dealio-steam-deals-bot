@@ -11,6 +11,7 @@ import { formatMinorPrice } from './notification-messages.js';
 import { historicalLowLine, priceChangeLine, priceHistoryCredit } from './price-history-text.js';
 import { assertComponentsV2Limit } from './ui/components-v2.js';
 import { buildTabBar } from './ui/tab-bar.js';
+import { defaultTimezone, timezoneChoices, timezoneLabel } from '../domain/timezone.js';
 import { dealioBrand } from './ui/brand.js';
 
 export interface AssistantView {
@@ -26,6 +27,11 @@ export interface AssistantViewData {
 export type GameHistoryState={status:'loading'}|{status:'ready';history:GameHistory|null};
 const text=(value:string)=>new TextDisplayBuilder().setContent(value);
 const button=(id:string,label:string,primary=false)=>new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(primary?ButtonStyle.Primary:ButtonStyle.Secondary);
+/** The saved time zone, else the Store region's own zone; null when the user must choose. */
+export function effectiveTimezone(data:Pick<AssistantViewData,'preference'|'config'>):string|null {
+  return data.preference.timezone??defaultTimezone(data.config.storeCountryCode);
+}
+const clock=(minute:number|null)=>minute===null?'—':String(Math.floor(minute/60)).padStart(2,'0')+':'+String(minute%60).padStart(2,'0');
 export function matchesRule(item:WishlistItem,rule:GameRule|undefined,global:number):boolean {
   if(rule?.muted || !item.price || !item.price.currency) return false;
   if(rule?.mode==='target') return item.price.currency===rule.currency && item.price.finalMinor<=rule.targetMinor!;
@@ -126,19 +132,32 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       button(prefix+'prev','‹').setDisabled(disabled||view.page===0),
       button(prefix+'next','›').setDisabled(disabled||start+5>=data.history.length),button(prefix+'retry',tr?'DM erişimini dene':'Retry DM access')));
   }else{
-    const p=data.preference;
-    const mode=p.mode==='instant'?(tr?'Tespit edilince':'When detected'):p.mode==='quiet'?(tr?'Sessiz saatler':'Quiet hours'):(tr?'Günlük özet':'Daily digest');
-    add('## '+mode);
-    const time=(m:number|null)=>m===null?'—':String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
-    add((tr?'Saat dilimi: ':'Timezone: ')+(p.timezone??(tr?'Seçilmedi':'Not selected')));
-    if(p.mode==='quiet') add(time(p.quietStart)+' → '+time(p.quietEnd));
-    if(p.mode==='digest') add((tr?'Özet saati: ':'Digest time: ')+time(p.digestMinute));
-    add(tr?'Kontroller 30 dakikada bir yapılır. Sessiz saatlerde bildirimler bekler; iletilmeden önce fiyat tekrar doğrulanır.':'Checks run every 30 minutes. Alerts wait during quiet hours; prices are revalidated before delivery.');
+    const p=data.preference, zone=effectiveTimezone(data);
+    const current=p.mode==='quiet'?`🌙 ${tr?'Rahatsız etme':'Do not disturb'} · ${clock(p.quietStart)}–${clock(p.quietEnd)}`
+      :p.mode==='digest'?`📬 ${tr?'Günlük özet':'Daily digest'} · ${clock(p.digestMinute)}`
+      :`⚡ ${tr?'Hemen':'Right away'}`;
+    add((tr?'Şu an: ':'Now: ')+'**'+current+'**\n🌍 '+(tr?'Saat dilimi: ':'Time zone: ')+
+      (zone?timezoneLabel(zone):(tr?'seçilmedi, aşağıdan seç':'not set, choose below')));
+    add([
+      tr?'⚡ **Hemen:** İndirim bulununca hemen DM gelir.':'⚡ **Right away:** a DM as soon as a deal is found.',
+      tr?'🌙 **Rahatsız etme saatleri:** Bu saatlerde bildirim gelmez; saat bitince bekleyenler gelir.':'🌙 **Do not disturb:** no alerts during these hours; waiting alerts arrive when they end.',
+      tr?'📬 **Günlük özet:** Günde bir kez, seçtiğin saatte tek mesaj.':'📬 **Daily digest:** one message a day at the time you choose.',
+    ].join('\n'));
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button(prefix+'instant',tr?'Tespit edilince':'When detected'),button(prefix+'quiet',tr?'Sessiz saatler':'Quiet hours'),
-      button(prefix+'digest',tr?'Günlük özet':'Daily digest')));
+      button(prefix+'instant','⚡ '+(tr?'Hemen':'Right away'),p.mode==='instant'),
+      button(prefix+'quiet-night','🌙 '+(tr?'Gece 23:00–08:00':'Night 23:00–08:00'),p.mode==='quiet'),
+      button(prefix+'digest-evening','📬 '+(tr?'Her akşam 19:00':'Every evening 19:00'),p.mode==='digest')));
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
+      button(prefix+'quiet','🕐 '+(tr?'Kendi saatlerim':'My own hours')),
+      button(prefix+'digest','🕐 '+(tr?'Kendi özet saatim':'My digest time')),
       button(prefix+'history','📜 '+(tr?'Bildirim geçmişi':'Alert history'))));
+    root.addActionRowComponents(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      new StringSelectMenuBuilder().setCustomId(prefix+'timezone').setDisabled(disabled)
+        .setPlaceholder('🌍 '+(tr?'Saat dilimini değiştir':'Change time zone'))
+        .addOptions(timezoneChoices(data.config.storeCountryCode,zone).map(choice=>({
+          label:timezoneLabel(choice),value:choice,default:choice===zone})))));
+    add(tr?'-# Kontroller yaklaşık 30 dakikada bir yapılır. Bekleyen bildirimlerin fiyatı göndermeden önce yeniden doğrulanır.'
+      :'-# Checks run about every 30 minutes. Waiting alerts are re-checked before they are sent.');
   }
   const games=view.screen==='wishlist'||view.screen==='detail';
   root.addActionRowComponents(buildTabBar('assistant',session,lang,{active:games?'games':'alerts',
