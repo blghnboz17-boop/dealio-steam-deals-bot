@@ -19,7 +19,9 @@ export const testNotificationCommand = new SlashCommandBuilder()
   .setName('test-notification')
   .setDescription('Send yourself an example sale notification by DM')
   .setDescriptionLocalizations({
-    tr: 'Kendine DM ile örnek bir indirim bildirimi gönder',
+    tr: 'Kendine örnek bir indirim bildirimi DM olarak gönder',
+    de: 'Dir selbst eine Beispiel-Angebotsbenachrichtigung per DM schicken',
+    fr: 'T’envoyer en MP un exemple d’alerte promo',
   });
 
 export async function handleTestNotification(

@@ -18,7 +18,8 @@ import {
   type TestNotificationService,
 } from '../../application/test-notification-service.js';
 import type { UserConfigurationService } from '../../application/user-configuration-service.js';
-import type { Language } from '../../domain/user-config.js';
+import { isLanguage, languages, type Language } from '../../domain/user-config.js';
+import { languageNames, localizer } from '../i18n.js';
 import { parseStoreCountryCode } from '../../domain/store-country.js';
 import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-bar.js';
 import { languageFromDiscordLocale } from '../language.js';
@@ -41,7 +42,11 @@ type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
 export const statusCommand = new SlashCommandBuilder()
   .setName('status')
   .setDescription('Open your Dealio settings: alerts, region, language')
-  .setDescriptionLocalizations({ tr: 'Dealio ayarlarını aç: bildirimler, bölge, dil' });
+  .setDescriptionLocalizations({
+    tr: 'Dealio ayarlarını aç: bildirimler, bölge, dil',
+    de: 'Deine Dealio-Einstellungen öffnen: Benachrichtigungen, Region, Sprache',
+    fr: 'Ouvrir tes réglages Dealio : alertes, région, langue',
+  });
 
 export function parseDiscountPercent(value: string): number | null {
   if (!/^\d+$/.test(value)) {
@@ -74,8 +79,8 @@ export async function handleStatus(
         initial.language,
         initial.status === 'not-configured' ? 'warning' : 'danger',
         initial.status === 'not-configured'
-          ? (initial.language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured')
-          : (initial.language === 'tr' ? 'Durum bilgisi alınamadı' : 'Status unavailable'),
+          ? uiCopy(initial.language).notSetUpTitle
+          : uiCopy(initial.language).detailsUnavailableTitle,
         initial.status === 'not-configured' ? messages.statusNotConfigured : messages.statusDashboardUnavailable,
       )],
     }));
@@ -116,10 +121,8 @@ export async function handleStatus(
       flags: dealioEphemeralV2Flags,
       components: [buildNoticePanel(
         current.language, 'warning',
-        current.language === 'tr' ? 'İşlem tamamlanamadı' : 'Action could not be completed',
-        current.language === 'tr'
-          ? 'İşlem sonucu gösterilemedi. Güncel durumu görmek için paneli yeniden açabilirsin.'
-          : 'The result could not be displayed. Reopen the panel to check the current state.',
+        uiCopy(current.language).actionFailedTitle,
+        uiCopy(current.language).actionFailedDescription,
       )],
     });
   });
@@ -133,7 +136,7 @@ export async function handleStatus(
         components: [buildNoticePanel(
           refreshed.language,
           refreshed.status === 'not-configured' ? 'warning' : 'danger',
-          refreshed.language === 'tr' ? 'Panel kapatıldı' : 'Panel closed',
+          uiCopy(refreshed.language).panelClosedTitle,
           refreshed.status === 'not-configured'
             ? messagesFor(refreshed.language).statusNotConfigured
             : messagesFor(refreshed.language).statusDashboardUnavailable,
@@ -254,7 +257,7 @@ export async function handleStatus(
         }
         const language = modal.fields.getRadioGroup('notification-language', true);
         await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate());
-        if (language === 'tr' || language === 'en') {
+        if (isLanguage(language)) {
           await userConfigurationService.setLanguage(interaction.user.id, language);
         }
         await refresh();
@@ -284,7 +287,7 @@ export async function handleStatus(
           await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.reply({
             flags: dealioEphemeralV2Flags,
             components: [buildNoticePanel(current.language, 'warning',
-              current.language === 'tr' ? 'Geçersiz değer' : 'Invalid value',
+              localizer(current.language)({ tr: 'Bu değer olmadı', en: 'That value won’t work', de: 'Dieser Wert passt nicht', fr: 'Cette valeur ne convient pas' }),
               messagesFor(current.language).discountThresholdInvalid)],
           }));
           return;
@@ -352,20 +355,24 @@ export async function handleStatus(
 }
 
 function buildLanguageModal(customId: string, language: Language): ModalBuilder {
+  const t = localizer(language);
   return new ModalBuilder()
     .setCustomId(customId)
-    .setTitle(language === 'tr' ? 'Bildirim dili' : 'Notification language')
+    .setTitle(t({ tr: 'Dil', en: 'Language', de: 'Sprache', fr: 'Langue' }))
     .addLabelComponents(
       new LabelBuilder()
-        .setLabel(language === 'tr' ? 'Kullanmak istediğin dili seç' : 'Choose your preferred language')
+        .setLabel(t({
+          tr: 'Hangi dilde konuşalım?',
+          en: 'Which language do you prefer?',
+          de: 'Welche Sprache möchtest du?',
+          fr: 'Quelle langue préfères-tu ?',
+        }))
         .setRadioGroupComponent(
           new RadioGroupBuilder()
             .setCustomId('notification-language')
             .setRequired(true)
-            .addOptions(
-              new RadioGroupOptionBuilder().setLabel('Türkçe').setValue('tr').setDefault(language === 'tr'),
-              new RadioGroupOptionBuilder().setLabel('English').setValue('en').setDefault(language === 'en'),
-            ),
+            .addOptions(languages.map((option) => new RadioGroupOptionBuilder()
+              .setLabel(languageNames[option]).setValue(option).setDefault(option === language))),
         ),
     );
 }

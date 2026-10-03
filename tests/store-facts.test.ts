@@ -66,9 +66,9 @@ describe('alert presentation', () => {
       .toBe('**Free**  ~~$9.99~~  🟢 `−100%`');
     const shown = text([free]);
     expect(shown).toContain('DEALIO · ÜCRETSİZ');
-    expect(shown).toContain('# 🎁 Wishlistindeki bir oyun ücretsiz!');
+    expect(shown).toContain('# 🎁 İstek listendeki bir oyun ücretsiz!');
     expect(shown).toContain('## 🎁 [Portal 2]');
-    expect(shown).toContain('sonsuza kadar senin');
+    expect(shown).toContain('sonsuza dek senin');
   });
 
   it('leads with 🏆 when every game is at its lowest recorded price', () => {
@@ -130,7 +130,7 @@ describe('unreleased and unavailable games', () => {
     expect(releaseDateText({ date: at, precision: 'month' }, 'en')).toBe('October 2026');
     expect(releaseDateText({ date: at, precision: 'quarter' }, 'tr')).toBe('2026 4. çeyrek');
     expect(releaseDateText({ date: '2027-12-31T08:00:00.000Z', precision: 'year' }, 'en')).toBe('2027');
-    expect(releaseDateText({}, 'tr')).toBe('tarih açıklanmadı');
+    expect(releaseDateText({}, 'tr')).toBe('tarih henüz belli değil');
     expect(noPriceText({ upcoming: { message: 'Duyurulacak' } }, 'tr')).toBe('🗓️ Yakında · Duyurulacak');
     expect(unavailableGamesLine([{ code: 'STEAM_APP_REGION_UNAVAILABLE' }, { code: 'STEAM_APP_NOT_FOUND' },
       { code: 'STEAM_TIMEOUT' }], 'TR', 'tr')).toBe("🚫 1 oyun Türkiye mağazasında satılmıyor · 🗑️ 1 oyun Steam'den kaldırılmış");

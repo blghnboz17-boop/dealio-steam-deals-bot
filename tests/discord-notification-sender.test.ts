@@ -219,8 +219,8 @@ describe('DiscordNotificationSender', () => {
     const text = componentText(post.mock.calls[1]?.[1]?.body.components);
     // A test is the real alert with a TEST tag, so it looks exactly like what will arrive.
     expect(text).toContain('DEALIO · TEST · İNDİRİM');
-    expect(text).toContain('Wishlistinde yeni bir indirim var');
-    expect(text).toContain('Bu bir test');
+    expect(text).toContain('İstek listendeki bir oyun indirimde!');
+    expect(text).toContain('Bu bir deneme');
     expect(text).toContain('Test Game');
     expect(text).toContain('dealio-open:home');
   });

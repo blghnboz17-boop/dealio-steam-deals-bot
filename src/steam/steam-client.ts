@@ -3,7 +3,15 @@ import {
   type SteamWishlistResult,
   type WishlistItem,
 } from '../domain/steam.js';
-import type { Language } from '../domain/user-config.js';
+import { isLanguage, type Language } from '../domain/user-config.js';
+
+/** Steam Store's own name for each language, so reviews and release notes come back in it. */
+const steamLanguage: Readonly<Record<Language, string>> = {
+  tr: 'turkish',
+  en: 'english',
+  de: 'german',
+  fr: 'french',
+};
 import {
   parseStoreCountryCode,
   type StoreCountryCode,
@@ -234,7 +242,7 @@ export class SteamClient {
     language: Language,
   ): Promise<SteamWishlistResult> {
     const storeCountryCode = parseStoreCountryCode(storeCountryInput);
-    if (!storeCountryCode || (language !== 'tr' && language !== 'en')) {
+    if (!storeCountryCode || !isLanguage(language)) {
       throw new SteamWishlistError(
         'STEAM_INVALID_REQUEST',
         'Steam store country or response language is invalid',
@@ -309,7 +317,7 @@ export class SteamClient {
         const input = JSON.stringify({
           ids: appIds.map((appid) => ({ appid })),
           context: {
-            language: language === 'tr' ? 'turkish' : 'english',
+            language: steamLanguage[language],
             country_code: storeCountryCode,
             steam_realm: 1,
           },

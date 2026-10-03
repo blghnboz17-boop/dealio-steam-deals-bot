@@ -57,7 +57,7 @@ Her oyun için ayrı hedef belirleyebilir, gece bildirim istemiyorsan sessiz saa
 - 🎯 **Her oyuna ayrı karar ver.** Genel indirim eşiğini kullan, o oyuna özel bir yüzde seç ya da doğrudan fiyat yaz. İlgilenmediğin oyunu sustur.
 - 📬 **Bildirimini takip et.** Bekleyen ve gönderilen DM’leri gör. Mesaj alamıyorsan test bildirimiyle kontrol et; gönderim kaydı mesajın okunduğu anlamına gelmez.
 - 📊 **Fiyatın zamanla nasıl değiştiğine bak.** Dealio kendi gözlemlerini 90 gün tutar. Yeni izlenen oyunların geçmişi kısa olabilir; bu kayıtlar tüm zamanların en düşük fiyatını göstermez.
-- 🌍 **Türkçe veya İngilizce kullan.** Kurulumdan bildirimlere kadar iki dil de mevcut. Türkçe metinler için ayrıca insan eliyle yerelleştirme çalışması sürüyor.
+- 🌍 **Türkçe, İngilizce, Almanca ya da Fransızca kullan.** Kurulumdan bildirimlere kadar dört dil de mevcut; metinler samimi bir dille ve her dilde Steam’in kendi terimleriyle (ör. istek listesi) yazıldı. Almanca ve Fransızca yeni; henüz gerçek kullanıcı denemesinden geçmedi.
 
 <a name="son-gelismeler"></a>
 

@@ -9,6 +9,7 @@ import {
   UserConfigurationService,
 } from '../../application/user-configuration-service.js';
 import { countryDisplay } from '../ui/design.js';
+import { localizer } from '../i18n.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
 import {
@@ -21,13 +22,17 @@ export const regionCommand = new SlashCommandBuilder()
   .setName('region')
   .setDescription('Change the country configured for your Steam Store account')
   .setDescriptionLocalizations({
-    tr: 'Steam mağaza hesabında ayarlı ülkeyi değiştir',
+    tr: 'Steam hesabındaki mağaza ülkesini değiştir',
+    de: 'Das Shop-Land deines Steam-Kontos ändern',
+    fr: 'Changer le pays de boutique de ton compte Steam',
   })
   .addStringOption((option) => option
     .setName('country')
     .setDescription('Steam Store country; this is not inferred from your Discord location')
     .setDescriptionLocalizations({
-      tr: 'Steam mağaza ülkesi; Discord konumundan tahmin edilmez',
+      tr: 'Steam mağazanın ülkesi; Discord konumuna bakılmaz',
+      de: 'Land deines Steam-Shops; dein Discord-Standort spielt keine Rolle',
+      fr: 'Pays de ta boutique Steam ; ta position Discord n’est pas utilisée',
     })
     .setAutocomplete(true)
     .setRequired(true));
@@ -40,10 +45,11 @@ export async function handleRegion(
   const existing = service.get(interaction.user.id);
   const language = existing?.language ?? languageFromDiscordLocale(interaction.locale);
   const messages = messagesFor(language);
+  const t = localizer(language);
   if (!existing) {
     await measureDiscordOperation(interaction, 'region.render', () => interaction.editReply({
       components: [buildNoticePanel(language, 'warning',
-        language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
+        t({ tr: 'Dealio henüz kurulmadı', en: 'Dealio isn’t set up yet', de: 'Dealio ist noch nicht eingerichtet', fr: 'Dealio n’est pas encore configuré' }),
         messages.notConfigured, { button: openPanelNoticeButton(language, true) })],
       flags: dealioV2Flags,
     }));
@@ -59,7 +65,7 @@ export async function handleRegion(
       await measureDiscordOperation(interaction, 'region.render', () => interaction.editReply({
         flags: dealioV2Flags,
         components: [buildNoticePanel(language, 'warning',
-          language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
+          t({ tr: 'Dealio henüz kurulmadı', en: 'Dealio isn’t set up yet', de: 'Dealio ist noch nicht eingerichtet', fr: 'Dealio n’est pas encore configuré' }),
           messages.notConfigured, { button: openPanelNoticeButton(language, true) })],
       }));
       return;
@@ -71,9 +77,9 @@ export async function handleRegion(
       components: [buildNoticePanel(
         updated.language,
         unchanged ? 'info' : 'success',
-        unchanged
-          ? (updated.language === 'tr' ? 'Bölge zaten seçili' : 'Region already selected')
-          : (updated.language === 'tr' ? 'Mağaza bölgesi güncellendi' : 'Store region updated'),
+        localizer(updated.language)(unchanged
+          ? { tr: 'Bölgen zaten bu', en: 'That’s already your region', de: 'Das ist schon deine Region', fr: 'C’est déjà ta région' }
+          : { tr: 'Mağaza bölgeni güncelledim', en: 'Store region updated', de: 'Shop-Region aktualisiert', fr: 'Région mise à jour' }),
         unchanged
           ? messagesFor(updated.language).regionUnchanged(label)
           : messagesFor(updated.language).regionSaved(label),
@@ -86,7 +92,7 @@ export async function handleRegion(
       await measureDiscordOperation(interaction, 'region.render', () => interaction.editReply({
         flags: dealioV2Flags,
         components: [buildNoticePanel(language, 'warning',
-          language === 'tr' ? 'Geçersiz mağaza bölgesi' : 'Invalid Store region',
+          t({ tr: 'Bu ülkeyi tanımadım', en: 'I don’t recognize that country', de: 'Dieses Land kenne ich nicht', fr: 'Je ne reconnais pas ce pays' }),
           messages.invalidStoreCountry)],
       }));
       return;

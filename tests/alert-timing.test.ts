@@ -59,7 +59,7 @@ describe('alerts screen', () => {
     const rendered = render('TR', instant);
     expect(rendered).toContain('Şu an: **⚡ Hemen**');
     expect(rendered).toContain('Saat dilimi: Istanbul (UTC+3)');
-    expect(rendered).toContain('Bu saatlerde bildirim gelmez; saat bitince bekleyenler gelir.');
+    expect(rendered).toContain('Bu saatlerde sessiz kalırım; saat bitince bekleyenleri gönderirim.');
     expect(rendered).toContain('Gece 23:00–08:00');
     expect(rendered).toContain('"value":"Europe/Istanbul","default":true');
     expect(rendered).not.toMatch(/IANA|Sessiz saat/);
@@ -68,7 +68,7 @@ describe('alerts screen', () => {
   it('asks a multi-zone country to choose and keeps hand-written minutes', () => {
     expect(render('US', instant, 'en')).toContain('Time zone: not set, choose below');
     const quiet = render('TR', { mode: 'quiet', timezone: 'Europe/Istanbul', quietStart: 1410, quietEnd: 450, digestMinute: null });
-    expect(quiet).toContain('🌙 Rahatsız etme · 23:30–07:30');
+    expect(quiet).toContain('🌙 Rahatsız etme saatleri · 23:30–07:30');
   });
 });
 
@@ -106,7 +106,7 @@ describe('alert timing actions', () => {
     try {
       await vi.waitFor(() => expect(f.collector.listenerCount('collect')).toBe(1));
       f.click('quiet-night');
-      await vi.waitFor(() => expect(f.last()).toContain('Bildirim zamanın kaydedildi.'));
+      await vi.waitFor(() => expect(f.last()).toContain('bildirim zamanını kaydettim.'));
       expect(f.repository.preference('owner')).toMatchObject({ mode: 'quiet', timezone: 'Europe/Istanbul', quietStart: 1380, quietEnd: 480 });
       f.click('instant');
       await vi.waitFor(() => expect(f.repository.preference('owner').mode).toBe('instant'));

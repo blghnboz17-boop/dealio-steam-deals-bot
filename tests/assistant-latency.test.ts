@@ -46,9 +46,9 @@ describe('assistant latency isolation', () => {
       await vi.waitFor(()=>expect(f.collector.listenerCount('collect')).toBe(1));
       f.load.mockResolvedValueOnce({status:'cooldown',language:'en',retryAfterSeconds:27});
       const click=f.click('refresh');
-      await vi.waitFor(()=>expect(JSON.stringify(f.interaction.editReply.mock.calls.at(-1))).toContain('Wait 27 seconds'));
+      await vi.waitFor(()=>expect(JSON.stringify(f.interaction.editReply.mock.calls.at(-1))).toContain('try again in 27 seconds'));
       const text=JSON.stringify(f.interaction.editReply.mock.calls.at(-1));
-      expect(text).toContain('Game 0');expect(text).not.toContain('Steam refresh failed');
+      expect(text).toContain('Game 0');expect(text).not.toContain('I couldn’t refresh from Steam');
       expect(click.deferUpdate).toHaveBeenCalledOnce();
       f.click('history');
       await vi.waitFor(()=>expect(JSON.stringify(f.interaction.editReply.mock.calls.at(-1))).toContain('Your alert history'));
@@ -104,7 +104,7 @@ describe('assistant latency isolation', () => {
     try {
       await vi.waitFor(()=>expect(f.collector.listenerCount('collect')).toBe(1));
       f.load.mockRejectedValueOnce(new Error('offline'));f.click('refresh');
-      await vi.waitFor(()=>expect(JSON.stringify(f.interaction.editReply.mock.calls.at(-1))).toContain('Steam refresh failed'));
+      await vi.waitFor(()=>expect(JSON.stringify(f.interaction.editReply.mock.calls.at(-1))).toContain('I couldn’t refresh from Steam'));
       expect(JSON.stringify(f.interaction.editReply.mock.calls.at(-1))).toContain('Game 0');
       f.click('refresh');await vi.waitFor(()=>expect(f.load).toHaveBeenCalledTimes(3));
     } finally {f.collector.stop();await task;f.db.close();}

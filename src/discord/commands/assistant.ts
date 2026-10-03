@@ -5,6 +5,9 @@ import type { WishlistViewService } from '../../application/wishlist-view-servic
 import { formatMinorPrice } from '../notification-messages.js';
 import { buildAssistantView, effectiveTimezone, type AssistantView, type AssistantViewData, type GameHistoryState, filteredAssistantItems } from '../assistant-view.js';
 import { languageFromDiscordLocale } from '../language.js';
+import { localizer } from '../i18n.js';
+import { messagesFor } from '../messages.js';
+import { uiCopy } from '../ui/copy.js';
 import { buildNoticePanel, dealioV2Flags, dealioEphemeralV2Flags, dealioUiSessionTimeoutMs } from '../ui/components-v2.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
 import { PanelOperationQueue } from '../ui/operation-queue.js';
@@ -33,23 +36,30 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
   const loadWishlist=(refresh=false)=>measureDiscordOperation(interaction,'assistant.load',()=>wishlist.load(interaction.user.id,language,refresh));
   if(!ui.inPlace) await measureDiscordOperation(interaction,'assistant.ack',()=>interaction.deferReply({flags:MessageFlags.Ephemeral}));
   const user=interaction.user.id, config=service.config(user), language=config?.language??languageFromDiscordLocale(interaction.locale);
-  const tr=language==='tr';
-  const chooseTimezoneFirst=tr?'Önce aşağıdan saat dilimini seç.':'Choose your time zone below first.';
-  const timingSaved=tr?'Bildirim zamanın kaydedildi.':'Alert timing saved.';
+  const t=localizer(language), messages=messagesFor(language), text=uiCopy(language);
+  const chooseTimezoneFirst=t({tr:'Önce aşağıdan saat dilimini seç.',en:'Choose your time zone below first.',
+    de:'Wähle zuerst unten deine Zeitzone.',fr:'Choisis d’abord ton fuseau horaire ci-dessous.'});
+  const timingSaved=t({tr:'Tamam, bildirim zamanını kaydettim.',en:'Got it, alert timing saved.',
+    de:'Alles klar, Benachrichtigungszeit gespeichert.',fr:'C’est noté, horaire des alertes enregistré.'});
+  const refreshFailed=t({tr:'Steam’den yenileyemedim; son kaydettiğim listeyi gösteriyorum.',en:'I couldn’t refresh from Steam, so here’s the last saved list.',
+    de:'Ich konnte nicht von Steam aktualisieren; hier ist die zuletzt gespeicherte Liste.',fr:'Impossible d’actualiser depuis Steam ; voici la dernière liste enregistrée.'});
   const hourField=(id:string,label:string,selectedMinute:number)=>new LabelBuilder().setLabel(label)
     .setStringSelectMenuComponent(new StringSelectMenuBuilder().setCustomId(id).setRequired(true).setMinValues(1).setMaxValues(1)
       .addOptions(Array.from({length:24},(_,hour)=>({label:String(hour).padStart(2,'0')+':00',value:String(hour*60),default:hour*60===selectedMinute}))));
-  const cooldownNotice=(seconds:number)=>tr?`Yeniden yenilemek için ${seconds} saniye bekle. Bu sınır tüm panellerinde ortaktır.`
-    :`Wait ${seconds} seconds before refreshing again. This limit is shared across all your panels.`;
+  const cooldownNotice=(seconds:number)=>t({
+    tr:`Az önce yeniledim. ${seconds} saniye sonra yeniden deneyebilirsin; bu süre tüm panellerin için geçerli.`,
+    en:`I just refreshed. You can try again in ${seconds} seconds; this applies to all your panels.`,
+    de:`Ich habe gerade aktualisiert. In ${seconds} Sekunden geht es wieder; das gilt für alle deine Panels.`,
+    fr:`Je viens d’actualiser. Tu pourras réessayer dans ${seconds} secondes ; ça vaut pour tous tes panneaux.`});
   if(!config) {
     await editPanel({flags:dealioV2Flags,components:[buildNoticePanel(language,'warning',
-      tr?'Önce Steam hesabını bağla':'Connect Steam first',tr?'/setup ile başlayabilirsin.':'Start with /setup.')]});return;
+      text.notSetUpTitle,messages.notConfigured)]});return;
   }
   const result=screen==='wishlist'||screen==='detail'?await loadWishlist():null;
   if(result && result.status!=='success') {
     await editPanel({flags:dealioV2Flags,components:[buildNoticePanel(language,'warning',
-      result.status==='cooldown'?(tr?'Biraz bekle':'Please wait'):(tr?'Wishlist alınamadı':'Wishlist unavailable'),
-      result.status==='cooldown'?cooldownNotice(result.retryAfterSeconds):(tr?'Steam’e erişilemiyor. Biraz sonra yeniden dene.':'Steam is unavailable. Try again shortly.'))]});return;
+      result.status==='cooldown'?text.checkCooldownTitle:t({tr:'İstek listene ulaşamadım',en:'Couldn’t load your wishlist',de:'Wunschliste nicht erreichbar',fr:'Liste de souhaits inaccessible'}),
+      result.status==='cooldown'?cooldownNotice(result.retryAfterSeconds):messages.unavailable)]});return;
   }
   let items:AssistantViewData['items']=result?.items??[],capturedAt=result?.capturedAt??new Date().toISOString();
   let errors:AssistantViewData['errors']=result?.errors??[];
@@ -95,12 +105,20 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
   const operations=new PanelOperationQueue(async(error)=>{
     safeLogger.error('Assistant panel failed',error);
     await interaction.followUp({flags:dealioEphemeralV2Flags,components:[buildNoticePanel(language,'warning',
-      tr?'İşlem tamamlanamadı':'Could not complete',
-      error instanceof Error && error.message==='Invalid amount' ? (tr?'Tutarı 19,99 gibi, en fazla iki ondalık basamakla gir.':'Enter an amount such as 19.99 with at most two decimals.')
-      : error instanceof Error && error.message==='Invalid quiet hours' ? (tr?'Başlangıç ve bitiş saati farklı olmalı.':'Start and end must be different hours.')
+      text.actionFailedTitle,
+      error instanceof Error && error.message==='Invalid amount' ? t({
+        tr:'Tutarı 19,99 gibi yaz; virgülden sonra en fazla iki basamak olabilir.',en:'Enter an amount like 19.99, with at most two decimals.',
+        de:'Gib einen Betrag wie 19,99 ein, mit höchstens zwei Nachkommastellen.',fr:'Saisis un montant comme 19,99, avec deux décimales au maximum.'})
+      : error instanceof Error && error.message==='Invalid quiet hours' ? t({
+        tr:'Başlangıç ve bitiş saati farklı olmalı.',en:'Start and end must be different hours.',
+        de:'Beginn und Ende müssen unterschiedlich sein.',fr:'Le début et la fin doivent être différents.'})
       : error instanceof Error && error.message.includes('timezone') ? chooseTimezoneFirst
-      : error instanceof Error && error.message==='Invalid percent' ? (tr?'İndirim oranı 0–100 arasında tam sayı olmalı.':'Discount must be a whole number from 0 to 100.')
-      : tr?'Bilgileri kontrol et. Hesap veya bölge değiştiyse /dealio ile paneli yeniden aç.':'Check the input. If account or region changed, reopen /dealio.')]});
+      : error instanceof Error && error.message==='Invalid percent' ? messages.discountThresholdInvalid
+      : t({
+        tr:'Girdiğin bilgiyi bir kontrol et. Hesabın ya da bölgen değiştiyse /dealio ile paneli yeniden aç.',
+        en:'Please check what you entered. If your account or region changed, reopen /dealio.',
+        de:'Prüf bitte deine Eingabe. Wenn sich Konto oder Region geändert haben, öffne /dealio neu.',
+        fr:'Vérifie ce que tu as saisi. Si ton compte ou ta région a changé, rouvre /dealio.'}))]});
   });
   const modalTasks=new Set<Promise<void>>();
   let loadTask:Promise<void>|undefined;
@@ -115,13 +133,13 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
         if(collector.ended||signal?.aborted)return;
         if(fresh.status==='success'){items=fresh.items;errors=fresh.errors;capturedAt=fresh.capturedAt;loaded=true;}
         else if(fresh.status==='cooldown')view.notice=cooldownNotice(fresh.retryAfterSeconds);
-        else view.notice=tr?'Steam yenilemesi başarısız. Son kayıtlı liste gösteriliyor.':'Steam refresh failed. Showing the last saved wishlist.';
+        else view.notice=refreshFailed;
         await render();
       }),
       ()=>operations.enqueue(Promise.resolve(),async()=>{
         view.refreshing=false;
         if(collector.ended||signal?.aborted)return;
-        view.notice=tr?'Steam yenilemesi başarısız. Son kayıtlı liste gösteriliyor.':'Steam refresh failed. Showing the last saved wishlist.';
+        view.notice=refreshFailed;
         await render();
       }),
     ).finally(()=>{loadTask=undefined;});
@@ -146,27 +164,34 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
         void operations.enqueue(acknowledge(),async()=>{view.notice=chooseTimezoneFirst;await render();});return;
       }
       const id='assistant-modal:'+interaction.id+':'+(++sequence);
-      const modal=new ModalBuilder().setCustomId(id).setTitle(action==='search'?(tr?'Wishlistinde ara':'Search your wishlist'):
-        action==='target'?(tr?'Hedef fiyatını seç':'Choose your target price'):action==='percent'?(tr?'Minimum indirim':'Minimum discount'):
-        action==='quiet'?(tr?'Rahatsız etme saatleri':'Do-not-disturb hours'):(tr?'Günlük özet saati':'Daily digest time'));
+      const modal=new ModalBuilder().setCustomId(id).setTitle(t(
+        action==='search'?{tr:'İstek listende ara',en:'Search your wishlist',de:'Wunschliste durchsuchen',fr:'Chercher dans ta liste'}
+        :action==='target'?{tr:'Hedef fiyatını belirle',en:'Set your target price',de:'Wunschpreis festlegen',fr:'Fixe ton prix cible'}
+        :action==='percent'?{tr:'En az ne kadar indirim olsun?',en:'Minimum discount',de:'Mindestrabatt',fr:'Réduction minimale'}
+        :action==='quiet'?{tr:'Rahatsız etme saatleri',en:'Do-not-disturb hours',de:'Ruhezeiten',fr:'Heures calmes'}
+        :{tr:'Günlük özet saati',en:'Daily digest time',de:'Uhrzeit der Zusammenfassung',fr:'Heure du résumé'}));
       const field=(id:string,label:string,placeholder:string,value?:string)=>new LabelBuilder().setLabel(label)
         .setTextInputComponent(new TextInputBuilder().setCustomId(id).setStyle(TextInputStyle.Short).setRequired(true)
           .setMaxLength(100).setPlaceholder(placeholder).setValue(value??''));
       if(action==='quiet'||action==='digest'){
         const p=service.repository.preference(user);
         if(action==='quiet') modal.addLabelComponents(
-          hourField('start',tr?'Bildirimler şu saatte dursun':'Pause alerts from',p.quietStart??nightStart),
-          hourField('end',tr?'Şu saatte yeniden başlasın':'Resume alerts at',p.quietEnd??nightEnd));
-        else modal.addLabelComponents(hourField('time',tr?'Özet şu saatte gelsin':'Send the digest at',p.digestMinute??eveningDigest));
-      } else modal.addLabelComponents(field('value',action==='target'?(tr?'Hedef fiyat · ':'Target price · ')+(selected?.price?.currency??''):
-        action==='percent'?(tr?'Yüzde (0–100)':'Percent (0–100)'):(tr?'Oyun adı (temizlemek için *)':'Game name (* to clear)'),
-        action==='target'?'19.99':action==='percent'?'50':tr?'Oyun adı':'Game name'));
+          hourField('start',t({tr:'Bildirimler şu saatte dursun',en:'Pause alerts from',de:'Pausieren ab',fr:'Couper les alertes à'}),p.quietStart??nightStart),
+          hourField('end',t({tr:'Şu saatte yeniden başlasın',en:'Resume alerts at',de:'Wieder aktiv ab',fr:'Les reprendre à'}),p.quietEnd??nightEnd));
+        else modal.addLabelComponents(hourField('time',t({tr:'Özet şu saatte gelsin',en:'Send the digest at',de:'Zusammenfassung um',fr:'Envoyer le résumé à'}),p.digestMinute??eveningDigest));
+      } else modal.addLabelComponents(field('value',action==='target'
+        ?t({tr:'Hedef fiyat',en:'Target price',de:'Wunschpreis',fr:'Prix cible'})+' · '+(selected?.price?.currency??'')
+        :action==='percent'?messages.statusMinimumDiscountInputLabel
+        :t({tr:'Oyun adı (temizlemek için *)',en:'Game name (* to clear)',de:'Spielname (* zum Zurücksetzen)',fr:'Nom du jeu (* pour effacer)'}),
+        action==='target'?t({tr:'19,99',en:'19.99',de:'19,99',fr:'19,99'}):action==='percent'?'50'
+        :t({tr:'Oyun adı',en:'Game name',de:'Spielname',fr:'Nom du jeu'})));
       const task=(async()=>{
         await measureDiscordOperation(component,'assistant.modal',()=>component.showModal(modal));
         const submit=await component.awaitModalSubmit({time:dealioUiSessionTimeoutMs,
           filter:m=>m.user.id===user&&m.customId===id}).catch(()=>null);
         if(!submit)return;
-        if(collector.ended||signal?.aborted){await submit.reply({content:tr?'Panel kapandı. /dealio ile yeniden aç.':'Panel closed. Reopen /dealio.',flags:MessageFlags.Ephemeral});return;}
+        if(collector.ended||signal?.aborted){await submit.reply({content:t({tr:'Bu panel kapandı. /dealio ile yenisini açabilirsin.',en:'This panel has closed. Open a new one with /dealio.',
+          de:'Dieses Panel ist geschlossen. Öffne mit /dealio ein neues.',fr:'Ce panneau est fermé. Ouvre-en un nouveau avec /dealio.'}),flags:MessageFlags.Ephemeral});return;}
         const ack=measureDiscordOperation(submit,'assistant.modal-submit-ack',()=>submit.deferUpdate());
         await operations.enqueue(ack,async()=>{
           if(action==='search'){view.query=submit.fields.getTextInputValue('value').trim();if(view.query==='*')view.query='';view.page=0;}
@@ -190,7 +215,11 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
               rule={mode:'percent',percent:Number(raw),targetMinor:null,currency:null,muted:existing?.muted??false};
             }
             await service.rule(user,config.configurationId,selected.appId,rule,config.configVersion);
-            view.notice=tr?'Kural kaydedildi. Şu anda uygun fiyat varsa burada gösterilir; başlangıç DM’i gönderilmez.':'Rule saved. A currently matching price is shown here without an initial DM.';
+            view.notice=t({
+              tr:'Kuralını kaydettim. Fiyat şu an uyuyorsa burada görürsün; bunun için ayrıca DM atmam.',
+              en:'Rule saved. If today’s price already matches, you’ll see it here; I won’t DM you about it.',
+              de:'Regel gespeichert. Passt der aktuelle Preis schon, siehst du es hier; dafür schicke ich keine DM.',
+              fr:'Règle enregistrée. Si le prix actuel correspond déjà, tu le verras ici ; pas de MP pour ça.'});
           }
           await render();
         });
@@ -201,7 +230,11 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       view.notice=undefined;
       if(action==='retry'){
         await service.retryDm(user,config.configurationId,config.configVersion);
-        view.notice=tr?'Deneme DM’i Discord’a iletildi. Takip kapalıysa /dealio ayarlarından bildirimleri açabilirsin.':'Test DM delivered to Discord. If tracking is paused, enable alerts in /dealio settings.';
+        view.notice=t({
+          tr:'Deneme DM’i Discord’a ulaştı. Takip kapalıysa /dealio → ⚙️ Ayarlar’dan bildirimleri açabilirsin.',
+          en:'Test DM delivered to Discord. If tracking is paused, turn alerts on in /dealio → ⚙️ Settings.',
+          de:'Test-DM an Discord zugestellt. Ist die Überwachung pausiert, schalte sie unter /dealio → ⚙️ Einstellungen ein.',
+          fr:'MP de test remis à Discord. Si le suivi est en pause, réactive les alertes dans /dealio → ⚙️ Réglages.'});
       }
       else if(action==='game'&&component.isStringSelectMenu()){view.selectedAppId=Number(component.values[0]);view.screen='detail';loadHistory();}
       else if(action==='refresh'){
@@ -228,7 +261,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       else if(action==='timezone'&&component.isStringSelectMenu()){
         const p=savedPreference(service.repository.preference(user));
         await service.preference(user,config.configurationId,{...p,timezone:component.values[0]??p.timezone},config.configVersion);
-        view.notice=tr?'Saat dilimin kaydedildi.':'Time zone saved.';
+        view.notice=t({tr:'Saat dilimini kaydettim.',en:'Time zone saved.',de:'Zeitzone gespeichert.',fr:'Fuseau horaire enregistré.'});
       }
       else if(action==='low'&&view.selectedAppId){
         const selected=items.find(i=>i.appId===view.selectedAppId), currency=selected?.price?.currency;
@@ -238,8 +271,12 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
           const existing=service.repository.rule(config,selected.appId);
           await service.rule(user,config.configurationId,selected.appId,
             {mode:'target',targetMinor:low.amountMinor,currency,percent:null,muted:existing?.muted??false},config.configVersion);
-          view.notice=tr?`🏆 Fiyat ${formatMinorPrice(low.amountMinor,currency,'tr')} veya altına inince haber vereceğiz.`
-            :`🏆 We will DM you when the price reaches ${formatMinorPrice(low.amountMinor,currency,'en')} or less.`;
+          const amount=formatMinorPrice(low.amountMinor,currency,language);
+          view.notice='🏆 '+t({
+            tr:`Fiyat ${amount} ya da altına inince haber vereceğim.`,
+            en:`I’ll DM you when the price drops to ${amount} or less.`,
+            de:`Ich melde mich, sobald der Preis auf ${amount} oder weniger fällt.`,
+            fr:`Je te préviens dès que le prix descend à ${amount} ou moins.`});
         }
       }
       else if((action==='inherit'||action==='mute')&&view.selectedAppId){

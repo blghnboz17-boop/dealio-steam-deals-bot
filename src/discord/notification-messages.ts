@@ -4,8 +4,9 @@ import type {
   NotificationSendOptions,
   SaleNotification,
 } from '../application/notification-service.js';
-import type { Language } from '../domain/user-config.js';
+import { languageLocale, type Language } from '../domain/user-config.js';
 import { storeCountryLabel } from '../domain/store-country.js';
+import { localizer, percentText } from './i18n.js';
 import { messagesFor } from './messages.js';
 import { dealioBrand } from './ui/brand.js';
 
@@ -37,7 +38,7 @@ export function formatMinorPrice(
   currency: string,
   language: Language,
 ): string {
-  const format = (currencyDisplay: 'narrowSymbol' | 'symbol') => new Intl.NumberFormat(language === 'tr' ? 'tr-TR' : 'en-US', {
+  const format = (currencyDisplay: 'narrowSymbol' | 'symbol') => new Intl.NumberFormat(languageLocale[language], {
     style: 'currency',
     currency,
     currencyDisplay,
@@ -73,7 +74,9 @@ export function buildSaleNotificationEmbed(
     color: dealioBrand.colors.primary,
     author: options.test
       ? { name: messages.testNotificationTitle }
-      : { name: 'Dealio · Steam Sale Alert' },
+      : { name: 'Dealio · ' + localizer(language)({
+          tr: 'Steam indirim bildirimi', en: 'Steam sale alert', de: 'Steam-Angebotsalarm', fr: 'Alerte promo Steam',
+        }) },
     title: gameName,
     url: storeUrl,
     description: options.test
@@ -82,9 +85,7 @@ export function buildSaleNotificationEmbed(
     fields: [
       {
         name: messages.discountLabel,
-        value: language === 'tr'
-          ? `%${notification.discountPercent}`
-          : `${notification.discountPercent}%`,
+        value: percentText(notification.discountPercent, language),
         inline: true,
       },
       { name: messages.normalPriceLabel, value: `~~${normalPrice}~~`, inline: true },

@@ -1,8 +1,10 @@
-import type { Language } from '../domain/user-config.js';
+import { isLanguage, type Language } from '../domain/user-config.js';
 import { parseStoreCountryCode, type StoreCountryCode } from '../domain/store-country.js';
 
+/** Discord's own language ("de", "fr", "tr", "en-US"…); anything Dealio does not speak falls back to English. */
 export function languageFromDiscordLocale(locale: string): Language {
-  return locale.toLowerCase().startsWith('tr') ? 'tr' : 'en';
+  const language = locale.toLowerCase().split(/[-_]/)[0] ?? '';
+  return isLanguage(language) ? language : 'en';
 }
 
 export function suggestedStoreCountryFromDiscordLocale(

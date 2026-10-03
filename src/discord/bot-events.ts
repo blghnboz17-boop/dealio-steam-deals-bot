@@ -24,6 +24,7 @@ import { handleStoreCountryAutocomplete } from './store-country-options.js';
 import type { SetupPresentationOptions } from './setup-view.js';
 import { buildExpiredPanel, buildNoticePanel, dealioEphemeralV2Flags, openPanelCustomId } from './ui/components-v2.js';
 import { dealioUiSessions } from './ui/session-manager.js';
+import { localizer } from './i18n.js';
 import { languageFromDiscordLocale } from './language.js';
 
 export interface BotCommandServices {
@@ -112,10 +113,13 @@ export function registerBotEvents(options: BotEventOptions): void {
             ? buildNoticePanel(
                 language,
                 'warning',
-                language === 'tr' ? 'Bu panel sana ait değil' : 'This panel is not yours',
-                language === 'tr'
-                  ? 'Kendi güvenli panelini açmak için komutu yeniden çalıştır.'
-                  : 'Run the command yourself to open your secure panel.',
+                localizer(language)({ tr: 'Bu panel başkasına ait', en: 'This panel belongs to someone else', de: 'Dieses Panel gehört jemand anderem', fr: 'Ce panneau appartient à quelqu’un d’autre' }),
+                localizer(language)({
+                  tr: 'Kendi panelini açmak için komutu sen de çalıştırabilirsin.',
+                  en: 'Run the command yourself to open your own panel.',
+                  de: 'Führ den Befehl selbst aus, um dein eigenes Panel zu öffnen.',
+                  fr: 'Lance la commande toi-même pour ouvrir ton propre panneau.',
+                }),
               )
             : buildExpiredPanel(language)],
         }).catch(() => undefined);
@@ -138,10 +142,13 @@ export function registerBotEvents(options: BotEventOptions): void {
           const panel = buildNoticePanel(
             language,
             'danger',
-            language === 'tr' ? 'İşlem tamamlanamadı' : 'Action could not be completed',
-            language === 'tr'
-              ? 'Geçici bir sorun oluştu. Biraz sonra yeniden deneyebilirsin.'
-              : 'A temporary problem occurred. Please try again shortly.',
+            localizer(language)({ tr: 'Bir şeyler ters gitti', en: 'Something went wrong', de: 'Da ist etwas schiefgelaufen', fr: 'Quelque chose s’est mal passé' }),
+            localizer(language)({
+              tr: 'Geçici bir sorun çıktı. Biraz sonra yeniden dener misin?',
+              en: 'A temporary problem got in the way. Could you try again in a moment?',
+              de: 'Ein vorübergehendes Problem ist aufgetreten. Versuchst du es gleich noch mal?',
+              fr: 'Un souci passager est survenu. Tu peux réessayer dans un instant ?',
+            }),
           );
           if (interaction.replied || interaction.deferred) {
             await interaction.editReply({
@@ -241,8 +248,13 @@ async function handleInteraction(
         components: [buildNoticePanel(
           language,
           'warning',
-          language === 'tr' ? 'Bilinmeyen komut' : 'Unknown command',
-          language === 'tr' ? 'Bu komut Dealio tarafından tanınmadı.' : 'Dealio did not recognize this command.',
+          localizer(language)({ tr: 'Bu komutu tanımıyorum', en: 'I don’t know that command', de: 'Diesen Befehl kenne ich nicht', fr: 'Je ne connais pas cette commande' }),
+          localizer(language)({
+            tr: 'Tüm Dealio özelliklerine /dealio ile ulaşabilirsin.',
+            en: 'Everything Dealio can do is in /dealio.',
+            de: 'Alles, was Dealio kann, findest du unter /dealio.',
+            fr: 'Tout ce que fait Dealio se trouve dans /dealio.',
+          }),
         )],
         flags: dealioEphemeralV2Flags,
       });

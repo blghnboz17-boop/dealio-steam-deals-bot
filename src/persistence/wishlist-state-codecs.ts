@@ -1,5 +1,5 @@
 import type { SQLOutputValue } from 'node:sqlite';
-import type { Language, UserConfig } from '../domain/user-config.js';
+import { isLanguage, type Language, type UserConfig } from '../domain/user-config.js';
 import {
   parseStoreCountryCode,
   type StoreCountryCode,
@@ -80,7 +80,7 @@ export function integerValue(value: SQLOutputValue, column: string): number {
 
 export function languageValue(value: SQLOutputValue): Language {
   const language = textValue(value, 'language');
-  if (language !== 'tr' && language !== 'en') {
+  if (!isLanguage(language)) {
     throw new Error('Invalid language value in notification batch');
   }
 

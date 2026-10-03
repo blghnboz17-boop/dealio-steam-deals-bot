@@ -21,7 +21,7 @@ own price rules, with the context needed to trust the alert.
 
 Dealio is in **limited beta** on a single Azure VM. Implemented:
 
-- Per-user setup (`/setup`), Steam Store country and language, English and Turkish panels (Discord Components V2).
+- Per-user setup (`/setup`), Steam Store country and language, Turkish, English, German and French panels (Discord Components V2; every text is a `{ tr, en, de, fr }` entry, see `src/discord/i18n.ts`).
 - Polling waits thirty minutes after a completed scan by default (`POLL_INTERVAL_HOURS=0.5`); notification retries run independently every 60 seconds. This is polling, not a Steam event feed.
 - Per-game rules: inherit the global discount threshold, a game-specific percentage, or a currency-bound target price; muting is independent.
 - Notify only when a game changes from not-on-sale to on-sale, or crosses a rule threshold. Saving a rule or finishing setup records a baseline and never sends an initial alert for an existing discount.

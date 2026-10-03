@@ -22,7 +22,8 @@ import { SteamIdentityError } from '../../domain/steam-identity.js';
 import {
   parseStoreCountryCode,
 } from '../../domain/store-country.js';
-import type { Language } from '../../domain/user-config.js';
+import { isLanguage, type Language } from '../../domain/user-config.js';
+import { localizer } from '../i18n.js';
 import {
   languageFromDiscordLocale,
   suggestedStoreCountryFromDiscordLocale,
@@ -49,12 +50,20 @@ import { handOffPanel, type PanelNavigation } from '../ui/tab-bar.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
 
 const setupSessionTimeoutMs = 5 * 60 * 1_000;
+const lookingUp = {
+  tr: 'Steam hesabına bakıyorum',
+  en: 'Looking up your Steam account',
+  de: 'Ich suche dein Steam-Konto',
+  fr: 'Je cherche ton compte Steam',
+} as const;
 
 export const setupCommand = new SlashCommandBuilder()
   .setName('setup')
-  .setDescription('Start the guided Steam wishlist setup')
+  .setDescription('Connect your Steam wishlist in about a minute')
   .setDescriptionLocalizations({
-    tr: 'Rehberli Steam wishlist kurulumunu başlat',
+    tr: 'Steam istek listeni bir dakikada bağla',
+    de: 'Deine Steam-Wunschliste in etwa einer Minute verbinden',
+    fr: 'Connecter ta liste de souhaits Steam en une minute environ',
   });
 
 export async function handleSetup(
@@ -286,7 +295,7 @@ export async function handleSetup(
             components: [buildNoticePanel(
               language,
               'info',
-              language === 'tr' ? 'Steam hesabı doğrulanıyor' : 'Verifying Steam account',
+              localizer(language)(lookingUp),
               messagesFor(language).setupWizardPreparing,
             )],
           });
@@ -381,7 +390,7 @@ export async function handleSetup(
           components: [buildNoticePanel(
             language,
             'info',
-            language === 'tr' ? 'Steam hesabı doğrulanıyor' : 'Verifying Steam account',
+            localizer(language)(lookingUp),
             messages.setupWizardPreparing,
           )],
         });
@@ -485,7 +494,8 @@ export async function handleSetup(
         return;
       }
       if (action === 'language' && prepared) {
-        language = prepared.language === 'tr' ? 'en' : 'tr';
+        const chosen = component.isStringSelectMenu() ? component.values[0] ?? '' : '';
+        language = isLanguage(chosen) ? chosen : prepared.language;
         prepared = { ...prepared, language };
         await editPanel({
           components: [buildSetupConfirmationPanel(
@@ -503,7 +513,7 @@ export async function handleSetup(
           components: [buildNoticePanel(
             language,
             'info',
-            language === 'tr' ? 'Kurulum iptal edildi' : 'Setup cancelled',
+            localizer(language)({ tr: 'Kurulum iptal edildi', en: 'Setup cancelled', de: 'Einrichtung abgebrochen', fr: 'Configuration annulée' }),
             messagesFor(language).setupWizardCancelled,
           )],
         });
@@ -605,7 +615,7 @@ async function handleLegacySetup(
   profileInput: string,
 ): Promise<void> {
   const rawLanguage = safeGetString(interaction, 'language');
-  const language: Language = rawLanguage === 'en' ? 'en' : 'tr';
+  const language: Language = rawLanguage && isLanguage(rawLanguage) ? rawLanguage : 'tr';
   const storeCountry = safeGetString(interaction, 'store-country') ?? undefined;
   try {
     const { config, summary } = await service.configure(
@@ -627,7 +637,7 @@ async function handleLegacySetup(
       components: [buildNoticePanel(
         config.language,
         summary.status === 'sent' ? 'success' : 'warning',
-        config.language === 'tr' ? 'Kurulum tamamlandı' : 'Setup complete',
+        localizer(config.language)({ tr: 'Her şey hazır!', en: 'You’re all set!', de: 'Alles eingerichtet!', fr: 'Tout est prêt !' }),
         `${messages.setupSuccess} ${summaryMessage}`,
       )],
     });
@@ -647,7 +657,7 @@ function buildSetupErrorPanel(
   return buildNoticePanel(
     language,
     'danger',
-    language === 'tr' ? 'Kurulum tamamlanamadı' : 'Setup could not be completed',
+    localizer(language)({ tr: 'Kurulumu bitiremedik', en: 'Setup didn’t finish', de: 'Einrichtung nicht abgeschlossen', fr: 'Configuration inachevée' }),
     setupErrorMessage(error, language),
     {
       button: {
@@ -683,9 +693,12 @@ function setupErrorMessage(error: unknown, language: Language): string {
       ? messages.wishlistInaccessible
       : messages.setupValidationUnavailable;
   }
-  return language === 'tr'
-    ? 'Kurulum şu anda tamamlanamadı. Lütfen daha sonra tekrar dene.'
-    : 'Setup could not be completed right now. Please try again later.';
+  return localizer(language)({
+    tr: 'Kurulumu şu an bitiremedim. Biraz sonra yeniden dener misin?',
+    en: 'I couldn’t finish setup right now. Could you try again in a bit?',
+    de: 'Ich konnte die Einrichtung gerade nicht abschließen. Versuchst du es gleich noch mal?',
+    fr: 'Je n’ai pas pu terminer la configuration. Tu peux réessayer dans un moment ?',
+  });
 }
 
 function safeGetString(

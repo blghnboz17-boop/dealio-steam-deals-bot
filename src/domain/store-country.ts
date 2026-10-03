@@ -1,4 +1,4 @@
-import type { Language } from './user-config.js';
+import { languageLocale, languages, type Language } from './user-config.js';
 
 export const storeCountryCodes = [
   'AD', 'AE', 'AF', 'AG', 'AI', 'AL', 'AM', 'AO', 'AQ', 'AR', 'AS', 'AT', 'AU', 'AW',
@@ -58,15 +58,13 @@ export function resolveStoreCountry(value: string): StoreCountryCode | null {
   if (aliases[query]) {
     return aliases[query];
   }
-  const matches = storeCountryCodes.filter((candidate) => [
-    storeCountryName(candidate, 'tr'),
-    storeCountryName(candidate, 'en'),
-  ].some((name) => searchableCountry(name) === query));
+  const matches = storeCountryCodes.filter((candidate) => languages
+    .some((language) => searchableCountry(storeCountryName(candidate, language)) === query));
   return matches.length === 1 ? matches[0] : null;
 }
 
 export function storeCountryName(code: StoreCountryCode, language: Language): string {
-  const displayNames = new Intl.DisplayNames([language === 'tr' ? 'tr-TR' : 'en-US'], {
+  const displayNames = new Intl.DisplayNames([languageLocale[language]], {
     type: 'region',
   });
   return displayNames.of(code) ?? code;

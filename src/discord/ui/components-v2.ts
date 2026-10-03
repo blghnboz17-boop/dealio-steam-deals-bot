@@ -10,6 +10,7 @@ import {
   type JSONEncodable,
 } from 'discord.js';
 import type { Language } from '../../domain/user-config.js';
+import { localizer } from '../i18n.js';
 import { dealioBrand } from './brand.js';
 
 export const dealioV2Flags = MessageFlags.IsComponentsV2;
@@ -33,9 +34,12 @@ const noticeIcons: Readonly<Record<DealioNoticeKind, string>> = {
 };
 
 export function dealioFooter(language: Language): string {
-  return language === 'tr'
-    ? '-# Dealio · Kişisel Steam indirim asistanı'
-    : '-# Dealio · Personal Steam sale assistant';
+  return '-# Dealio · ' + localizer(language)({
+    tr: 'Kişisel Steam indirim asistanın',
+    en: 'Your personal Steam deal assistant',
+    de: 'Dein persönlicher Steam-Schnäppchen-Assistent',
+    fr: 'Ton assistant bons plans Steam',
+  });
 }
 
 export function buildNoticePanel(
@@ -91,21 +95,28 @@ export const openPanelCustomId = 'dealio-open:home';
 
 /** The notice button that opens /dealio; for a newcomer that is the setup welcome. */
 export function openPanelNoticeButton(language: Language, setup = false) {
+  const t = localizer(language);
   return {
     customId: openPanelCustomId,
-    label: setup ? (language === 'tr' ? 'Kurulumu başlat' : 'Start setup') : (language === 'tr' ? 'Dealio paneli' : 'Dealio panel'),
+    label: setup
+      ? t({ tr: 'Hadi başlayalım', en: 'Get started', de: 'Los geht’s', fr: 'C’est parti' })
+      : t({ tr: 'Dealio paneli', en: 'Dealio panel', de: 'Dealio-Panel', fr: 'Panneau Dealio' }),
     emoji: setup ? '✨' : '🏠',
   };
 }
 
 export function buildExpiredPanel(language: Language): ContainerBuilder {
+  const t = localizer(language);
   return buildNoticePanel(
     language,
     'warning',
-    language === 'tr' ? 'Bu panelin süresi doldu' : 'This panel has expired',
-    language === 'tr'
-      ? 'Güvenliğin için paneller bir süre sonra kapanır. Yenisini hemen açabilirsin.'
-      : 'Panels close after a while for your security. You can open a fresh one right away.',
+    t({ tr: 'Bu panel kapandı', en: 'This panel has closed', de: 'Dieses Panel ist geschlossen', fr: 'Ce panneau est fermé' }),
+    t({
+      tr: 'Güvenliğin için paneller bir süre sonra kapanıyor. Yenisini hemen açabilirsin.',
+      en: 'Panels close after a while to keep your account safe. You can open a fresh one right away.',
+      de: 'Panels schließen sich nach einer Weile, damit dein Konto sicher bleibt. Du kannst sofort ein neues öffnen.',
+      fr: 'Les panneaux se ferment au bout d’un moment pour protéger ton compte. Tu peux en ouvrir un nouveau tout de suite.',
+    }),
     { button: openPanelNoticeButton(language) },
   );
 }

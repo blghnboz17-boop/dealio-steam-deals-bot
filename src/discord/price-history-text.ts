@@ -1,14 +1,16 @@
 import { historicalLowStanding, type HistoricalLow, type PriceChange } from '../domain/price-history.js';
-import type { Language } from '../domain/user-config.js';
+import { languageLocale, type Language } from '../domain/user-config.js';
+import { localizer, percentOff } from './i18n.js';
 import { formatMinorPrice } from './notification-messages.js';
 
 /** IsThereAnyDeal asks API users to credit the service. */
 export function priceHistoryCredit(language: Language): string {
-  return `-# ${language === 'tr' ? 'Fiyat geçmişi' : 'Price history'}: [IsThereAnyDeal](https://isthereanydeal.com/)`;
+  const label = localizer(language)({ tr: 'Fiyat geçmişi', en: 'Price history', de: 'Preisverlauf', fr: 'Historique des prix' });
+  return `-# ${label}: [IsThereAnyDeal](https://isthereanydeal.com/)`;
 }
 
 export function monthYear(value: string, language: Language): string {
-  return new Intl.DateTimeFormat(language === 'tr' ? 'tr-TR' : 'en-US', {
+  return new Intl.DateTimeFormat(languageLocale[language], {
     month: 'long', year: 'numeric', timeZone: 'UTC',
   }).format(new Date(value));
 }
@@ -27,24 +29,46 @@ export function historicalLowLine(
   // A low limited to the current currency's period must not be called "all-time".
   // "sonrası" avoids a Turkish suffix that would depend on how the year is read.
   const since = low.since ? monthYear(low.since, language) : null;
+  const t = localizer(language);
   if (standing === 'new-low') {
-    return language === 'tr'
-      ? since ? `🏆 **${since} sonrasının en düşük fiyatı!**` : '🏆 **Tüm zamanların en düşük fiyatı!**'
-      : since ? `🏆 **Lowest price since ${since}!**` : '🏆 **Lowest price ever!**';
+    return since
+      ? t({
+          tr: `🏆 **${since} sonrasının en düşük fiyatı!**`,
+          en: `🏆 **Lowest price since ${since}!**`,
+          de: `🏆 **Tiefstpreis seit ${since}!**`,
+          fr: `🏆 **Prix le plus bas depuis ${since} !**`,
+        })
+      : t({
+          tr: '🏆 **Tüm zamanların en düşük fiyatı!**',
+          en: '🏆 **Lowest price ever!**',
+          de: '🏆 **So günstig war es noch nie!**',
+          fr: '🏆 **Prix le plus bas jamais vu !**',
+        });
   }
   if (standing === 'matches-low') {
-    return language === 'tr'
-      ? since ? `🏆 **${since} sonrasının en düşük fiyatına eşit**` : '🏆 **Tarihî en düşük fiyata eşit**'
-      : since ? `🏆 **Matches the lowest price since ${since}**` : '🏆 **Matches the all-time low**';
+    return since
+      ? t({
+          tr: `🏆 **${since} sonrasının en düşük fiyatıyla aynı**`,
+          en: `🏆 **Matches the lowest price since ${since}**`,
+          de: `🏆 **Genauso günstig wie der Tiefstpreis seit ${since}**`,
+          fr: `🏆 **Égale le prix le plus bas depuis ${since}**`,
+        })
+      : t({
+          tr: '🏆 **Gelmiş geçmiş en düşük fiyatla aynı**',
+          en: '🏆 **Matches the all-time low**',
+          de: '🏆 **Genauso günstig wie der Allzeit-Tiefstpreis**',
+          fr: '🏆 **Égale le prix le plus bas jamais vu**',
+        });
   }
   const price = formatMinorPrice(low.amountMinor, low.currency, language);
   const details = [
     ...(low.discountPercent > 0 ? [discountText(low, language)] : []),
     monthYear(low.recordedAt, language),
   ].join(' · ');
-  return language === 'tr'
-    ? `📉 ${since ? `${since} sonrası en düşük` : 'Tarihî en düşük'}: **${price}** (${details})`
-    : `📉 ${since ? `Lowest since ${since}` : 'All-time low'}: **${price}** (${details})`;
+  const label = since
+    ? t({ tr: `${since} sonrası en düşük`, en: `Lowest since ${since}`, de: `Tiefstpreis seit ${since}`, fr: `Le plus bas depuis ${since}` })
+    : t({ tr: 'Gelmiş geçmiş en düşük', en: 'All-time low', de: 'Allzeit-Tiefstpreis', fr: 'Le plus bas jamais vu' });
+  return `📉 ${label}: **${price}** (${details})`;
 }
 
 /** One recorded Steam price change for a game's detail panel. */
@@ -55,5 +79,5 @@ export function priceChangeLine(change: PriceChange, language: Language): string
 }
 
 function discountText(change: PriceChange, language: Language): string {
-  return language === 'tr' ? `%${change.discountPercent}` : `${change.discountPercent}% off`;
+  return percentOff(change.discountPercent, language);
 }

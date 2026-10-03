@@ -1,6 +1,16 @@
 import type { StoreCountryCode } from './store-country.js';
 
-export type Language = 'tr' | 'en';
+/** Every language Dealio speaks, in the order a picker lists them. */
+export const languages = ['tr', 'en', 'de', 'fr'] as const;
+export type Language = typeof languages[number];
+
+/** The BCP 47 locale behind a language: dates, numbers, prices and country names. */
+export const languageLocale: Readonly<Record<Language, string>> = {
+  tr: 'tr-TR',
+  en: 'en-US',
+  de: 'de-DE',
+  fr: 'fr-FR',
+};
 
 export interface UserConfig {
   readonly discordUserId: string;
@@ -27,5 +37,5 @@ export function isSteamId64(value: string): boolean {
 }
 
 export function isLanguage(value: string): value is Language {
-  return value === 'tr' || value === 'en';
+  return (languages as readonly string[]).includes(value);
 }

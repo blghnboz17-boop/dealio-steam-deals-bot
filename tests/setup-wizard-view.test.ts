@@ -36,7 +36,7 @@ describe('guided setup presentation', () => {
     expect(json).toContain('https://example.com/dealio.png');
     expect(json).toContain('İndirim başlayınca DM');
     expect(json).toContain('"custom_id":"setup:session:start"');
-    expect(json).toContain('"label":"Kurulumu Başlat"');
+    expect(json).toContain('"label":"Hadi başlayalım"');
     expect(json).toContain('"custom_id":"setup:session:how"');
   });
 
@@ -54,16 +54,16 @@ describe('guided setup presentation', () => {
 
     expect(json).toContain('United States');
     expect(json).toContain('Every 6 hours');
-    expect(json).toContain('Suggested automatically from your Discord language');
-    expect(json).toContain('allow Dealio to send proactive sale DMs');
+    expect(json).toContain('Guessed from your Discord language');
+    expect(json).toContain('I can DM you when a game on your wishlist goes on sale');
     expect(json).toContain('76561••••••••0000');
     expect(json).toContain(`https://steamcommunity.com/profiles/${prepared.steamId64}`);
-    expect(json).toMatch(/"custom_id":"setup:session:confirm"[^}]*"label":"Correct, Enable Notifications"|"label":"Correct, Enable Notifications"[^}]*"custom_id":"setup:session:confirm"/);
+    expect(json).toMatch(/"custom_id":"setup:session:confirm"[^}]*"label":"Looks good, turn on alerts"|"label":"Looks good, turn on alerts"[^}]*"custom_id":"setup:session:confirm"/);
     expect(json).toContain('"custom_id":"setup:session:region"');
   });
 
   it.each([
-    ['tr', 'Her 30 dakikada bir'],
+    ['tr', '30 dakikada bir'],
     ['en', 'Every 30 minutes'],
   ] as const)('shows the default half-hour schedule in %s', (language, expected) => {
     const panel = buildSetupConfirmationPanel({

@@ -128,7 +128,7 @@ describe('database migration', () => {
         saleEpisodeId: state?.saleEpisodeId,
       });
       expect((database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version)
-        .toBe(10);
+        .toBe(11);
       expect(database.prepare(
         `SELECT name FROM sqlite_master
          WHERE type = 'table' AND name IN ('notification_batch', 'notification_batch_item')
@@ -247,7 +247,7 @@ describe('database migration', () => {
         ).toEqual({ attempt_count: 0 });
         expect(
           (database.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-          ).toBe(10);
+          ).toBe(11);
       } finally {
         database.close();
       }
@@ -311,7 +311,7 @@ describe('database migration', () => {
       try {
         expect(
           (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version,
-        ).toBe(10);
+        ).toBe(11);
         expect(migrated.prepare(
           `SELECT last_success_completed_at, last_success_checked_count,
                   last_success_on_sale_count, last_success_free_count,
@@ -333,6 +333,74 @@ describe('database migration', () => {
           `SELECT next_scheduled_at FROM wishlist_poll_schedule
            WHERE schedule_name = 'wishlist'`,
         ).get()).toEqual({ next_scheduled_at: null });
+      } finally {
+        migrated.close();
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('widens the language list to German and French without losing linked rows', () => {
+    const database = createDatabase(':memory:');
+    try {
+      const schema = (table: string) => (database.prepare(
+        "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?",
+      ).get(table) as { sql: string }).sql;
+      expect(schema('user_config')).toContain("CHECK (language IN ('tr', 'en', 'de', 'fr'))");
+      expect(schema('notification_batch')).toContain("CHECK (language IN ('tr', 'en', 'de', 'fr'))");
+      expect(database.prepare(
+        "SELECT name FROM sqlite_schema WHERE type = 'index' AND name = 'user_config_configuration_id_idx'",
+      ).get()).toBeTruthy();
+      expect((database.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number }).foreign_keys).toBe(1);
+    } finally {
+      database.close();
+    }
+
+    const directory = mkdtempSync(join(tmpdir(), 'wishlist-bot-languages-'));
+    const databasePath = join(directory, 'wishlist.db');
+    try {
+      const version10 = new DatabaseSync(databasePath);
+      version10.exec(`
+        PRAGMA foreign_keys = ON;
+        CREATE TABLE user_config (
+          discord_user_id TEXT PRIMARY KEY NOT NULL,
+          steam_id64 TEXT NOT NULL,
+          language TEXT NOT NULL CHECK (language IN ('tr', 'en')),
+          enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        , configuration_id TEXT);
+        CREATE UNIQUE INDEX user_config_configuration_id_idx ON user_config(configuration_id);
+        CREATE TABLE notification_batch (
+          batch_id TEXT PRIMARY KEY NOT NULL,
+          discord_user_id TEXT NOT NULL,
+          language TEXT NOT NULL CHECK (language IN ('tr', 'en')),
+          FOREIGN KEY (discord_user_id) REFERENCES user_config(discord_user_id) ON DELETE CASCADE
+        );
+        CREATE TABLE notification_preference (
+          discord_user_id TEXT PRIMARY KEY REFERENCES user_config(discord_user_id) ON DELETE CASCADE,
+          mode TEXT NOT NULL
+        );
+        INSERT INTO user_config VALUES ('user', '76561198000000000', 'tr', 1, '2026-10-01', '2026-10-01', 'config');
+        INSERT INTO notification_batch VALUES ('batch', 'user', 'en');
+        INSERT INTO notification_preference VALUES ('user', 'instant');
+        PRAGMA user_version = 10;
+      `);
+      version10.close();
+
+      const migrated = createDatabase(databasePath);
+      try {
+        expect(migrated.prepare('SELECT mode FROM notification_preference').all()).toEqual([{ mode: 'instant' }]);
+        expect(migrated.prepare('SELECT language FROM notification_batch').all()).toEqual([{ language: 'en' }]);
+        expect(migrated.prepare(
+          "SELECT name FROM sqlite_schema WHERE type = 'index' AND name = 'user_config_configuration_id_idx'",
+        ).get()).toBeTruthy();
+        migrated.exec("UPDATE user_config SET language = 'de'");
+        expect(() => migrated.exec("UPDATE user_config SET language = 'xx'")).toThrow();
+        migrated.exec("DELETE FROM user_config WHERE discord_user_id = 'user'");
+        expect(migrated.prepare('SELECT COUNT(*) AS count FROM notification_preference').get()).toEqual({ count: 0 });
+        expect(migrated.prepare('SELECT COUNT(*) AS count FROM notification_batch').get()).toEqual({ count: 0 });
       } finally {
         migrated.close();
       }

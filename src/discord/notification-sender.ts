@@ -33,6 +33,7 @@ import {
   buildInitialWishlistV2Page,
   buildSaleNotificationPanel,
 } from './notification-components-v2.js';
+import { localizer } from './i18n.js';
 import { languageFromDiscordLocale } from './language.js';
 import {
   buildExpiredPanel,
@@ -297,10 +298,13 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
         components: [buildNoticePanel(
           session.summary.language,
           'warning',
-          session.summary.language === 'tr' ? 'Bu panel sana ait değil' : 'This panel is not yours',
-          session.summary.language === 'tr'
-            ? 'Kendi Dealio panelini açmak için /dealio komutunu kullan.'
-            : 'Use /dealio to open your own Dealio panel.',
+          localizer(session.summary.language)({ tr: 'Bu panel başkasına ait', en: 'This panel belongs to someone else', de: 'Dieses Panel gehört jemand anderem', fr: 'Ce panneau appartient à quelqu’un d’autre' }),
+          localizer(session.summary.language)({
+            tr: 'Kendi Dealio panelini /dealio ile açabilirsin.',
+            en: 'Use /dealio to open your own Dealio panel.',
+            de: 'Mit /dealio öffnest du dein eigenes Dealio-Panel.',
+            fr: 'Utilise /dealio pour ouvrir ton propre panneau Dealio.',
+          }),
         )],
         flags: dealioEphemeralV2Flags,
       }).catch(() => undefined);

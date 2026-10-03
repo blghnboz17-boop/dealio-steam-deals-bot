@@ -57,7 +57,7 @@ describe('Dealio Components V2 UI', () => {
       storeCountryCode:'TR',minimumDiscountPercent:0,totalGameCount:2,failedItemCount:1,
       capturedAt:'2026-09-19T00:00:00Z',sales:[]},{},'session',0);
     const text=JSON.stringify(page.components[0].toJSON());
-    expect(text).toContain(language==='tr'?'Bazı fiyatlar doğrulanamadı':'Some prices could not be verified');
+    expect(text).toContain(language==='tr'?'Bazı fiyatları alamadım':'I couldn’t get a few prices');
     expect(text).not.toContain(language==='tr'?'şu anda indirimde oyun yok':'no discounted games');
     expect(text).not.toContain(language==='tr'?'Şu anda indirimde oyun bulunmuyor':'No games are currently discounted');
   });
@@ -70,7 +70,7 @@ describe('Dealio Components V2 UI', () => {
       const buttons=panel.components.filter(c=>c.type===1).flatMap(row=>row.components);
       const donation=buttons.filter(b=>'url' in b&&b.url==='https://buymeacoffee.com/dealio');
       expect(donation).toHaveLength(1);
-      expect(donation[0]).toMatchObject({style:5,label:language==='tr'?'Bağış yap':'Donate',emoji:{name:'☕'}});
+      expect(donation[0]).toMatchObject({style:5,label:language==='tr'?'Destek ol':'Support Dealio',emoji:{name:'☕'}});
       expect(donation[0]).not.toHaveProperty('custom_id');
       expect(donation[0].disabled).not.toBe(true);
       expect(countComponentsV2([panel])).toBeLessThanOrEqual(40);
@@ -188,8 +188,8 @@ describe('Dealio Components V2 UI', () => {
     });
     expect(countComponentsV2([panel])).toBeLessThanOrEqual(40);
     const serialized = JSON.stringify(panel.toJSON());
-    expect(serialized).toContain(mode === 'home' ? 'Wishlist’in. Senin kuralların.' : 'Hesabın ve tercihlerin');
-    expect(serialized).toContain(mode === 'home' ? 'İlk kontrol bekleniyor' : 'Henüz tamamlanmış kontrol yok');
+    expect(serialized).toContain(mode === 'home' ? 'İstek listen, senin kuralların.' : 'Hesabın ve tercihlerin');
+    expect(serialized).toContain(mode === 'home' ? 'İlk kontrol birazdan' : 'Henüz kontrol yapılmadı');
     const rows = panel.toJSON().components.filter((component) => component.type === 1);
     // Home: check + refresh, then the four tabs.
     expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [2, 4] : [3, 2]);

@@ -14,7 +14,8 @@ import {
 } from 'discord.js';
 import type { StatusDashboardResult } from '../application/status-service.js';
 import type { CheckStatus } from '../domain/check-state.js';
-import type { Language } from '../domain/user-config.js';
+import { languageLocale, type Language } from '../domain/user-config.js';
+import { languageNames, localizer, percentText } from './i18n.js';
 import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { uiCopy } from './ui/copy.js';
@@ -47,8 +48,7 @@ function buildSettingsPanel(
 ): ContainerBuilder {
   const { config, checkState, notificationQueue, language } = result;
   const text = uiCopy(language);
-  const tr = language === 'tr';
-  const t = (turkish: string, english: string) => tr ? turkish : english;
+  const t = localizer(language);
   const disabled = options.disabled ?? false;
   const prefix = 'status-v2';
   const profileUrl = `https://steamcommunity.com/profiles/${config.steamId64}`;
@@ -64,11 +64,11 @@ function buildSettingsPanel(
     .setCustomId(`${prefix}:${sessionId}:${action}`).setLabel(label).setEmoji(emoji).setStyle(style).setDisabled(disabled);
 
   const tracking = config.dmDeliveryBlockedAt
-    ? '🔴 ' + t('DM teslimatı engellendi', 'DM delivery blocked')
-    : config.enabled ? '✅ ' + t('Takip açık', 'Tracking on') : '⏸️ ' + t('Takip duraklatıldı', 'Tracking paused');
+    ? '🔴 ' + t({ tr: 'DM’lerin kapalı', en: 'DMs blocked', de: 'DMs blockiert', fr: 'MP bloqués' })
+    : config.enabled ? '✅ ' + t(trackingOn) : '⏸️ ' + t(trackingPaused);
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(panelHeader('settings', language,
-    t('Hesabın ve tercihlerin', 'Your account & preferences'),
-    `**${tracking}** · Discord DM`)));
+    t({ tr: 'Hesabın ve tercihlerin', en: 'Your account & preferences', de: 'Dein Konto & deine Vorlieben', fr: 'Ton compte et tes préférences' }),
+    `**${tracking}** · ${t({ tr: 'Discord DM', en: 'Discord DM', de: 'Discord-DM', fr: 'MP Discord' })}`)));
   if (options.notice) {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`> ${options.notice}`.slice(0, 400)));
   }
@@ -77,8 +77,10 @@ function buildSettingsPanel(
   const account = [
     `### 👤 ${text.account}`,
     `[${maskSteamId(config.steamId64)}](${profileUrl})`,
-    `**${countryDisplay(config.storeCountryCode, language)}** · 🌐 ${tr ? 'Türkçe' : 'English'}`,
-    `🏷️ ${t('Minimum indirim', 'Minimum discount')} **${tr ? `%${config.minimumDiscountPercent}` : `${config.minimumDiscountPercent}%`}** · 🎯 **${result.gameDiscountOverrideCount}** ${t('oyuna özel kural', 'game rules')}`,
+    `**${countryDisplay(config.storeCountryCode, language)}** · 🌐 ${languageNames[language]}`,
+    `🏷️ ${minimumDiscountText(config.minimumDiscountPercent, language)} · 🎯 **${result.gameDiscountOverrideCount}** ${t({
+      tr: 'oyuna özel kural', en: 'game rules', de: 'Spielregeln', fr: 'règles par jeu',
+    })}`,
   ].join('\n');
   container.addSectionComponents(options.avatarUrl
     ? new SectionBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(account))
@@ -86,45 +88,64 @@ function buildSettingsPanel(
     : new SectionBuilder().addTextDisplayComponents(new TextDisplayBuilder().setContent(account))
       .setButtonAccessory(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(profileUrl).setLabel('Steam')));
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent([
-    `### 🗓️ ${t('Kontrol takvimi', 'Check schedule')}`,
-    `🔜 ${t('Sonraki otomatik kontrol', 'Next automatic check')}: ${config.enabled ? displayTime(checkState?.nextScheduledAt, text.never) : t('takip duraklatıldı', 'tracking paused')}`,
+    `### 🗓️ ${t({ tr: 'Kontroller', en: 'Checks', de: 'Prüfungen', fr: 'Vérifications' })}`,
+    `🔜 ${t({ tr: 'Bir sonraki kontrol', en: 'Next check', de: 'Nächste Prüfung', fr: 'Prochaine vérification' })}: ${config.enabled
+      ? displayTime(checkState?.nextScheduledAt, text.never) : t(trackingPaused).toLocaleLowerCase(languageLocale[language])}`,
     `${localizedCheckStatus(checkState?.lastStatus ?? null, language)} · ${displayTime(checkState?.lastCompletedAt, text.never)}`,
-    `-# 🎮 ${displayCount(checkState?.lastSuccessCheckedCount, '—')} ${t('oyun işlendi', 'games processed')} · 🏷️ ${displayCount(checkState?.lastSuccessOnSaleCount, '—')} ${t('indirimde', 'on sale')} · 💱 ${result.latestPriceCurrencies.join(' / ') || text.never}`,
+    `-# 🎮 ${displayCount(checkState?.lastSuccessCheckedCount, '—')} ${t({ tr: 'oyun', en: 'games', de: 'Spiele', fr: 'jeux' })} · 🏷️ ${displayCount(checkState?.lastSuccessOnSaleCount, '—')} ${t({
+      tr: 'indirimde', en: 'on sale', de: 'im Angebot', fr: 'en promo',
+    })} · 💱 ${result.latestPriceCurrencies.join(' / ') || text.never}`,
   ].join('\n')));
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent([
-    `### 📨 ${t('Bildirimler', 'Alerts')}`,
-    `✅ **${notificationQueue.sent}** ${t('gönderildi', 'sent')} · 📬 **${notificationQueue.pending + notificationQueue.retry}** ${t('bekliyor', 'waiting')} · ❌ **${notificationQueue.terminalFailed}** ${t('kalıcı hata', 'permanent failures')}`,
-    t('-# Minimum indirim tüm oyunlara uygulanır. 🎮 Oyunlarım’dan oyuna özel kural koyabilirsin.',
-      '-# The minimum discount applies to every game. Set per-game rules in 🎮 My games.'),
+    `### 📨 ${t({ tr: 'Bildirimler', en: 'Alerts', de: 'Benachrichtigungen', fr: 'Alertes' })}`,
+    `✅ **${notificationQueue.sent}** ${t({ tr: 'gönderildi', en: 'sent', de: 'gesendet', fr: 'envoyées' })} · 📬 **${notificationQueue.pending + notificationQueue.retry}** ${t({
+      tr: 'sırada', en: 'waiting', de: 'wartend', fr: 'en attente',
+    })} · ❌ **${notificationQueue.terminalFailed}** ${t({ tr: 'iletilemedi', en: 'undeliverable', de: 'nicht zustellbar', fr: 'non distribuées' })}`,
+    t({
+      tr: '-# En az indirim oranı tüm oyunlar için geçerli. Tek bir oyuna kural koymak için 🎮 İstek listem’e geç.',
+      en: '-# The minimum discount applies to every game. Set a rule for a single game in 🎮 Wishlist.',
+      de: '-# Der Mindestrabatt gilt für alle Spiele. Regeln für einzelne Spiele legst du unter 🎮 Wunschliste fest.',
+      fr: '-# La réduction minimale s’applique à tous les jeux. Pour une règle propre à un jeu, va dans 🎮 Ma liste.',
+    }),
   ].join('\n')));
   if (incompleteCount > 0) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(t(
-      `> ⚠️ Son başarılı kontrolde **${incompleteCount} oyunun** fiyatı doğrulanamadı. İndirim sayısı bu oyunları kapsamıyor.`,
-      `> ⚠️ Prices for **${incompleteCount} games** could not be verified in the last successful check. They are excluded from the sale count.`)));
+    const one = incompleteCount === 1;
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(t({
+      tr: `> ⚠️ Son kontrolde **${incompleteCount} oyunun** fiyatını alamadım; indirim sayısına bunlar dahil değil.`,
+      en: `> ⚠️ I couldn’t get the price of **${incompleteCount} ${one ? 'game' : 'games'}** in the last check, so ${one ? 'it isn’t' : 'they aren’t'} in the sale count.`,
+      de: `> ⚠️ Bei der letzten Prüfung fehlte mir der Preis von **${incompleteCount} ${one ? 'Spiel' : 'Spielen'}**; ${one ? 'es zählt' : 'sie zählen'} nicht zu den Angeboten.`,
+      fr: `> ⚠️ Lors de la dernière vérification, il me manquait le prix de **${incompleteCount} ${one ? 'jeu' : 'jeux'}** ; ${one ? 'il n’est pas compté' : 'ils ne sont pas comptés'} dans les promos.`,
+    })));
   }
   if (failed) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(t(
-      '> ⚠️ Son kontrol tamamlanamadı. Sayılar son başarılı kontrolden; güncel fiyatlar doğrulanmış değil.',
-      '> ⚠️ The latest check did not complete. Counts are from the last successful check; current prices are unverified.')));
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(t({
+      tr: '> ⚠️ Son kontrol yarım kaldı. Sayılar bir önceki başarılı kontrolden; güncel fiyatları henüz teyit edemedim.',
+      en: '> ⚠️ The last check didn’t finish. These numbers are from the last good check; current prices aren’t confirmed yet.',
+      de: '> ⚠️ Die letzte Prüfung wurde nicht abgeschlossen. Die Zahlen stammen von der letzten erfolgreichen Prüfung; aktuelle Preise sind noch nicht bestätigt.',
+      fr: '> ⚠️ La dernière vérification n’a pas abouti. Ces chiffres viennent de la dernière vérification réussie ; les prix actuels ne sont pas encore confirmés.',
+    })));
   }
   if (config.dmDeliveryBlockedAt) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(t(
-      '> 🛑 **DM teslimatı duraklatıldı.** Discord gizlilik ayarını düzelttikten sonra Test DM’i gönder ve bildirimleri yeniden aç.',
-      '> 🛑 **DM delivery is paused.** Fix Discord privacy settings, send a Test DM, then enable notifications again.')));
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(t({
+      tr: '> 🛑 **DM’lerini şimdilik durdurdum.** Discord gizlilik ayarını düzelt, bir Test DM gönder ve bildirimleri yeniden aç.',
+      en: '> 🛑 **I’ve paused your DMs for now.** Fix your Discord privacy settings, send a Test DM, then turn alerts back on.',
+      de: '> 🛑 **Deine DMs sind vorerst pausiert.** Pass deine Discord-Privatsphäre-Einstellungen an, schick eine Test-DM und schalte die Benachrichtigungen wieder ein.',
+      fr: '> 🛑 **J’ai mis tes MP en pause.** Corrige tes paramètres de confidentialité Discord, envoie un MP de test, puis réactive les alertes.',
+    })));
   }
 
   divider();
   container.addActionRowComponents(
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       config.enabled
-        ? button('disable', t('Bildirimleri kapat', 'Pause alerts'), '🔕')
-        : button('enable', t('Bildirimleri aç', 'Resume alerts'), '🔔', ButtonStyle.Success),
-      button('minimum-discount', t('Minimum indirim', 'Minimum discount'), '🏷️'),
-      button('test', 'Test DM', '✉️'),
+        ? button('disable', t({ tr: 'Bildirimleri durdur', en: 'Pause alerts', de: 'Pausieren', fr: 'Mettre en pause' }), '🔕')
+        : button('enable', t({ tr: 'Bildirimleri aç', en: 'Resume alerts', de: 'Wieder einschalten', fr: 'Réactiver' }), '🔔', ButtonStyle.Success),
+      button('minimum-discount', t({ tr: 'En az indirim', en: 'Minimum discount', de: 'Mindestrabatt', fr: 'Réduction minimale' }), '🏷️'),
+      button('test', t({ tr: 'Test DM', en: 'Test DM', de: 'Test-DM', fr: 'MP de test' }), '✉️'),
     ),
     new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button('region', t('Bölge', 'Region'), '🌍'),
-      button('language', t('Dil', 'Language'), '🌐'),
+      button('region', t({ tr: 'Bölge', en: 'Region', de: 'Region', fr: 'Région' }), '🌍'),
+      button('language', t({ tr: 'Dil', en: 'Language', de: 'Sprache', fr: 'Langue' }), '🌐'),
     ),
   );
   if (options.tabs) {
@@ -152,17 +173,26 @@ function maskSteamId(steamId64: string): string {
   return `${steamId64.slice(0, 5)}••••••••${steamId64.slice(-4)}`;
 }
 
+const trackingOn = { tr: 'Takip açık', en: 'Tracking on', de: 'Überwachung aktiv', fr: 'Suivi actif' } as const;
+const trackingPaused = { tr: 'Takip duraklatıldı', en: 'Tracking paused', de: 'Überwachung pausiert', fr: 'Suivi en pause' } as const;
+
+/** "En az **%20** indirim", "At least **20%** off". */
+function minimumDiscountText(percent: number, language: Language): string {
+  const value = `**${percentText(percent, language)}**`;
+  return localizer(language)({
+    tr: `En az ${value} indirim`,
+    en: `At least ${value} off`,
+    de: `Mindestens ${value} Rabatt`,
+    fr: `Au moins ${value} de réduction`,
+  });
+}
+
 function localizedCheckStatus(status: CheckStatus | null, language: Language): string {
-  if (language === 'tr') {
-    if (status === 'success') return '✅ Başarılı';
-    if (status === 'unavailable') return '⚠️ Steam kullanılamıyor';
-    if (status === 'failed') return '🛑 Başarısız';
-    return '⏳ Henüz tamamlanmış kontrol yok';
-  }
-  if (status === 'success') return '✅ Successful';
-  if (status === 'unavailable') return '⚠️ Steam unavailable';
-  if (status === 'failed') return '🛑 Failed';
-  return '⏳ No completed check yet';
+  const t = localizer(language);
+  if (status === 'success') return '✅ ' + t({ tr: 'Son kontrol sorunsuz', en: 'Last check went fine', de: 'Letzte Prüfung erfolgreich', fr: 'Dernière vérification réussie' });
+  if (status === 'unavailable') return '⚠️ ' + t({ tr: 'Steam’e ulaşılamadı', en: 'Couldn’t reach Steam', de: 'Steam nicht erreichbar', fr: 'Steam injoignable' });
+  if (status === 'failed') return '🛑 ' + t({ tr: 'Son kontrol yarım kaldı', en: 'Last check didn’t finish', de: 'Letzte Prüfung abgebrochen', fr: 'Dernière vérification interrompue' });
+  return '⏳ ' + t({ tr: 'Henüz kontrol yapılmadı', en: 'No check yet', de: 'Noch keine Prüfung', fr: 'Aucune vérification pour l’instant' });
 }
 
 export function buildStatusV2Panel(

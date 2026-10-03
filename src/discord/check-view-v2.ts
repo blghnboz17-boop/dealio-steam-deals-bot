@@ -5,6 +5,7 @@ import {
   TextDisplayBuilder,
 } from 'discord.js';
 import type { Language } from '../domain/user-config.js';
+import { localizer } from './i18n.js';
 import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { buildTabBar } from './ui/tab-bar.js';
@@ -32,7 +33,7 @@ export function buildCheckPanel(
   const container = new ContainerBuilder()
     .setAccentColor(colors[presentation.kind])
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`-# 🔄 DEALIO · ${language === 'tr' ? 'KONTROL' : 'CHECK'}\n# ${icons[presentation.kind]} ${presentation.title}\n${presentation.description}`),
+      new TextDisplayBuilder().setContent(`-# 🔄 DEALIO · ${localizer(language)({ tr: 'KONTROL', en: 'CHECK', de: 'PRÜFUNG', fr: 'VÉRIFICATION' })}\n# ${icons[presentation.kind]} ${presentation.title}\n${presentation.description}`),
     );
   if (presentation.metrics && presentation.metrics.length > 0) {
     container

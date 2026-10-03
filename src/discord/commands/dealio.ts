@@ -17,7 +17,9 @@ import type { TestNotificationService } from '../../application/test-notificatio
 import type { UserConfigurationService } from '../../application/user-configuration-service.js';
 import type { WishlistViewService } from '../../application/wishlist-view-service.js';
 import { languageFromDiscordLocale } from '../language.js';
+import { localizer } from '../i18n.js';
 import { messagesFor } from '../messages.js';
+import { uiCopy } from '../ui/copy.js';
 import type { SetupPresentationOptions } from '../setup-view.js';
 import { buildStatusV2Panel } from '../status-view-v2.js';
 import {
@@ -35,8 +37,12 @@ import { handleStatus } from './status.js';
 
 export const dealioCommand = new SlashCommandBuilder()
   .setName('dealio')
-  .setDescription('Open your Dealio panel: deals, games, alerts and settings')
-  .setDescriptionLocalizations({ tr: 'Dealio panelini aç: fırsatlar, oyunlar, bildirimler ve ayarlar' });
+  .setDescription('Open your Dealio panel: deals, wishlist, alerts and settings')
+  .setDescriptionLocalizations({
+    tr: 'Dealio panelini aç: fırsatlar, istek listen, bildirimler ve ayarlar',
+    de: 'Dein Dealio-Panel öffnen: Angebote, Wunschliste, Preisalarme und Einstellungen',
+    fr: 'Ouvrir ton panneau Dealio : bons plans, liste de souhaits, alertes et réglages',
+  });
 
 export interface DealioCommandServices {
   readonly setupService: SetupService;
@@ -123,15 +129,15 @@ export async function handleDealio(
         current.language,
         current.status === 'not-configured' ? 'warning' : 'danger',
         current.status === 'not-configured'
-          ? (current.language === 'tr' ? 'Dealio’ya hoş geldin' : 'Welcome to Dealio')
-          : (current.language === 'tr' ? 'Dealio paneli açılamadı' : 'Dealio panel unavailable'),
+          ? messagesFor(current.language).setupWizardTitle
+          : localizer(current.language)({ tr: 'Paneli açamadım', en: 'Couldn’t open the panel', de: 'Panel konnte nicht geöffnet werden', fr: 'Impossible d’ouvrir le panneau' }),
         current.status === 'not-configured'
           ? messagesFor(current.language).statusNotConfigured
           : messagesFor(current.language).statusDashboardUnavailable,
         current.status === 'not-configured'
           ? { button: {
               customId: `dealio:${interaction.id}:setup`,
-              label: current.language === 'tr' ? 'Kurulumu Başlat' : 'Start Setup',
+              label: messagesFor(current.language).setupWizardStart,
               emoji: '✨',
             } }
           : {},
@@ -157,10 +163,8 @@ export async function handleDealio(
       flags: dealioEphemeralV2Flags,
       components: [buildNoticePanel(
         current.language, 'warning',
-        current.language === 'tr' ? 'İşlem tamamlanamadı' : 'Action could not be completed',
-        current.language === 'tr'
-          ? 'İşlem sonucu gösterilemedi. Güncel durumu görmek için paneli yeniden açabilirsin.'
-          : 'The result could not be displayed. Reopen the panel to check the current state.',
+        uiCopy(current.language).actionFailedTitle,
+        uiCopy(current.language).actionFailedDescription,
       )],
     });
   });
@@ -196,8 +200,8 @@ export async function handleDealio(
               current.language,
               current.status === 'not-configured' ? 'warning' : 'danger',
               current.status === 'not-configured'
-                ? (current.language === 'tr' ? 'Dealio kurulumu bulunamadı' : 'Dealio setup not found')
-                : (current.language === 'tr' ? 'Durum bilgisi alınamadı' : 'Status unavailable'),
+                ? uiCopy(current.language).notSetUpTitle
+                : uiCopy(current.language).detailsUnavailableTitle,
               current.status === 'not-configured'
                 ? messagesFor(current.language).statusNotConfigured
                 : messagesFor(current.language).statusDashboardUnavailable,
@@ -229,10 +233,13 @@ export async function handleDealio(
       await editPanel({
         components: [buildNoticePanel(
           current.language, 'info',
-          current.language === 'tr' ? 'Panel kapatıldı' : 'Panel closed',
-          current.language === 'tr'
-            ? 'Devam etmek için /dealio komutuyla yeni bir panel aç.'
-            : 'Open a fresh panel with /dealio to continue.',
+          uiCopy(current.language).panelClosedTitle,
+          localizer(current.language)({
+            tr: 'Kaldığın yerden devam etmek için /dealio yazman yeterli.',
+            en: 'Type /dealio to pick up where you left off.',
+            de: 'Tipp /dealio, um weiterzumachen.',
+            fr: 'Tape /dealio pour reprendre où tu en étais.',
+          }),
         )],
       }).catch((error: unknown) => safeLogger.error('Dealio welcome cleanup failed', error));
     }

@@ -78,7 +78,7 @@ describe('dashboard recovery', () => {
     f.statusService.getDashboard.mockReturnValue({ status: 'unavailable', language: 'en' } as never);
     f.collector.emit('collect', click('dealio', 'refresh'));
     await vi.waitFor(() => expect(f.interaction.editReply).toHaveBeenCalledTimes(2));
-    expect(JSON.stringify(f.interaction.editReply.mock.calls[1]?.[0])).toContain('Status unavailable');
+    expect(JSON.stringify(f.interaction.editReply.mock.calls[1]?.[0])).toContain('Couldn’t load your details');
     f.collector.stop('time');
     await handling;
   });

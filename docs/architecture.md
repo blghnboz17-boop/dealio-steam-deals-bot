@@ -88,7 +88,7 @@ Setup and recovery steps are in [`deploy/FREE-OPERATIONS.tr.md`](../deploy/FREE-
 
 Run `npm run preview:ui` to build the bot and generate `.runtime/ui-preview.html`.
 The preview renders the production component builders with explicitly synthetic data.
-It includes selected Turkish and English panels and synthetic states. The preview renderer may lag newer component structures. Browser rendering approximates Discord;
+It includes selected Turkish, English, German and French panels and synthetic states. The preview renderer may lag newer component structures. Browser rendering approximates Discord;
 validate final spacing and interactions in Discord before publishing.
 
 Panel operations on the home and settings screens acknowledge clicks immediately,

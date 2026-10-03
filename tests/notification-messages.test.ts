@@ -77,10 +77,10 @@ describe('notification messages', () => {
       buildSaleNotificationPanel([candidate], language, { test: true, testSource }).toJSON());
 
     expect(text('tr', 'wishlist')).toContain('DEALIO · TEST');
-    expect(text('tr', 'wishlist')).toContain('wishlistinden alındı');
+    expect(text('tr', 'wishlist')).toContain('senin istek listenden');
     expect(text('tr', 'example')).toContain('örnek bir oyun');
     expect(text('en', 'wishlist')).toContain('come from your wishlist');
-    expect(text('en', 'example')).toContain('an example game is shown');
+    expect(text('en', 'example')).toContain('here’s an example game');
   });
 
   it('keeps the flame for hot deals of 60% or more', () => {

@@ -18,6 +18,8 @@ import {
 } from 'discord.js';
 import type { SetupService } from '../../application/setup-service.js';
 import type { UserConfigurationService } from '../../application/user-configuration-service.js';
+import type { Language } from '../../domain/user-config.js';
+import { localizer } from '../i18n.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { handleSetup } from './setup.js';
 import type { SetupPresentationOptions } from '../setup-view.js';
@@ -36,7 +38,11 @@ import { dealioUiSessions } from '../ui/session-manager.js';
 export const deleteDataCommand = new SlashCommandBuilder()
   .setName('delete-data')
   .setDescription('Permanently delete your Dealio data')
-  .setDescriptionLocalizations({ tr: 'Dealio verilerini kalıcı olarak sil' });
+  .setDescriptionLocalizations({
+    tr: 'Dealio verilerini kalıcı olarak sil',
+    de: 'Deine Dealio-Daten endgültig löschen',
+    fr: 'Supprimer définitivement tes données Dealio',
+  });
 
 export async function handleDeleteData(
   interaction: ChatInputCommandInteraction,
@@ -49,6 +55,7 @@ export async function handleDeleteData(
   const config = service.get(interaction.user.id);
   const language = config?.language ?? languageFromDiscordLocale(interaction.locale);
   const text = uiCopy(language);
+  const t = localizer(language);
   const sessionId = interaction.id;
   const message = await measureDiscordOperation(interaction, 'delete-data.render', () => interaction.editReply({
     flags: dealioV2Flags,
@@ -81,8 +88,13 @@ export async function handleDeleteData(
         components: [buildNoticePanel(
           language,
           'info',
-          language === 'tr' ? 'Silme işlemi iptal edildi' : 'Deletion cancelled',
-          language === 'tr' ? 'Hiçbir verin değiştirilmedi.' : 'None of your data was changed.',
+          t({ tr: 'Vazgeçtin, sorun değil', en: 'No problem, nothing deleted', de: 'Kein Problem, nichts gelöscht', fr: 'Pas de souci, rien n’a été supprimé' }),
+          t({
+            tr: 'Verilerine dokunmadım, her şey olduğu gibi duruyor.',
+            en: 'I didn’t touch your data; everything is just as it was.',
+            de: 'Ich habe deine Daten nicht angerührt, alles bleibt, wie es war.',
+            fr: 'Je n’ai pas touché à tes données, tout est resté comme avant.',
+          }),
         )],
       })).then(
         () => undefined,
@@ -131,8 +143,13 @@ export async function handleDeleteData(
         await measureDiscordOperation(modal, 'delete-data.modal-submit-ack', () => modal.reply({
           flags: dealioEphemeralV2Flags,
           components: [buildNoticePanel(language, 'warning',
-            language === 'tr' ? 'Onay gerekli' : 'Confirmation required',
-            language === 'tr' ? 'Veriler silinmedi.' : 'No data was deleted.')],
+            t({ tr: 'Onay gerekiyor', en: 'Confirmation needed', de: 'Bestätigung nötig', fr: 'Confirmation nécessaire' }),
+            t({
+              tr: 'Kutucuğu işaretlemediğin için hiçbir şeyi silmedim.',
+              en: 'You didn’t tick the box, so I didn’t delete anything.',
+              de: 'Du hast das Kästchen nicht angehakt, deshalb habe ich nichts gelöscht.',
+              fr: 'Tu n’as pas coché la case, donc je n’ai rien supprimé.',
+            }))],
         }));
         return;
       }
@@ -144,10 +161,18 @@ export async function handleDeleteData(
           deleted ? 'success' : 'info',
           deleted ? text.deleteSuccessTitle : text.deleteNoDataTitle,
           deleted
-            ? (language === 'tr'
-                ? 'Steam bağlantın, bildirim ayarların ve Dealio geçmişin kalıcı olarak silindi.'
-                : 'Your Steam connection, alert settings, and Dealio history were permanently deleted.')
-            : (language === 'tr' ? 'Hesabına ait aktif Dealio kaydı yok.' : 'There is no active Dealio record for your account.'),
+            ? t({
+                tr: 'Steam bağlantını, bildirim ayarlarını ve Dealio geçmişini kalıcı olarak sildim. Yeniden görüşmek istersen buradayım.',
+                en: 'I permanently deleted your Steam connection, alert settings and Dealio history. I’m here if you ever want to come back.',
+                de: 'Ich habe deine Steam-Verbindung, deine Benachrichtigungseinstellungen und deinen Dealio-Verlauf endgültig gelöscht. Wenn du zurückkommen willst, bin ich da.',
+                fr: 'J’ai supprimé définitivement ta connexion Steam, tes réglages d’alertes et ton historique Dealio. Je suis là si tu veux revenir.',
+              })
+            : t({
+                tr: 'Bu hesaba ait bir Dealio kaydı bulamadım.',
+                en: 'I couldn’t find any Dealio data for your account.',
+                de: 'Ich habe zu deinem Konto keine Dealio-Daten gefunden.',
+                fr: 'Je n’ai trouvé aucune donnée Dealio pour ton compte.',
+              }),
           setupService
             ? { button: { customId: `delete-v2:${sessionId}:setup`, label: text.setupAgain, emoji: '✨' } }
             : {},
@@ -175,7 +200,7 @@ export async function handleDeleteData(
   }
 }
 
-function buildDeleteWarningPanel(language: 'tr' | 'en', sessionId: string): ContainerBuilder {
+function buildDeleteWarningPanel(language: Language, sessionId: string): ContainerBuilder {
   const text = uiCopy(language);
   const container = new ContainerBuilder()
     .setAccentColor(dealioBrand.colors.danger)
@@ -195,7 +220,7 @@ function buildDeleteWarningPanel(language: 'tr' | 'en', sessionId: string): Cont
   return container;
 }
 
-function buildDeleteConfirmationModal(customId: string, language: 'tr' | 'en'): ModalBuilder {
+function buildDeleteConfirmationModal(customId: string, language: Language): ModalBuilder {
   const text = uiCopy(language);
   return new ModalBuilder()
     .setCustomId(customId)

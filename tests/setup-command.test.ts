@@ -199,10 +199,10 @@ describe('guided setup command', () => {
     const setupModal = component.showModal.mock.calls[0]?.[0].toJSON();
     expect(setupModal.components).toHaveLength(2);
     expect(setupModal.components[1]).toMatchObject({
-      label: 'Steam Store ülkesi',
+      label: 'Steam mağazanın ülkesi',
       component: {
         custom_id: 'store-country',
-        placeholder: 'Steam Store ülkeni listeden seç',
+        placeholder: 'Steam mağazanın ülkesini seç',
       },
     });
     expect(setupModal.components[1].component.options).toContainEqual(expect.objectContaining({
@@ -217,7 +217,7 @@ describe('guided setup command', () => {
       'TR',
     );
     expect(JSON.stringify(interaction.editReply.mock.calls.at(-1)?.[0]))
-      .toContain('Discord diline göre otomatik önerildi');
+      .toContain('Discord dilinden tahmin ettim');
     collector.emit('end', [], 'time');
     await handling;
   });
@@ -286,7 +286,7 @@ describe('guided setup command', () => {
     await vi.waitFor(() => expect(JSON.stringify(interaction.editReply.mock.calls.at(-1)?.[0]))
       .toContain('Almanya (DE)'));
     expect(JSON.stringify(interaction.editReply.mock.calls.at(-1)?.[0]))
-      .toContain('Senin seçtiğin mağaza bölgesi');
+      .toContain('Senin seçtiğin bölge');
     expect(service.confirm).not.toHaveBeenCalled();
     collector.emit('end', [], 'time');
     await handling;
@@ -693,7 +693,7 @@ it('shows a usable retry panel when Steam profile preparation fails', async () =
   collector.emit('collect', setupStartComponent(modal));
   await vi.waitFor(() => {
     const payload = JSON.stringify(interaction.editReply.mock.calls.at(-1)?.[0]);
-    expect(payload).toContain('Kurulum tamamlanamadı');
+    expect(payload).toContain('Kurulumu bitiremedik');
     expect(payload).toContain('setup:setup-session:start');
     expect(payload).toContain('🔄');
     expect(payload).not.toContain('↻');

@@ -1,7 +1,8 @@
 import { ButtonBuilder, ButtonStyle } from 'discord.js';
 import { storeCountryName, type StoreCountryCode } from '../../domain/store-country.js';
-import type { Language } from '../../domain/user-config.js';
+import { languageLocale, type Language } from '../../domain/user-config.js';
 import type { StoreFacts, UpcomingRelease, WishlistItem, WishlistItemError } from '../../domain/steam.js';
+import { localizer, percentText, type Localized } from '../i18n.js';
 import { formatMinorPrice } from '../notification-messages.js';
 import { dealioBrand } from './brand.js';
 import { openPanelCustomId } from './components-v2.js';
@@ -18,17 +19,38 @@ export const tabAccent: Record<DealioTab, number> = {
   settings: 0xc7d5e0,
 };
 
-const sectionNames: Record<DealioTab, { readonly emoji: string; readonly tr: string; readonly en: string }> = {
-  home: { emoji: '🏠', tr: 'ANA SAYFA', en: 'HOME' },
-  games: { emoji: '🎮', tr: 'OYUNLARIM', en: 'MY GAMES' },
-  alerts: { emoji: '🔔', tr: 'BİLDİRİMLER', en: 'ALERTS' },
-  settings: { emoji: '⚙️', tr: 'AYARLAR', en: 'SETTINGS' },
+/** The four tabs' names, shared by the tab row and every panel header. */
+export const tabNames: Record<DealioTab, { readonly emoji: string; readonly label: Localized }> = {
+  home: { emoji: '🏠', label: { tr: 'Ana sayfa', en: 'Home', de: 'Start', fr: 'Accueil' } },
+  games: { emoji: '🎮', label: { tr: 'İstek listem', en: 'Wishlist', de: 'Wunschliste', fr: 'Ma liste' } },
+  alerts: { emoji: '🔔', label: { tr: 'Bildirimler', en: 'Alerts', de: 'Preisalarme', fr: 'Alertes' } },
+  settings: { emoji: '⚙️', label: { tr: 'Ayarlar', en: 'Settings', de: 'Einstellungen', fr: 'Réglages' } },
 };
 
-/** "-# 🎮 DEALIO · OYUNLARIM", a large title and an optional one-line subtitle. */
+/** "-# 🎮 DEALIO · İSTEK LİSTEM": the small line naming the tab above every screen. */
+export function panelKicker(tab: DealioTab, language: Language): string {
+  const section = tabNames[tab];
+  return `-# ${section.emoji} DEALIO · ${section.label[language].toLocaleUpperCase(languageLocale[language])}`;
+}
+
+/** The tab's kicker, a large title and an optional one-line subtitle. */
 export function panelHeader(tab: DealioTab, language: Language, title: string, subtitle?: string): string {
-  const section = sectionNames[tab];
-  return `-# ${section.emoji} DEALIO · ${language === 'tr' ? section.tr : section.en}\n# ${title}${subtitle ? `\n${subtitle}` : ''}`;
+  return `${panelKicker(tab, language)}\n# ${title}${subtitle ? `\n${subtitle}` : ''}`;
+}
+
+/** "Fiyatı Steam’den 5 dakika önce aldım": when a shown price was read, around a Discord relative time. */
+export function priceFetched(at: string, language: Language, plural = false): string {
+  return localizer(language)(plural ? {
+    tr: `Fiyatları Steam’den ${at} aldım`,
+    en: `Prices from Steam, ${at}`,
+    de: `Preise von Steam, ${at}`,
+    fr: `Prix Steam relevés ${at}`,
+  } : {
+    tr: `Fiyatı Steam’den ${at} aldım`,
+    en: `Price from Steam, ${at}`,
+    de: `Preis von Steam, ${at}`,
+    fr: `Prix Steam relevé ${at}`,
+  });
 }
 
 /** "🇹🇷 Türkiye": the one way a Store country is shown. */
@@ -58,7 +80,7 @@ export function hotPrefix(percent: number | null | undefined): string {
 
 /** "🟢 `−%90`": the tier dot and an inline-code pill, which Discord draws as a small badge. */
 export function discountBadge(percent: number, language: Language): string {
-  return `${discountTier(percent)} ${language === 'tr' ? `\`−%${percent}\`` : `\`−${percent}%\``}`;
+  return `${discountTier(percent)} \`−${percentText(percent, language)}\``;
 }
 
 /** "**$1,99**  ~~$19,99~~  🟢 `−%90`", or the price alone when there is no discount. */
@@ -67,13 +89,14 @@ export function priceLine(
   language: Language,
 ): string {
   const freeToKeep = price.finalMinor === 0 && price.initialMinor > 0;
-  const final = `**${freeToKeep ? (language === 'tr' ? 'Ücretsiz' : 'Free') : formatMinorPrice(price.finalMinor, price.currency, language)}**`;
+  const free = localizer(language)({ tr: 'Ücretsiz', en: 'Free', de: 'Kostenlos', fr: 'Gratuit' });
+  const final = `**${freeToKeep ? free : formatMinorPrice(price.finalMinor, price.currency, language)}**`;
   return price.discountPercent > 0 && price.initialMinor > price.finalMinor
     ? `${final}  ~~${formatMinorPrice(price.initialMinor, price.currency, language)}~~  ${discountBadge(price.discountPercent, language)}`
     : final;
 }
 
-/** "💰 $18,00 tasarruf" for a discounted price, else null. */
+/** "💰 $18,00 cebinde kalır" for a discounted price, else null. */
 export function savingsLine(
   price: { readonly finalMinor: number; readonly initialMinor: number; readonly currency: string },
   language: Language,
@@ -81,31 +104,36 @@ export function savingsLine(
   const saved = price.initialMinor - price.finalMinor;
   if (saved <= 0) return null;
   const amount = formatMinorPrice(saved, price.currency, language);
-  return language === 'tr' ? `💰 ${amount} tasarruf` : `💰 You save ${amount}`;
+  return localizer(language)({
+    tr: `💰 ${amount} cebinde kalır`,
+    en: `💰 You save ${amount}`,
+    de: `💰 Du sparst ${amount}`,
+    fr: `💰 Tu économises ${amount}`,
+  });
 }
 
 /** "🏠 Dealio panel": opens a fresh /dealio panel from any message, DMs included. */
 
 export function openPanelButton(language: Language, style: ButtonStyle = ButtonStyle.Primary): ButtonBuilder {
   return new ButtonBuilder().setCustomId(openPanelCustomId).setStyle(style).setEmoji('🏠')
-    .setLabel(language === 'tr' ? 'Dealio paneli' : 'Dealio panel');
+    .setLabel(localizer(language)({ tr: 'Dealio paneli', en: 'Dealio panel', de: 'Dealio-Panel', fr: 'Panneau Dealio' }));
 }
 
-const steamDeckLabels = {
-  verified: { tr: 'Doğrulandı', en: 'Verified' },
-  playable: { tr: 'Oynanabilir', en: 'Playable' },
-  unsupported: { tr: 'Desteklenmiyor', en: 'Unsupported' },
-} as const;
+/** Steam's own wording for each Steam Deck rating. */
+const steamDeckLabels: Record<'verified' | 'playable' | 'unsupported', Localized> = {
+  verified: { tr: 'Doğrulandı', en: 'Verified', de: 'Verifiziert', fr: 'Vérifié' },
+  playable: { tr: 'Oynanabilir', en: 'Playable', de: 'Spielbar', fr: 'Jouable' },
+  unsupported: { tr: 'Desteklenmiyor', en: 'Unsupported', de: 'Nicht unterstützt', fr: 'Non pris en charge' },
+};
 
 /** "⭐ Son Derece Olumlu · %98　🎮 Steam Deck: Doğrulandı", or null when Steam gave neither. */
 export function reviewLine(facts: StoreFacts | undefined, language: Language): string | null {
   const parts: string[] = [];
   if (facts?.reviewLabel || facts?.reviewPercent !== undefined) {
-    const percent = facts.reviewPercent === undefined ? null
-      : language === 'tr' ? `%${facts.reviewPercent}` : `${facts.reviewPercent}%`;
+    const percent = facts.reviewPercent === undefined ? null : percentText(facts.reviewPercent, language);
     parts.push(`⭐ ${[facts.reviewLabel ? `**${facts.reviewLabel}**` : null, percent].filter(Boolean).join(' · ')}`);
   }
-  if (facts?.steamDeck) parts.push(`🎮 Steam Deck: ${steamDeckLabels[facts.steamDeck][language]}`);
+  if (facts?.steamDeck) parts.push(`🎮 Steam Deck${language === 'fr' ? ' :' : ':'} ${steamDeckLabels[facts.steamDeck][language]}`);
   return parts.length > 0 ? parts.join('　') : null;
 }
 
@@ -122,15 +150,23 @@ export function saleEndLine(facts: StoreFacts | undefined, language: Language, n
   const end = facts?.saleEndsAt ? Date.parse(facts.saleEndsAt) : Number.NaN;
   if (!Number.isFinite(end) || end <= now) return null;
   const at = `<t:${Math.floor(end / 1000)}:R>`;
-  return language === 'tr' ? `⏳ İndirim ${at} bitiyor` : `⏳ Sale ends ${at}`;
+  return localizer(language)({
+    tr: `⏳ İndirim ${at} bitiyor`,
+    en: `⏳ Sale ends ${at}`,
+    de: `⏳ Angebot endet ${at}`,
+    fr: `⏳ La promo se termine ${at}`,
+  });
 }
 
 /** "🎁 Sınırlı süre: şimdi alırsan oyun sonsuza kadar senin." for a 100% discount, else null. */
 export function freeToKeepLine(price: { readonly finalMinor: number; readonly initialMinor: number }, language: Language): string | null {
   if (price.finalMinor !== 0 || price.initialMinor <= 0) return null;
-  return language === 'tr'
-    ? '🎁 **Sınırlı süre ücretsiz:** şimdi kütüphanene eklersen oyun sonsuza kadar senin.'
-    : '🎁 **Free for a limited time:** add it to your library now and it is yours to keep.';
+  return localizer(language)({
+    tr: '🎁 **Sınırlı süre ücretsiz:** şimdi kütüphanene eklersen oyun sonsuza dek senin.',
+    en: '🎁 **Free for a limited time:** add it to your library now and it’s yours to keep.',
+    de: '🎁 **Für kurze Zeit kostenlos:** Füg es jetzt deiner Bibliothek hinzu, dann gehört es für immer dir.',
+    fr: '🎁 **Gratuit pour une durée limitée :** ajoute-le à ta bibliothèque maintenant, il est à toi pour toujours.',
+  });
 }
 
 /**
@@ -141,14 +177,22 @@ export function steamAppUrl(appId: number): string {
   return `https://blghnboz17-boop.github.io/dealio-public-pages/open.html?app=${appId}`;
 }
 
+export const steamAppLabel: Localized = {
+  tr: 'Steam uygulamasında aç',
+  en: 'Open in the Steam app',
+  de: 'In der Steam-App öffnen',
+  fr: 'Ouvrir dans l’app Steam',
+};
+
 /** "[🖥️ Steam uygulamasında aç](…)" for inline use in alert text. */
 export function steamAppLink(appId: number, language: Language): string {
-  return `[🖥️ ${language === 'tr' ? 'Steam uygulamasında aç' : 'Open in the Steam app'}](${steamAppUrl(appId)})`;
+  return `[🖥️ ${steamAppLabel[language]}](${steamAppUrl(appId)})`;
 }
 
 /** "12 Ekim 2026", "Ekim 2026", "2027 Ç4", "2027", or Steam's own text, as precise as Steam states it. */
 export function releaseDateText(upcoming: UpcomingRelease, language: Language): string {
-  const locale = language === 'tr' ? 'tr-TR' : 'en-US';
+  const locale = languageLocale[language];
+  const t = localizer(language);
   const date = upcoming.date ? new Date(upcoming.date) : null;
   if (date && !Number.isNaN(date.getTime())) {
     const year = date.getUTCFullYear();
@@ -156,22 +200,30 @@ export function releaseDateText(upcoming: UpcomingRelease, language: Language): 
     if (upcoming.precision === 'month') return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
     if (upcoming.precision === 'quarter') {
       const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
-      return language === 'tr' ? `${year} ${quarter}. çeyrek` : `Q${quarter} ${year}`;
+      return t({ tr: `${year} ${quarter}. çeyrek`, en: `Q${quarter} ${year}`, de: `Q${quarter} ${year}`, fr: `T${quarter} ${year}` });
     }
     if (upcoming.precision === 'year') return String(year);
   }
-  return upcoming.message ?? (language === 'tr' ? 'tarih açıklanmadı' : 'date not announced');
+  return upcoming.message ?? t({
+    tr: 'tarih henüz belli değil', en: 'date not announced yet', de: 'Termin noch offen', fr: 'date pas encore annoncée',
+  });
 }
+
+export const comingSoon: Localized = { tr: 'Yakında', en: 'Coming soon', de: 'Demnächst', fr: 'Bientôt disponible' };
 
 /** "🗓️ Yakında · 12 Ekim 2026": an unreleased game has no price yet, and that is not an error. */
 export function upcomingLine(upcoming: UpcomingRelease, language: Language): string {
-  return `🗓️ ${language === 'tr' ? 'Yakında' : 'Coming soon'} · ${releaseDateText(upcoming, language)}`;
+  return `🗓️ ${comingSoon[language]} · ${releaseDateText(upcoming, language)}`;
 }
 
 /** What to show instead of a price: the release for an unreleased game, else an honest "unavailable". */
 export function noPriceText(item: Pick<WishlistItem, 'upcoming'>, language: Language): string {
-  return item.upcoming ? upcomingLine(item.upcoming, language)
-    : language === 'tr' ? '❔ Fiyat şu an doğrulanamadı' : '❔ Price could not be confirmed right now';
+  return item.upcoming ? upcomingLine(item.upcoming, language) : localizer(language)({
+    tr: '❔ Fiyatını şu an alamadım',
+    en: '❔ Couldn’t get the price right now',
+    de: '❔ Preis gerade nicht verfügbar',
+    fr: '❔ Prix indisponible pour l’instant',
+  });
 }
 
 /** "🚫 1 oyun Türkiye mağazasında satılmıyor · 🗑️ 1 oyun Steam'den kaldırılmış", or null. */
@@ -183,11 +235,21 @@ export function unavailableGamesLine(
   const regionLocked = errors?.filter((error) => error.code === 'STEAM_APP_REGION_UNAVAILABLE').length ?? 0;
   const delisted = errors?.filter((error) => error.code === 'STEAM_APP_NOT_FOUND').length ?? 0;
   const country = storeCountryName(countryCode, language);
+  const one = (count: number) => count === 1;
+  const t = localizer(language);
   const parts = [
-    regionLocked > 0 ? (language === 'tr' ? `🚫 ${regionLocked} oyun ${country} mağazasında satılmıyor`
-      : `🚫 ${regionLocked} ${regionLocked === 1 ? 'game is' : 'games are'} not sold in ${country}`) : null,
-    delisted > 0 ? (language === 'tr' ? `🗑️ ${delisted} oyun Steam'den kaldırılmış`
-      : `🗑️ ${delisted} ${delisted === 1 ? 'game was' : 'games were'} removed from Steam`) : null,
+    regionLocked > 0 ? t({
+      tr: `🚫 ${regionLocked} oyun ${country} mağazasında satılmıyor`,
+      en: `🚫 ${regionLocked} ${one(regionLocked) ? 'game is' : 'games are'} not sold in ${country}`,
+      de: `🚫 ${regionLocked} ${one(regionLocked) ? 'Spiel ist' : 'Spiele sind'} in deiner Region (${country}) nicht erhältlich`,
+      fr: `🚫 ${regionLocked} ${one(regionLocked) ? 'jeu non vendu' : 'jeux non vendus'} dans ta région (${country})`,
+    }) : null,
+    delisted > 0 ? t({
+      tr: `🗑️ ${delisted} oyun Steam'den kaldırılmış`,
+      en: `🗑️ ${delisted} ${one(delisted) ? 'game was' : 'games were'} removed from Steam`,
+      de: `🗑️ ${delisted} ${one(delisted) ? 'Spiel wurde' : 'Spiele wurden'} von Steam entfernt`,
+      fr: `🗑️ ${delisted} ${one(delisted) ? 'jeu retiré' : 'jeux retirés'} de Steam`,
+    }) : null,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(' · ') : null;
 }

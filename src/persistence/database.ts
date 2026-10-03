@@ -86,6 +86,7 @@ export function createDatabase(databasePath: string): DatabaseSync {
     migratePricingContext(database);
     migrateDmConsentAndDelivery(database);
     migrateAssistant(database);
+    migrateLanguages(database);
     return database;
   } catch (error: unknown) {
     try {
@@ -97,6 +98,67 @@ export function createDatabase(databasePath: string): DatabaseSync {
       );
     }
     throw new DatabaseInitializationError(error, true);
+  }
+}
+
+const twoLanguageCheck = "CHECK (language IN ('tr', 'en'))";
+const languageCheck = "CHECK (language IN ('tr', 'en', 'de', 'fr'))";
+
+/**
+ * v11 adds German and French. SQLite cannot change a CHECK constraint, so the
+ * two tables that list languages are rebuilt from their own stored definition.
+ */
+function migrateLanguages(database: DatabaseSync): void {
+  const versionRow = database.prepare('PRAGMA user_version').get() as {
+    user_version: number;
+  };
+  if (versionRow.user_version >= 11) {
+    return;
+  }
+
+  // Dropping the old table with foreign keys on would cascade-delete every child row.
+  // The pragma has no effect inside a transaction, so it is switched around it.
+  database.exec('PRAGMA foreign_keys = OFF');
+  try {
+    database.exec('BEGIN IMMEDIATE');
+    try {
+      for (const table of ['user_config', 'notification_batch']) {
+        const definition = database.prepare(
+          "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?",
+        ).get(table) as { sql: string } | undefined;
+        if (!definition) {
+          throw new Error(`Missing ${table} table before the language migration`);
+        }
+        if (!definition.sql.includes(twoLanguageCheck)) {
+          continue;
+        }
+        const indexes = database.prepare(
+          "SELECT sql FROM sqlite_schema WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL",
+        ).all(table) as Array<{ sql: string }>;
+        const rebuilt = definition.sql
+          .replace(twoLanguageCheck, languageCheck)
+          .replace(/^CREATE TABLE\s+"?\w+"?/i, `CREATE TABLE ${table}_v11`);
+        database.exec(rebuilt);
+        database.exec(`INSERT INTO ${table}_v11 SELECT * FROM ${table}`);
+        database.exec(`DROP TABLE ${table}`);
+        database.exec(`ALTER TABLE ${table}_v11 RENAME TO ${table}`);
+        for (const index of indexes) {
+          database.exec(index.sql);
+        }
+      }
+      if (database.prepare('PRAGMA foreign_key_check').all().length > 0) {
+        throw new Error('Foreign key check failed after the language migration');
+      }
+      database.exec('PRAGMA user_version = 11');
+      database.exec('COMMIT');
+    } catch (error: unknown) {
+      if (database.isTransaction) {
+        database.exec('ROLLBACK');
+      }
+      throw error;
+    }
+  } finally {
+    database.exec('PRAGMA foreign_keys = ON');
   }
 }
 

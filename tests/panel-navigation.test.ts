@@ -53,7 +53,7 @@ const json = (value: unknown) => JSON.stringify(value);
 describe('tab bar', () => {
   it('shows four labelled tabs and locks only the active root screen', () => {
     const root = buildTabBar('dealio', 's', 'tr', { active: 'home' }).toJSON();
-    expect(root.components.map((button) => 'label' in button && button.label)).toEqual(['Ana sayfa', 'Oyunlarım', 'Bildirimler', 'Ayarlar']);
+    expect(root.components.map((button) => 'label' in button && button.label)).toEqual(['Ana sayfa', 'İstek listem', 'Bildirimler', 'Ayarlar']);
     expect(root.components.map((button) => button.disabled)).toEqual([true, false, false, false]);
     const below = buildTabBar('assistant', 's', 'en', { active: 'games', activeIsRoot: false }).toJSON();
     expect(below.components.every((button) => !button.disabled)).toBe(true);

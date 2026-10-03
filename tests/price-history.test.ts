@@ -306,9 +306,9 @@ describe('sale alert price history', () => {
     JSON.stringify(buildSaleNotificationPanel(notifications, language).toJSON()).replace(/ /g, ' ');
 
   it.each([
-    ['tr', 150, 'Tarihî en düşük: **$1,50** (%70 · Aralık 2022)'],
+    ['tr', 150, 'Gelmiş geçmiş en düşük: **$1,50** (%70 indirim · Aralık 2022)'],
     ['en', 150, 'All-time low: **$1.50** (70% off · December 2022)'],
-    ['tr', 199, 'Tarihî en düşük fiyata eşit'],
+    ['tr', 199, 'Gelmiş geçmiş en düşük fiyatla aynı'],
     ['en', 199, 'Matches the all-time low'],
     ['tr', 250, 'Tüm zamanların en düşük fiyatı!'],
     ['en', 250, 'Lowest price ever!'],
@@ -319,16 +319,16 @@ describe('sale alert price history', () => {
   });
 
   it.each([
-    ['tr', 150, 'Şubat 2024 sonrası en düşük: **$1,50** (%70 · Aralık 2022)'],
+    ['tr', 150, 'Şubat 2024 sonrası en düşük: **$1,50** (%70 indirim · Aralık 2022)'],
     ['en', 150, 'Lowest since February 2024: **$1.50** (70% off · December 2022)'],
-    ['tr', 199, 'Şubat 2024 sonrasının en düşük fiyatına eşit'],
+    ['tr', 199, 'Şubat 2024 sonrasının en düşük fiyatıyla aynı'],
     ['en', 199, 'Matches the lowest price since February 2024'],
     ['tr', 250, 'Şubat 2024 sonrasının en düşük fiyatı!'],
     ['en', 250, 'Lowest price since February 2024!'],
   ] as const)('never calls a current-currency %s low of %i all-time', (language, amountMinor, expected) => {
     const rendered = text([{ ...sale, historicalLow: { ...low, amountMinor, since: '2024-02-11T00:59:31.000Z' } }], language);
     expect(rendered).toContain(expected);
-    expect(rendered).not.toMatch(/Tarihî|Tüm zamanların|all-time|ever/);
+    expect(rendered).not.toMatch(/Gelmiş geçmiş|Tüm zamanların|all-time|ever/);
   });
 
   it('omits price history without data or in another currency', () => {
@@ -350,7 +350,7 @@ describe('sale alert price history', () => {
     })), 'tr');
     expect(componentsV2TextLength([panel])).toBeLessThanOrEqual(4000);
     expect(countComponentsV2([panel])).toBeLessThanOrEqual(40);
-    expect(JSON.stringify(panel.toJSON())).toContain('Tarihî en düşük');
+    expect(JSON.stringify(panel.toJSON())).toContain('Gelmiş geçmiş en düşük');
   });
 });
 

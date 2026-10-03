@@ -9,6 +9,8 @@ import type { CheckService } from '../../application/check-service.js';
 import type { NotificationService } from '../../application/notification-service.js';
 import type { StatusService } from '../../application/status-service.js';
 import { buildCheckPanel, type CheckResultPresentation } from '../check-view-v2.js';
+import type { Language } from '../../domain/user-config.js';
+import { localizer } from '../i18n.js';
 import { messagesFor } from '../messages.js';
 import { dealioUiSessionTimeoutMs, dealioV2Flags } from '../ui/components-v2.js';
 import { uiCopy } from '../ui/copy.js';
@@ -18,7 +20,11 @@ import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-ba
 export const checkCommand = new SlashCommandBuilder()
   .setName('check')
   .setDescription('Check your Steam wishlist for sales right now')
-  .setDescriptionLocalizations({ tr: 'Steam wishlistini indirimler için hemen kontrol et' });
+  .setDescriptionLocalizations({
+    tr: 'Steam istek listendeki indirimlere hemen bak',
+    de: 'Deine Steam-Wunschliste sofort nach Angeboten durchsuchen',
+    fr: 'Vérifier tout de suite les promos de ta liste de souhaits Steam',
+  });
 
 export interface CheckPanelOptions extends PanelNavigation {
   readonly lifecycleSignal?: AbortSignal;
@@ -43,7 +49,7 @@ export async function handleCheck(
       flags: dealioV2Flags,
       components: [buildCheckPanel(language, {
         kind: 'warning',
-        title: language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
+        title: localizer(language)({ tr: 'Dealio henüz kurulmadı', en: 'Dealio isn’t set up yet', de: 'Dealio ist noch nicht eingerichtet', fr: 'Dealio n’est pas encore configuré' }),
         description: messages.notConfigured,
       })],
     }));
@@ -121,12 +127,13 @@ export async function handleCheck(
 
 function checkPresentation(
   result: Awaited<ReturnType<CheckService['check']>>,
-  language: 'tr' | 'en',
+  language: Language,
   notificationsEnabled: boolean,
   delivery: { readonly sentCount: number; readonly failedCount: number; readonly candidateCount: number },
 ): CheckResultPresentation {
   const text = uiCopy(language);
   const messages = messagesFor(language);
+  const t = localizer(language);
   if (result.status === 'already-running') {
     return { kind: 'info', title: text.checkAlreadyTitle, description: messages.alreadyRunning };
   }
@@ -151,41 +158,39 @@ function checkPresentation(
   if (result.status === 'disabled') {
     return {
       kind: 'warning',
-      title: language === 'tr' ? 'Takip duraklatıldı' : 'Tracking is paused',
-      description: language === 'tr'
-        ? 'Bildirimlerin kapalı olduğu için kontrol yapılmadı. ⚙️ Ayarlar sekmesinden yeniden açabilirsin.'
-        : 'Alerts are turned off, so no check ran. Turn them back on in the ⚙️ Settings tab.',
+      title: t({ tr: 'Takip duraklatıldı', en: 'Tracking is paused', de: 'Überwachung pausiert', fr: 'Suivi en pause' }),
+      description: t({
+        tr: 'Bildirimlerin kapalı olduğu için kontrol etmedim. ⚙️ Ayarlar sekmesinden yeniden açabilirsin.',
+        en: 'Your alerts are off, so I didn’t check. Turn them back on in the ⚙️ Settings tab.',
+        de: 'Deine Benachrichtigungen sind aus, deshalb habe ich nicht geprüft. Schalte sie im Tab ⚙️ Einstellungen wieder ein.',
+        fr: 'Tes alertes sont coupées, donc je n’ai rien vérifié. Réactive-les dans l’onglet ⚙️ Réglages.',
+      }),
     };
   }
+  const summary = {
+    checked: result.checkedCount,
+    found: result.notificationCandidates.length,
+    sent: delivery.sentCount,
+    deliveryFailed: delivery.failedCount,
+    unconfirmed: result.failedItems.length + result.unknownPriceCount,
+  };
   const description = notificationsEnabled
-    ? messages.checkCompleted(
-        result.checkedCount,
-        delivery.candidateCount,
-        result.failedItems.length,
-        result.unknownPriceCount,
-        delivery.sentCount,
-        delivery.failedCount,
-      )
-    : messages.checkCompletedNotificationsDisabled(
-        result.checkedCount,
-        result.notificationCandidates.length,
-        result.failedItems.length,
-        result.unknownPriceCount,
-      );
+    ? messages.checkCompleted(summary)
+    : messages.checkCompletedNotificationsDisabled(summary);
   return {
     kind: delivery.failedCount > 0 || result.failedItems.length > 0 ? 'warning' : 'success',
     title: text.checkSuccessTitle,
     description,
     metrics: [
-      { emoji: '🎮', label: language === 'tr' ? 'oyun işlendi' : 'games processed', value: result.checkedCount },
-      { emoji: '🎯', label: language === 'tr' ? 'indirim adayı' : 'sale candidates', value: result.notificationCandidates.length },
-      { emoji: '📨', label: language === 'tr' ? 'DM gönderildi' : 'DMs sent', value: delivery.sentCount },
+      { emoji: '🎮', label: t({ tr: 'oyuna baktım', en: 'games checked', de: 'Spiele geprüft', fr: 'jeux vérifiés' }), value: result.checkedCount },
+      { emoji: '🎯', label: t({ tr: 'yeni fırsat', en: 'new deals', de: 'neue Angebote', fr: 'nouveaux bons plans' }), value: result.notificationCandidates.length },
+      { emoji: '📨', label: t({ tr: 'DM gönderdim', en: 'DMs sent', de: 'DMs verschickt', fr: 'MP envoyés' }), value: delivery.sentCount },
       // Problems only when they happened; unreleased and unavailable games are facts, not errors.
       ...[
-        { emoji: '🗓️', label: language === 'tr' ? 'henüz çıkmadı' : 'not released yet', value: result.upcomingCount },
-        { emoji: '🚫', label: language === 'tr' ? 'satılmıyor / kaldırıldı' : 'not sold / removed', value: result.unavailableItems.length },
-        { emoji: '❔', label: language === 'tr' ? 'fiyatı alınamadı' : 'price not confirmed', value: result.unknownPriceCount },
-        { emoji: '⚠️', label: language === 'tr' ? 'Steam hatası' : 'Steam errors', value: result.failedItems.length },
+        { emoji: '🗓️', label: t({ tr: 'henüz çıkmadı', en: 'not released yet', de: 'noch nicht erschienen', fr: 'pas encore sortis' }), value: result.upcomingCount },
+        { emoji: '🚫', label: t({ tr: 'satılmıyor / kaldırılmış', en: 'not sold / removed', de: 'nicht erhältlich / entfernt', fr: 'non vendus / retirés' }), value: result.unavailableItems.length },
+        { emoji: '❔', label: t({ tr: 'fiyatını alamadım', en: 'prices not confirmed', de: 'Preise nicht bestätigt', fr: 'prix non confirmés' }), value: result.unknownPriceCount },
+        { emoji: '⚠️', label: t({ tr: 'Steam hatası', en: 'Steam errors', de: 'Steam-Fehler', fr: 'erreurs Steam' }), value: result.failedItems.length },
       ].filter((metric) => metric.value > 0),
     ],
   };

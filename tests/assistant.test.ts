@@ -122,7 +122,7 @@ describe('game detail price history',()=>{
  it('replaces Dealio observations with Steam price history from IsThereAnyDeal',()=>{
   const text=render({status:'ready',history});
   expect(text).toContain('Steam fiyat geçmişi');
-  expect(text).toContain('Şubat 2024 sonrası en düşük: **$0,57** (%90 · Kasım 2024)');
+  expect(text).toContain('Şubat 2024 sonrası en düşük: **$0,57** (%90 indirim · Kasım 2024)');
   expect(text).toContain(`<t:${Date.parse('2026-10-01T18:26:44.000Z')/1000}:d> · **$1,15** · %80`);
   expect(text).toContain(`<t:${Date.parse('2026-07-09T17:17:12.000Z')/1000}:d> · **$5,79**"`);
   expect(text).toContain('[IsThereAnyDeal](https://isthereanydeal.com/)');
@@ -130,9 +130,9 @@ describe('game detail price history',()=>{
  });
 
  it.each([
-  [{status:'loading'} as const,'Fiyat geçmişi yükleniyor…'],
-  [{status:'ready',history:null} as const,'Fiyat geçmişi şu anda alınamadı.'],
-  [{status:'ready',history:{low:null,recent:[]}} as const,'Bu bölge için Steam fiyat geçmişi bulunamadı.'],
+  [{status:'loading'} as const,'Fiyat geçmişini getiriyorum…'],
+  [{status:'ready',history:null} as const,'Fiyat geçmişini şu an alamadım.'],
+  [{status:'ready',history:{low:null,recent:[]}} as const,'Bu bölge için henüz Steam fiyat geçmişi yok.'],
  ])('explains a %j price history state',(state,expected)=>{
   expect(render(state)).toContain(expected);
  });

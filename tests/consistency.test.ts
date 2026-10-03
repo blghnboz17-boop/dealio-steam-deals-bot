@@ -48,7 +48,7 @@ describe('one region picker', () => {
   it('finds countries by name or code and explains an empty search', () => {
     expect(json(buildCountrySearchPanel('tr', 's', 'alm'))).toContain('"value":"DE"');
     expect(json(buildCountrySearchPanel('en', 's', 'BR'))).toContain('"value":"BR"');
-    expect(json(buildCountrySearchPanel('tr', 's', 'zzzz'))).toContain('Bu adla bir ülke bulunamadı');
+    expect(json(buildCountrySearchPanel('tr', 's', 'zzzz'))).toContain('Bu adla bir ülke bulamadım');
   });
 });
 

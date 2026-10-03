@@ -6,10 +6,14 @@ import { handleAssistant } from './assistant.js';
 
 export const wishlistCommand = new SlashCommandBuilder()
   .setName('wishlist')
-  .setDescription('Open your games, price targets and price history')
-  .setDescriptionLocalizations({ tr: 'Oyunlarını, hedef fiyatlarını ve fiyat geçmişini aç' });
+  .setDescription('Open your wishlist, price targets and price history')
+  .setDescriptionLocalizations({
+    tr: 'İstek listeni, hedef fiyatlarını ve fiyat geçmişini aç',
+    de: 'Deine Wunschliste, Wunschpreise und Preisverläufe öffnen',
+    fr: 'Ouvrir ta liste de souhaits, tes prix cibles et l’historique des prix',
+  });
 
-/** /wishlist opens the Dealio panel at its My games tab. */
+/** /wishlist opens the Dealio panel at its Wishlist tab. */
 export async function handleWishlist(
   interaction: ChatInputCommandInteraction,
   service: WishlistViewService,

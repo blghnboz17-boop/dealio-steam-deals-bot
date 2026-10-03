@@ -15,7 +15,7 @@ const items = games.map(([appId, name, initialMinor, finalMinor, discountPercent
     platforms: { windows: true, mac: appId === 620, linux: appId === 620 }, saleEndsAt: '2030-01-01T00:00:00.000Z' },
 }));
 const panels = {};
-for (const language of ['tr', 'en']) {
+for (const language of ['tr', 'en', 'de', 'fr']) {
   const config = {
     discordUserId: 'preview-user', configurationId: 'preview-config', configVersion: 1,
     steamId64: '76561198000000000', language, storeCountryCode: 'TR', enabled: true, minimumDiscountPercent: 30,
@@ -60,7 +60,7 @@ for (const language of ['tr', 'en']) {
     welcome: [buildSetupWelcomePanel(language, 'preview').toJSON()],
     upcoming: personal('wishlist', { ...assistantData,
       items: [{ appId: 2719590, name: 'Light No Fire', priority: null, dateAdded: null, onSale: null, price: null,
-        headerImageUrl: 'https://cdn.akamai.steamstatic.com/steam/apps/2719590/header.jpg', upcoming: { message: language === 'tr' ? 'Duyurulacak' : 'To be announced' } },
+        headerImageUrl: 'https://cdn.akamai.steamstatic.com/steam/apps/2719590/header.jpg', upcoming: { message: { tr: 'Duyurulacak', en: 'To be announced', de: 'Wird angekündigt', fr: 'À annoncer' }[language] } },
         { appId: 4080520, name: 'Horns of Deliverance', priority: null, dateAdded: null, onSale: null, price: null,
         headerImageUrl: 'https://cdn.akamai.steamstatic.com/steam/apps/4080520/header.jpg', upcoming: { date: '2026-10-12T17:00:00.000Z', precision: 'day' } },
         items[0]],

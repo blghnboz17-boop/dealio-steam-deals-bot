@@ -1,6 +1,6 @@
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
-import type { Language, UserConfig } from '../domain/user-config.js';
+import { isLanguage, type Language, type UserConfig } from '../domain/user-config.js';
 import {
   parseStoreCountryCode,
   type StoreCountryCode,
@@ -33,7 +33,7 @@ function textValue(value: SQLOutputValue, column: string): string {
 function languageValue(value: SQLOutputValue): Language {
   const language = textValue(value, 'language');
 
-  if (language !== 'tr' && language !== 'en') {
+  if (!isLanguage(language)) {
     throw new Error('Invalid language value in user_config');
   }
 

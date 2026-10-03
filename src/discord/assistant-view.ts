@@ -13,9 +13,10 @@ import { defaultPollIntervalHours } from '../config/environment.js';
 import { historicalLowLine, priceChangeLine, priceHistoryCredit } from './price-history-text.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import {
-  countryDisplay, freeToKeepLine, hotDealPercent, hotPrefix, noPriceText, panelHeader, platformText, priceLine, releaseDateText,
-  reviewLine, saleEndLine, savingsLine, steamAppUrl, tabAccent, unavailableGamesLine,
+  comingSoon, countryDisplay, freeToKeepLine, hotDealPercent, hotPrefix, noPriceText, panelHeader, panelKicker, platformText, priceFetched,
+  priceLine, releaseDateText, reviewLine, saleEndLine, savingsLine, steamAppLabel, steamAppUrl, tabAccent, unavailableGamesLine,
 } from './ui/design.js';
+import { localizer, percentOff, percentText } from './i18n.js';
 import { buildTabBar } from './ui/tab-bar.js';
 import { defaultTimezone, timezoneChoices, timezoneLabel } from '../domain/timezone.js';
 
@@ -57,31 +58,40 @@ function pricedItem(item:WishlistItem){
   return p?.currency?{finalMinor:p.finalMinor,initialMinor:p.initialMinor,discountPercent:p.discountPercent,currency:p.currency}:null;
 }
 export function buildAssistantView(data:AssistantViewData,view:AssistantView,session:string,disabled=false):ContainerBuilder {
-  const tr=data.config.language==='tr', lang=data.config.language, prefix='assistant:'+session+':';
+  const lang=data.config.language, t=localizer(lang), prefix='assistant:'+session+':';
   const games=view.screen==='wishlist'||view.screen==='detail';
   const root=new ContainerBuilder().setAccentColor(tabAccent[games?'games':'alerts']);
   const add=(value:string)=>root.addTextDisplayComponents(text(value));
   const gap=()=>root.addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small));
   const divider=()=>root.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
   const price=(minor:number,currency:string)=>formatMinorPrice(minor,currency,lang);
-  const ruleText=(rule:GameRule|undefined)=>rule?.muted?'🔕 '+(tr?'Susturuldu':'Muted')
-    :rule?.mode==='target'?'🎯 '+(tr?'Hedef ':'Target ')+price(rule.targetMinor!,rule.currency!)
-    :'🏷️ '+(tr?'En az %':'At least ')+(rule?.mode==='percent'?rule.percent:data.config.minimumDiscountPercent)+(tr?' indirim':'% off')
-      +(rule?.mode==='percent'?'':(tr?' (genel)':' (global)'));
+  const ruleText=(rule:GameRule|undefined)=>{
+    if(rule?.muted) return '🔕 '+t({tr:'Sessizde',en:'Muted',de:'Stummgeschaltet',fr:'En sourdine'});
+    if(rule?.mode==='target'){
+      const target=price(rule.targetMinor!,rule.currency!);
+      return '🎯 '+t({tr:`Hedef fiyat: ${target}`,en:`Target: ${target}`,de:`Wunschpreis: ${target}`,fr:`Prix cible : ${target}`});
+    }
+    const percent=percentText(rule?.mode==='percent'?rule.percent!:data.config.minimumDiscountPercent,lang);
+    return '🏷️ '+t({tr:`En az ${percent} indirim`,en:`At least ${percent} off`,de:`Mindestens ${percent} Rabatt`,fr:`Au moins ${percent} de réduction`})
+      +(rule?.mode==='percent'?'':' '+t({tr:'(genel ayarın)',en:'(your default)',de:'(deine Standardregel)',fr:'(ta règle par défaut)'}));
+  };
   const notice=()=>{if(view.notice) add('> '+escapeMarkdown(view.notice).slice(0,250));};
+  const previous=t({tr:'Önceki',en:'Previous',de:'Zurück',fr:'Précédent'}), next=t({tr:'Sonraki',en:'Next',de:'Weiter',fr:'Suivant'});
 
   if(view.screen==='wishlist'){
     const items=filteredAssistantItems(data,view), pages=Math.max(1,Math.ceil(items.length/3));
     const page=Math.min(Math.max(0,view.page),pages-1), visible=items.slice(page*3,page*3+3);
     const count=data.items.filter(i=>matchesRule(i,data.rules.get(i.appId),data.config.minimumDiscountPercent)).length;
     const upcoming=data.items.filter(i=>i.upcoming&&!i.price).length;
-    add(panelHeader('games',lang,tr?'Oyunların ve hedeflerin':'Your games & targets',
-      `✅ **${count}** ${tr?'uygun fırsat':'matching deals'}　🎮 **${data.items.length}** ${tr?'oyun':'games'}`+
-      (upcoming?`　🗓️ **${upcoming}** ${tr?'yakında':'coming soon'}`:'')+`　${countryDisplay(data.config.storeCountryCode,lang)}`)+
-      '\n-# 🕒 '+(tr?'Fiyatlar ':'Prices ')+relative(data.items.map(i=>i.priceObservedAt??data.capturedAt).sort()[0]??data.capturedAt)+
-      (view.refreshing?(tr?' · Steam’den yenileniyor…':' · Refreshing from Steam…'):''));
+    add(panelHeader('games',lang,t({tr:'İstek listen ve hedeflerin',en:'Your wishlist & targets',de:'Deine Wunschliste & Wunschpreise',fr:'Ta liste et tes prix cibles'}),
+      `✅ **${count}** ${t({tr:'fırsat kuralına uyuyor',en:'matching deals',de:'passende Angebote',fr:'bons plans pour toi'})}`+
+      `　🎮 **${data.items.length}** ${t({tr:'oyun',en:'games',de:'Spiele',fr:'jeux'})}`+
+      (upcoming?`　🗓️ **${upcoming}** ${t({tr:'yakında çıkacak',en:'coming soon',de:'erscheinen bald',fr:'à venir'})}`:'')+
+      `　${countryDisplay(data.config.storeCountryCode,lang)}`)+
+      '\n-# 🕒 '+priceFetched(relative(data.items.map(i=>i.priceObservedAt??data.capturedAt).sort()[0]??data.capturedAt),lang,true)+
+      (view.refreshing?' · '+t({tr:'Steam’den yeniliyorum…',en:'Refreshing from Steam…',de:'Aktualisiere von Steam …',fr:'Actualisation depuis Steam…'}):''));
     notice();
-    if(view.query) add('🔍 '+(tr?'Arama: ':'Search: ')+'**'+escapeMarkdown(view.query)+'**');
+    if(view.query) add('🔍 '+t({tr:'Arama: ',en:'Search: ',de:'Suche: ',fr:'Recherche : '})+'**'+escapeMarkdown(view.query)+'**');
     divider();
     visible.forEach((item,index)=>{
       if(index>0) gap();
@@ -89,133 +99,203 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       const matches=matchesRule(item,rule,data.config.minimumDiscountPercent);
       root.addSectionComponents(artworkAccessory(new SectionBuilder().addTextDisplayComponents(text(
         `### ${hotPrefix(p?.discountPercent)}${escapeMarkdown(item.name).slice(0,100)}\n${p?priceLine(p,lang):noPriceText(item,lang)}\n`+
-        `-# ${ruleText(rule)}${matches?(tr?' · ✅ Kuralına uygun':' · ✅ Matches your rule'):''}`)), item));
+        `-# ${ruleText(rule)}${matches?' · ✅ '+t({tr:'Kuralına uyuyor',en:'Matches your rule',de:'Passt zu deiner Regel',fr:'Correspond à ta règle'}):''}`)), item));
     });
     const unavailable=unavailableGamesLine(data.errors,data.config.storeCountryCode,lang);
     if(unavailable&&!view.query&&!view.eligibleOnly&&page===pages-1) { gap(); add('-# '+unavailable); }
-    if(!visible.length) add('🫥 '+(tr?'Bu görünümde oyun yok. Aramayı veya filtreyi temizleyebilirsin.':'No games here. Clear the search or filter.'));
+    if(!visible.length) add('🫥 '+t({
+      tr:'Burada gösterecek oyun yok. Aramayı ya da filtreyi temizleyebilirsin.',
+      en:'No games here. Clear the search or the filter.',
+      de:'Hier gibt es keine Spiele. Setz die Suche oder den Filter zurück.',
+      fr:'Aucun jeu ici. Efface la recherche ou le filtre.',
+    }));
     divider();
     if(visible.length) root.addActionRowComponents(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-      new StringSelectMenuBuilder().setCustomId(prefix+'game').setPlaceholder('🎮 '+(tr?'Bir oyun aç · hedef ve fiyat geçmişi':'Open a game · target and price history'))
+      new StringSelectMenuBuilder().setCustomId(prefix+'game').setPlaceholder('🎮 '+t({
+        tr:'Bir oyun aç · hedef fiyat ve fiyat geçmişi',
+        en:'Open a game · target and price history',
+        de:'Spiel öffnen · Wunschpreis und Preisverlauf',
+        fr:'Ouvrir un jeu · prix cible et historique',
+      }))
         .setDisabled(disabled).addOptions(visible.map(item=>{
           const p=pricedItem(item);
           return {label:item.name.slice(0,100),value:String(item.appId),
             emoji:!p&&item.upcoming?'🗓️':(p?.discountPercent??0)>=hotDealPercent?'🔥':matchesRule(item,data.rules.get(item.appId),data.config.minimumDiscountPercent)?'🎯':item.onSale?'🏷️':'🎮',
-            ...(p?{description:(price(p.finalMinor,p.currency)+(p.discountPercent>0?(tr?` · %${p.discountPercent} indirim`:` · ${p.discountPercent}% off`):'')).slice(0,100)}
-              :item.upcoming?{description:((tr?'Yakında · ':'Coming soon · ')+releaseDateText(item.upcoming,lang)).slice(0,100)}:{})};
+            ...(p?{description:(price(p.finalMinor,p.currency)+(p.discountPercent>0?' · '+percentOff(p.discountPercent,lang):'')).slice(0,100)}
+              :item.upcoming?{description:(comingSoon[lang]+' · '+releaseDateText(item.upcoming,lang)).slice(0,100)}:{})};
         }))));
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button(prefix+'search',tr?'Oyun ara':'Search','🔍'),
-      button(prefix+'filter',view.eligibleOnly?(tr?'Tüm oyunlar':'All games'):(tr?'Uygun fırsatlar':'Matching deals'),view.eligibleOnly?'📋':'✅'),
-      button(prefix+'refresh',tr?'Yenile':'Refresh','🔄').setDisabled(disabled||view.refreshing===true)));
+      button(prefix+'search',t({tr:'Oyun ara',en:'Search',de:'Suchen',fr:'Rechercher'}),'🔍'),
+      button(prefix+'filter',view.eligibleOnly?t({tr:'Tüm oyunlar',en:'All games',de:'Alle Spiele',fr:'Tous les jeux'})
+        :t({tr:'Kuralıma uyanlar',en:'Matching deals',de:'Passende Angebote',fr:'Bons plans pour moi'}),view.eligibleOnly?'📋':'✅'),
+      button(prefix+'refresh',t({tr:'Yenile',en:'Refresh',de:'Aktualisieren',fr:'Actualiser'}),'🔄').setDisabled(disabled||view.refreshing===true)));
     if(pages>1) root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button(prefix+'prev',tr?'Önceki':'Previous','◀️').setDisabled(disabled||page===0),
+      button(prefix+'prev',previous,'◀️').setDisabled(disabled||page===0),
       button(prefix+'page',`${page+1} / ${pages}`).setDisabled(true),
-      button(prefix+'next',tr?'Sonraki':'Next','▶️').setDisabled(disabled||page===pages-1)));
+      button(prefix+'next',next,'▶️').setDisabled(disabled||page===pages-1)));
   } else if(view.screen==='detail'){
     const item=data.items.find(i=>i.appId===view.selectedAppId);
+    const backToList=t({tr:'Listeye dön',en:'Back to list',de:'Zurück zur Liste',fr:'Retour à la liste'});
     if(!item){
-      add(panelHeader('games',lang,tr?'Oyun bulunamadı':'Game not found',
-        tr?'Oyun kayıtlı listede yok. Listeye dönüp yenileyebilirsin.':'The game is not in the saved wishlist. Go back and refresh.'));
-      root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(button(prefix+'wishlist',tr?'Listeye dön':'Back to list','◀️')));
+      add(panelHeader('games',lang,t({tr:'Bu oyunu bulamadım',en:'I can’t find that game',de:'Dieses Spiel finde ich nicht',fr:'Je ne trouve pas ce jeu'}),
+        t({
+          tr:'Kayıtlı istek listende artık yok. Listeye dönüp yenileyebilirsin.',
+          en:'It’s no longer in your saved wishlist. Go back and refresh.',
+          de:'Es ist nicht mehr auf deiner gespeicherten Wunschliste. Geh zurück und aktualisiere.',
+          fr:'Il n’est plus dans ta liste enregistrée. Reviens en arrière et actualise.',
+        })));
+      root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(button(prefix+'wishlist',backToList,'◀️')));
     } else{
       const p=pricedItem(item),rule=data.rules.get(item.appId);
-      add('-# 🎮 DEALIO · '+(tr?'OYUNLARIM':'MY GAMES'));
+      add(panelKicker('games',lang));
       addArtwork(root, item);
       const facts=item.storeFacts;
       add(['# '+hotPrefix(p?.discountPercent)+escapeMarkdown(item.name).slice(0,120),
         p?priceLine(p,lang):noPriceText(item,lang),
         p&&freeToKeepLine(p,lang), p&&savingsLine(p,lang), item.onSale?saleEndLine(facts,lang):null, reviewLine(facts,lang),
-        '-# '+['🕒 '+(tr?'Steam fiyatı alındı: ':'Steam price fetched: ')+relative(item.priceObservedAt??data.capturedAt),
+        '-# '+['🕒 '+priceFetched(relative(item.priceObservedAt??data.capturedAt),lang),
           platformText(facts)].filter(Boolean).join(' · '),
       ].filter(Boolean).join('\n'));
       notice();
       divider();
       const eligible=matchesRule(item,rule,data.config.minimumDiscountPercent);
-      add('### 🎯 '+(tr?'Kuralın':'Your rule')+'\n'+ruleText(rule)+
-        (rule?.mode==='target'&&p?.currency!==rule.currency?(tr?' · ⚠️ Para birimi değişmiş; hedefi yeniden kaydet.':' · ⚠️ Currency changed; save a new target.'):'')+'\n'+
-        (eligible?(tr?'✅ Şu anki fiyat kuralına uygun. Kural kaydı ayrıca DM göndermez.':'✅ The current price matches your rule. Saving a rule does not send an initial DM.')
-          :(tr?'⏳ Kuralına uyan bir fiyat gelince DM ile haber vereceğiz.':'⏳ We will DM you when a price meets your rule.')));
+      add('### 🎯 '+t({tr:'Kuralın',en:'Your rule',de:'Deine Regel',fr:'Ta règle'})+'\n'+ruleText(rule)+
+        (rule?.mode==='target'&&p?.currency!==rule.currency?' · ⚠️ '+t({
+          tr:'Para birimi değişmiş; hedefini yeniden kaydet.',
+          en:'The currency changed; save a new target.',
+          de:'Die Währung hat sich geändert; leg einen neuen Wunschpreis fest.',
+          fr:'La devise a changé ; enregistre un nouveau prix cible.',
+        }):'')+'\n'+
+        (eligible?'✅ '+t({
+          tr:'Şu anki fiyat kuralına uyuyor. Kuralı kaydetmek tek başına DM göndermez.',
+          en:'Today’s price already matches your rule. Saving a rule doesn’t send a DM by itself.',
+          de:'Der aktuelle Preis passt schon zu deiner Regel. Eine Regel zu speichern verschickt selbst keine DM.',
+          fr:'Le prix actuel correspond déjà à ta règle. Enregistrer une règle n’envoie pas de MP à lui seul.',
+        }):'⏳ '+t({
+          tr:'Fiyat kuralına uyduğu an sana DM atacağım.',
+          en:'I’ll DM you as soon as the price meets your rule.',
+          de:'Sobald der Preis zu deiner Regel passt, schicke ich dir eine DM.',
+          fr:'Je t’envoie un MP dès que le prix respecte ta règle.',
+        })));
       const history=data.priceHistory;
       const low=history?.status==='ready'?history.history?.low:undefined;
       root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-        button(prefix+'inherit',tr?'Genel kural':'Global rule','♻️'),
-        button(prefix+'percent',tr?'İndirim yüzdesi':'Discount %','🏷️'),
-        button(prefix+'target',tr?'Hedef fiyat':'Target price','🎯',true).setDisabled(disabled||!p),
+        button(prefix+'inherit',t({tr:'Genel ayarım',en:'Use default',de:'Standardregel',fr:'Règle par défaut'}),'♻️'),
+        button(prefix+'percent',t({tr:'İndirim oranı',en:'Discount %',de:'Rabatt in %',fr:'Réduction en %'}),'🏷️'),
+        button(prefix+'target',t({tr:'Hedef fiyat',en:'Target price',de:'Wunschpreis',fr:'Prix cible'}),'🎯',true).setDisabled(disabled||!p),
         // One tap: a target at the recorded Steam low in the current currency.
-        ...(low&&p&&low.currency===p.currency?[button(prefix+'low',tr?'En düşükte haber ver':'Alert at the lowest','🏆')]:[])));
+        ...(low&&p&&low.currency===p.currency?[button(prefix+'low',t({
+          tr:'En düşüğe inince haber ver',en:'Alert me at the lowest',de:'Beim Tiefstpreis melden',fr:'Me prévenir au plus bas',
+        }),'🏆')]:[])));
       if(history&&p){
         divider();
-        add('### 📈 '+(tr?'Steam fiyat geçmişi':'Steam price history'));
-        if(history.status==='loading') add('⏳ '+(tr?'Fiyat geçmişi yükleniyor…':'Loading price history…'));
-        else if(!history.history) add('⚠️ '+(tr?'Fiyat geçmişi şu anda alınamadı.':'Price history is unavailable right now.'));
+        add('### 📈 '+t({tr:'Steam fiyat geçmişi',en:'Steam price history',de:'Steam-Preisverlauf',fr:'Historique des prix Steam'}));
+        if(history.status==='loading') add('⏳ '+t({tr:'Fiyat geçmişini getiriyorum…',en:'Loading price history…',de:'Lade Preisverlauf …',fr:'Chargement de l’historique…'}));
+        else if(!history.history) add('⚠️ '+t({
+          tr:'Fiyat geçmişini şu an alamadım.',en:'Price history isn’t available right now.',
+          de:'Der Preisverlauf ist gerade nicht verfügbar.',fr:'L’historique des prix est indisponible pour l’instant.',
+        }));
         else {
           const low=history.history.low&&historicalLowLine(p.finalMinor,p.currency,history.history.low,lang);
-          add(low??('📭 '+(tr?'Bu bölge için Steam fiyat geçmişi bulunamadı.':'No Steam price history for this region yet.')));
-          if(history.history.recent.length) add((tr?'**Son fiyat değişiklikleri**\n':'**Recent price changes**\n')+
-            history.history.recent.map(change=>priceChangeLine(change,lang)).join('\n'));
+          add(low??('📭 '+t({
+            tr:'Bu bölge için henüz Steam fiyat geçmişi yok.',en:'No Steam price history for this region yet.',
+            de:'Für diese Region gibt es noch keinen Steam-Preisverlauf.',fr:'Pas encore d’historique de prix Steam pour cette région.',
+          })));
+          if(history.history.recent.length) add('**'+t({
+            tr:'Son fiyat değişiklikleri',en:'Recent price changes',de:'Letzte Preisänderungen',fr:'Derniers changements de prix',
+          })+'**\n'+history.history.recent.map(change=>priceChangeLine(change,lang)).join('\n'));
           add(priceHistoryCredit(lang));
         }
       }
       divider();
       root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-        button(prefix+'wishlist',tr?'Listeye dön':'Back to list','◀️'),
-        button(prefix+'mute',rule?.muted?(tr?'Sesi aç':'Unmute'):(tr?'Oyunu sustur':'Mute game'),rule?.muted?'🔔':'🔕')));
+        button(prefix+'wishlist',backToList,'◀️'),
+        button(prefix+'mute',rule?.muted?t({tr:'Sessizden çıkar',en:'Unmute',de:'Stumm aus',fr:'Réactiver'})
+          :t({tr:'Bu oyunu sustur',en:'Mute game',de:'Spiel stummschalten',fr:'Mettre en sourdine'}),rule?.muted?'🔔':'🔕')));
       root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://store.steampowered.com/app/'+item.appId).setEmoji('🛒').setLabel(tr?'Steam’de aç':'Open on Steam'),
-        new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(steamAppUrl(item.appId)).setEmoji('🖥️').setLabel(tr?'Steam uygulamasında aç':'Open in the Steam app')));
+        new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://store.steampowered.com/app/'+item.appId).setEmoji('🛒').setLabel(messagesFor(lang).openSteamStore),
+        new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(steamAppUrl(item.appId)).setEmoji('🖥️').setLabel(steamAppLabel[lang])));
     }
   } else if(view.screen==='history'){
-    add(panelHeader('alerts',lang,tr?'Bildirim geçmişin':'Your alert history',
-      tr?'-# Son 30 gün. “Discord’a iletildi”, mesajın okunduğu anlamına gelmez.':'-# Last 30 days. “Delivered to Discord” does not mean read.'));
+    add(panelHeader('alerts',lang,t({tr:'Bildirim geçmişin',en:'Your alert history',de:'Dein Benachrichtigungsverlauf',fr:'Ton historique d’alertes'}),
+      '-# '+t({
+        tr:'Son 30 gün. “Discord’a iletildi”, mesajın okunduğu anlamına gelmez.',
+        en:'Last 30 days. “Delivered to Discord” doesn’t mean it was read.',
+        de:'Letzte 30 Tage. „An Discord zugestellt“ heißt nicht, dass sie gelesen wurde.',
+        fr:'30 derniers jours. « Remis à Discord » ne veut pas dire lu.',
+      })));
     notice();
     divider();
     const start=Math.max(0,view.page)*5, entries=data.history.slice(start,start+5);
     entries.forEach((h,index)=>{
       if(index>0) gap();
-      const status=h.status==='sent'?['✅',tr?'Discord’a iletildi':'Delivered to Discord']:
-        h.status==='expired'?['⌛',tr?'Geçerliliğini kaybetti':'Expired']:
-        h.status==='blocked'?['🚫',tr?'DM engellendi':'DM blocked']:h.status==='terminal_failed'?['❌',tr?'İletilemedi':'Failed']:['⏳',tr?'Bekliyor':'Pending'];
-      const why=h.reason.startsWith('target:')?'🎯 '+(tr?'Hedef fiyatına ulaştı':'Your target price was reached'):'🏷️ '+(tr?'İndirim eşiğini karşıladı':'Your discount threshold was met');
+      const status=h.status==='sent'?['✅',t({tr:'Discord’a iletildi',en:'Delivered to Discord',de:'An Discord zugestellt',fr:'Remis à Discord'})]:
+        h.status==='expired'?['⌛',t({tr:'Süresi geçti',en:'Expired',de:'Abgelaufen',fr:'Expiré'})]:
+        h.status==='blocked'?['🚫',t({tr:'DM engellendi',en:'DM blocked',de:'DM blockiert',fr:'MP bloqué'})]
+        :h.status==='terminal_failed'?['❌',t({tr:'İletilemedi',en:'Couldn’t be delivered',de:'Nicht zustellbar',fr:'Non distribué'})]
+        :['⏳',t({tr:'Sırada',en:'Waiting',de:'Wartet',fr:'En attente'})];
+      const why=h.reason.startsWith('target:')
+        ?'🎯 '+t({tr:'Hedef fiyatına ulaştı',en:'Your target price was reached',de:'Dein Wunschpreis wurde erreicht',fr:'Ton prix cible est atteint'})
+        :'🏷️ '+t({tr:'İndirim kuralına uydu',en:'Your discount rule was met',de:'Deine Rabattregel wurde erfüllt',fr:'Ta règle de réduction est remplie'});
       add(`${status[0]} **${escapeMarkdown(h.game_name).slice(0,100)}**\n-# ${why} · ${status[1]} · ${relative(h.created_at)}`);
     });
-    if(!entries.length) add('📭 '+(tr?'Henüz bildirim kaydı yok.':'No alerts yet.'));
+    if(!entries.length) add('📭 '+t({tr:'Henüz bildirim yok.',en:'No alerts yet.',de:'Noch keine Benachrichtigungen.',fr:'Pas encore d’alertes.'}));
     divider();
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button(prefix+'rhythm',tr?'Geri':'Back','↩️'),
-      button(prefix+'prev',tr?'Önceki':'Previous','◀️').setDisabled(disabled||view.page===0),
-      button(prefix+'next',tr?'Sonraki':'Next','▶️').setDisabled(disabled||start+5>=data.history.length),
-      button(prefix+'retry',tr?'DM erişimini dene':'Retry DM access','✉️')));
+      button(prefix+'rhythm',t({tr:'Geri',en:'Back',de:'Zurück',fr:'Retour'}),'↩️'),
+      button(prefix+'prev',previous,'◀️').setDisabled(disabled||view.page===0),
+      button(prefix+'next',next,'▶️').setDisabled(disabled||start+5>=data.history.length),
+      button(prefix+'retry',t({tr:'DM erişimini dene',en:'Test DM access',de:'DM-Zugang testen',fr:'Tester les MP'}),'✉️')));
   }else{
     const p=data.preference, zone=effectiveTimezone(data);
-    const current=p.mode==='quiet'?`🌙 ${tr?'Rahatsız etme':'Do not disturb'} · ${clock(p.quietStart)}–${clock(p.quietEnd)}`
-      :p.mode==='digest'?`📬 ${tr?'Günlük özet':'Daily digest'} · ${clock(p.digestMinute)}`
-      :`⚡ ${tr?'Hemen':'Right away'}`;
-    add(panelHeader('alerts',lang,tr?'Bildirimler sana uysun':'Alerts on your terms',
-      (tr?'Şu an: ':'Now: ')+'**'+current+'**\n🌍 '+(tr?'Saat dilimi: ':'Time zone: ')+
-      (zone?timezoneLabel(zone):(tr?'seçilmedi, aşağıdan seç':'not set, choose below'))));
+    const instant=t({tr:'Hemen',en:'Right away',de:'Sofort',fr:'Tout de suite'});
+    const quiet=t({tr:'Rahatsız etme saatleri',en:'Do not disturb',de:'Nicht stören',fr:'Ne pas déranger'});
+    const digest=t({tr:'Günlük özet',en:'Daily digest',de:'Tägliche Zusammenfassung',fr:'Résumé quotidien'});
+    const colon=lang==='fr'?' :':':';
+    const current=p.mode==='quiet'?`🌙 ${quiet} · ${clock(p.quietStart)}–${clock(p.quietEnd)}`
+      :p.mode==='digest'?`📬 ${digest} · ${clock(p.digestMinute)}`
+      :`⚡ ${instant}`;
+    add(panelHeader('alerts',lang,t({tr:'Bildirimler sana uysun',en:'Alerts on your terms',de:'Benachrichtigungen, wie du sie willst',fr:'Des alertes à ton rythme'}),
+      t({tr:'Şu an: ',en:'Now: ',de:'Aktuell: ',fr:'Actuellement : '})+'**'+current+'**\n🌍 '+t({tr:'Saat dilimi: ',en:'Time zone: ',de:'Zeitzone: ',fr:'Fuseau horaire : '})+
+      (zone?timezoneLabel(zone):t({tr:'seçilmedi, aşağıdan seç',en:'not set, choose below',de:'nicht gewählt, unten auswählen',fr:'non choisi, choisis-le ci-dessous'}))));
     notice();
     divider();
     add([
-      tr?'⚡ **Hemen:** İndirim bulununca hemen DM gelir.':'⚡ **Right away:** a DM as soon as a deal is found.',
-      tr?'🌙 **Rahatsız etme saatleri:** Bu saatlerde bildirim gelmez; saat bitince bekleyenler gelir.':'🌙 **Do not disturb:** no alerts during these hours; waiting alerts arrive when they end.',
-      tr?'📬 **Günlük özet:** Günde bir kez, seçtiğin saatte tek mesaj.':'📬 **Daily digest:** one message a day at the time you choose.',
+      `⚡ **${instant}${colon}** `+t({
+        tr:'Fırsatı bulduğum an DM atarım.',en:'a DM the moment I find a deal.',
+        de:'eine DM, sobald ich ein Angebot finde.',fr:'un MP dès que je trouve un bon plan.',
+      }),
+      `🌙 **${quiet}${colon}** `+t({
+        tr:'Bu saatlerde sessiz kalırım; saat bitince bekleyenleri gönderirim.',
+        en:'I stay quiet during these hours and send what’s waiting when they end.',
+        de:'In dieser Zeit bleibe ich still und schicke danach, was sich angesammelt hat.',
+        fr:'je reste silencieux pendant ces heures et j’envoie ce qui attend à la fin.',
+      }),
+      `📬 **${digest}${colon}** `+t({
+        tr:'Günde bir kez, seçtiğin saatte tek mesaj.',en:'one message a day, at the time you pick.',
+        de:'eine Nachricht am Tag, zu deiner Wunschzeit.',fr:'un seul message par jour, à l’heure de ton choix.',
+      }),
     ].join('\n'));
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button(prefix+'instant',tr?'Hemen':'Right away','⚡',p.mode==='instant'),
-      button(prefix+'quiet-night',tr?'Gece 23:00–08:00':'Night 23:00–08:00','🌙',p.mode==='quiet'),
-      button(prefix+'digest-evening',tr?'Her akşam 19:00':'Every evening 19:00','📬',p.mode==='digest')));
+      button(prefix+'instant',instant,'⚡',p.mode==='instant'),
+      button(prefix+'quiet-night',t({tr:'Gece 23:00–08:00',en:'Night 23:00–08:00',de:'Nachts 23:00–08:00',fr:'La nuit 23:00–08:00'}),'🌙',p.mode==='quiet'),
+      button(prefix+'digest-evening',t({tr:'Her akşam 19:00',en:'Every evening 19:00',de:'Jeden Abend 19:00',fr:'Chaque soir 19:00'}),'📬',p.mode==='digest')));
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button(prefix+'quiet',tr?'Kendi saatlerim':'My own hours','🕐'),
-      button(prefix+'digest',tr?'Kendi özet saatim':'My digest time','🕖'),
-      button(prefix+'history',tr?'Bildirim geçmişi':'Alert history','📜')));
+      button(prefix+'quiet',t({tr:'Kendi saatlerim',en:'My own hours',de:'Eigene Zeiten',fr:'Mes horaires'}),'🕐'),
+      button(prefix+'digest',t({tr:'Kendi özet saatim',en:'My digest time',de:'Eigene Uhrzeit',fr:'Mon heure de résumé'}),'🕖'),
+      button(prefix+'history',t({tr:'Bildirim geçmişi',en:'Alert history',de:'Verlauf',fr:'Historique'}),'📜')));
     root.addActionRowComponents(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
       new StringSelectMenuBuilder().setCustomId(prefix+'timezone').setDisabled(disabled)
-        .setPlaceholder('🌍 '+(tr?'Saat dilimini değiştir':'Change time zone'))
+        .setPlaceholder('🌍 '+t({tr:'Saat dilimini değiştir',en:'Change time zone',de:'Zeitzone ändern',fr:'Changer de fuseau horaire'}))
         .addOptions(timezoneChoices(data.config.storeCountryCode,zone).map(choice=>({
           label:timezoneLabel(choice),value:choice,default:choice===zone})))));
-    add('-# 🔄 '+(tr?'Kontrol sıklığı: ':'Check frequency: ')+messagesFor(lang).setupWizardFrequency(defaultPollIntervalHours)+
-      (tr?'. Bekleyen bildirimlerin fiyatı göndermeden önce yeniden doğrulanır.':'. Waiting alerts are re-checked before they are sent.'));
+    const frequency=messagesFor(lang).setupWizardFrequency(defaultPollIntervalHours);
+    add('-# 🔄 '+t({
+      tr:`Kontrol sıklığı: ${frequency}. Bekleyen bildirimlerin fiyatını göndermeden önce bir kez daha kontrol ederim.`,
+      en:`Checks: ${frequency.toLowerCase()}. I double-check the price of waiting alerts before sending them.`,
+      de:`Prüfung: ${frequency}. Bei wartenden Benachrichtigungen prüfe ich den Preis vor dem Senden noch einmal.`,
+      fr:`Vérifications : ${frequency.toLowerCase()}. Je revérifie le prix des alertes en attente avant de les envoyer.`,
+    }));
   }
   divider();
   root.addActionRowComponents(buildTabBar('assistant',session,lang,{active:games?'games':'alerts',

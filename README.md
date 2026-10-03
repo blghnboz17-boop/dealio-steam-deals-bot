@@ -57,7 +57,7 @@ Set a different target for each game, or use one discount threshold across your 
 - 🎯 **A choice for each game.** Use your default discount threshold, set a different percentage, or enter a target price. Mute games you want to skip.
 - 📬 **A record of your alerts.** See pending and sent DMs, and try a test message if delivery isn't working. A delivery record doesn't mean the message was read.
 - 📊 **Prices over time.** Dealio keeps its own observations for 90 days. Newly tracked games may have little history; these records don't establish an all-time low.
-- 🌍 **English and Turkish.** Both are available throughout setup, menus, and notifications. A human-led Turkish localization pass is also underway.
+- 🌍 **Turkish, English, German and French.** Every language covers setup, menus, and notifications, written in a friendly first-person voice and using Steam’s own words for the wishlist in each language. German and French are new and have not had real-user trials yet.
 
 <a name="latest-updates"></a>
 
