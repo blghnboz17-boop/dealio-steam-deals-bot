@@ -49,6 +49,13 @@ describe('loadEnvironment', () => {
       .not.toHaveProperty('steamWebApiKey');
   });
 
+  it('loads the optional IsThereAnyDeal API key without requiring it', () => {
+    expect(loadEnvironment({ ...validEnvironment, ITAD_API_KEY: '  itad-key  ' }))
+      .toMatchObject({ isThereAnyDealApiKey: 'itad-key' });
+    expect(loadEnvironment({ ...validEnvironment, ITAD_API_KEY: '   ' }))
+      .not.toHaveProperty('isThereAnyDealApiKey');
+  });
+
   it('accepts only HTTPS Dealio banner URLs', () => {
     expect(loadEnvironment({
       ...validEnvironment,

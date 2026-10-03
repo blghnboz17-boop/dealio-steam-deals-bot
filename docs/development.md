@@ -23,7 +23,7 @@ The template uses a separate SQLite database at `./data/test-wishlist.db`. Leave
 DOTENV_CONFIG_PATH=.env.test npm run dev
 ```
 
-Install the test application in a test server, then run `/setup` and `/dealio`. No privileged Discord gateway intents are required. An optional `STEAM_WEB_API_KEY` enables vanity-name resolution; numeric SteamID64 and numeric profile links do not require it.
+Install the test application in a test server, then run `/setup` and `/dealio`. No privileged Discord gateway intents are required. An optional `STEAM_WEB_API_KEY` enables vanity-name resolution; numeric SteamID64 and numeric profile links do not require it. An optional `ITAD_API_KEY` (free, from https://isthereanydeal.com/apps/my/) adds Steam's historical low price to sale alerts; without it alerts are unchanged.
 
 ## Verify changes
 

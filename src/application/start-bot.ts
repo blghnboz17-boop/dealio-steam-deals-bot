@@ -9,6 +9,7 @@ import { loadEnvironment, type EnvironmentConfig } from '../config/environment.j
 import { registerBotEvents } from '../discord/bot-events.js';
 import { createDiscordClient } from '../discord/client.js';
 import { DiscordNotificationSender } from '../discord/notification-sender.js';
+import { IsThereAnyDealClient } from '../price-history/itad-client.js';
 import { registerCommands } from '../discord/register-commands.js';
 import { CheckStateRepository } from '../persistence/check-state-repository.js';
 import { DiscountThresholdRepository } from '../persistence/discount-threshold-repository.js';
@@ -153,6 +154,12 @@ export async function startBot(
           return result.status === 'success';
         },
         lifecycleSignal: applicationAbortController.signal,
+        ...(environment.isThereAnyDealApiKey ? {
+          priceHistory: new IsThereAnyDealClient({
+            apiKey: environment.isThereAnyDealApiKey,
+            lifecycleSignal: applicationAbortController.signal,
+          }),
+        } : {}),
       },
     );
     const testNotificationService = new TestNotificationService(notificationSender);

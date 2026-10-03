@@ -17,6 +17,7 @@ Notification retry scheduler -> durable notification queue -> Discord DM
 - `src/domain`: sale, account-generation, and duplicate-notification rules
 - `src/persistence`: SQLite schema and repositories
 - `src/application`: checks, both schedulers, delivery, assistant rules, lifecycle, health, and locking
+- `src/price-history`: Steam historical lows from the IsThereAnyDeal API
 - `src/operations`: encrypted backup envelope and the independent health-ping logic
 - `scripts`: backup, restore, monitoring, metrics report, release gate, and public-site build (Node scripts run outside the bot process)
 
@@ -60,6 +61,8 @@ Migration v10 adds configuration-scoped game rules (inherit, percent, target), c
 Wishlist snapshots support fast panel opening. Steam is queried in batches of 100 apps: game names, free flags, and artwork come from `IStoreBrowseService/GetItems` (cached six hours per country/language), and prices with their currency come from `appdetails?filters=price_overview` (cached five minutes per country). A 500-game wishlist therefore needs about ten Steam requests instead of one per game. Concurrent scans of overlapping wishlists share in-flight batches, and the original price-observation time survives cache hits. A failed batch marks only its own games as item errors, and failed or unpriced results are not cached as prices.
 
 Notification preferences support detection-time delivery, IANA-timezone quiet hours, and a daily digest. Pending candidates remain durable while delivery is deferred. The sender revalidates them through the coordinated check path before sending; an unavailable upstream can therefore delay queued delivery. Discord message IDs record accepted delivery, not whether a user read the message.
+
+When `ITAD_API_KEY` is set, delivery adds Steam's historical low for the user's Store region from IsThereAnyDeal (`/lookup/id/shop/61/v1`, then `/games/storelow/v2`). Only Steam app IDs and the Store country are sent, with the key in a header. Game IDs are cached in memory, lows for six hours. The line is presentation-only: it is added after a batch is claimed, never persisted or part of the batch identity, shown only when the currency matches Steam's (no conversion), and any failure omits it. Requests time out after five seconds and a failure pauses lookups for five minutes (or longer when rate limited), so an unavailable service cannot delay deliveries.
 
 Price observations are retained for 90 days; notification history displays 30 days. Cleanup preserves unresolved deliveries and the deduplication state of ongoing offers. Logging redacts credentials and interaction/webhook secrets. The dedicated seven-day journald policy is supplied as deployment configuration; it is not automatically activated by installing the application.
 

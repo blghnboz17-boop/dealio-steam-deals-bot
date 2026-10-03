@@ -13,6 +13,13 @@ const exampleNotification: Omit<SaleNotification, 'discordUserId' | 'createdAt'>
   finalPriceMinor: 10_500,
   discountPercent: 90,
   storeCountryCode: 'TR',
+  // Sample history so the test shows how a real alert presents price context.
+  historicalLow: {
+    currency: 'TRY',
+    amountMinor: 8_925,
+    discountPercent: 91,
+    recordedAt: '2025-06-26T17:00:00.000Z',
+  },
 };
 
 export class TestNotificationCooldownError extends Error {
