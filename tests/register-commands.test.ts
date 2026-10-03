@@ -1,4 +1,4 @@
-import { Routes } from 'discord.js';
+import { ApplicationIntegrationType, InteractionContextType, Routes } from 'discord.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { EnvironmentConfig } from '../src/config/environment.js';
 import {
@@ -62,6 +62,31 @@ describe('Discord command registration', () => {
       `Verified global commands: ${commandNames.join(', ')}`,
     ]);
     expect(log.mock.calls.flat().join(' ')).not.toContain(environment.discordToken);
+  });
+
+  it('offers every command to server and personal (user) installs in all contexts', async () => {
+    const put = vi.fn().mockResolvedValue(discordCommands);
+    const get = vi.fn().mockResolvedValue(discordCommands);
+
+    await registerGlobalCommands({ get, put } as never, environment.discordClientId, undefined, vi.fn());
+
+    const deployedBody = put.mock.calls[0]?.[1]?.body as Array<{
+      name: string;
+      integration_types?: number[];
+      contexts?: number[];
+    }>;
+    expect(deployedBody).toHaveLength(commandNames.length);
+    for (const command of deployedBody) {
+      expect(command.integration_types, command.name).toEqual([
+        ApplicationIntegrationType.GuildInstall,
+        ApplicationIntegrationType.UserInstall,
+      ]);
+      expect(command.contexts, command.name).toEqual([
+        InteractionContextType.Guild,
+        InteractionContextType.BotDM,
+        InteractionContextType.PrivateChannel,
+      ]);
+    }
   });
 
   it('fails startup verification when Discord GET omits a deployed command', async () => {
