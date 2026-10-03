@@ -19,6 +19,7 @@ export class SteamFixture {
   public active = 0;
   public peak = 0;
   public wishlistRequests = 0;
+  public metadataRequests = 0;
   public priceRequests = 0;
   public rateLimitsRemaining = 0;
   public constructor(public readonly games: number, private readonly sharedGames = true) {}
@@ -40,17 +41,22 @@ export class SteamFixture {
         return Response.json({ response: { items: Array.from({ length: this.games }, (_, n) =>
           ({ appid: offset + n + 1, priority: 1, date_added: 0 })) } }, { headers: { 'x-eresult': '1' } });
       }
+      if (url.pathname.includes('GetItems')) {
+        this.metadataRequests++;
+        const ids = (JSON.parse(url.searchParams.get('input_json')!) as { ids: Array<{ appid: number }> }).ids;
+        return Response.json({ response: { store_items: ids.map(({ appid }) =>
+          ({ id: appid, appid, success: 1, visible: true, name: `Fixture Game ${appid}` })) } });
+      }
       if (!url.pathname.endsWith('/appdetails')) throw new Error('Unexpected offline route');
       this.priceRequests++;
       if (this.mode === 'outage') return new Response('{}', { status: 503 });
-      const appId = Number(url.searchParams.get('appids'));
-      return Response.json({ [appId]: { success: true, data: {
-        steam_appid: appId, name: `Fixture Game ${appId}`, is_free: false,
-        ...(this.mode === 'unknown' ? {} : { price_overview: {
+      const appIds = url.searchParams.get('appids')!.split(',').map(Number);
+      return Response.json(Object.fromEntries(appIds.map(appId => [appId, { success: true,
+        data: this.mode === 'unknown' ? [] : { price_overview: {
           currency: 'USD', initial: 1000, final: this.mode === 'sale' ? 500 : 1000,
           discount_percent: this.mode === 'sale' ? 50 : 0,
-        } }),
-      } } });
+        } },
+      }])));
     } finally { this.active--; }
   };
 }

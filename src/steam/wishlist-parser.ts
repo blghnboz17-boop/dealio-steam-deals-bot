@@ -10,11 +10,16 @@ interface ParsedWishlistEntry {
   readonly dateAdded: number | null;
 }
 
-interface ParsedAppDetails {
+export interface ParsedStoreItem {
   readonly headerImageUrl?: string;
   readonly name: string;
-  readonly price: SalePrice | null;
+  readonly isFree: boolean;
 }
+
+/** A batched appdetails price entry; `null` means Steam listed the app without a price. */
+export type ParsedPriceEntry = SalePrice | null;
+
+const steamAssetBaseUrl = 'https://shared.akamai.steamstatic.com/store_item_assets/';
 
 type JsonObject = Record<string, unknown>;
 
@@ -85,65 +90,130 @@ export function parseWishlistResponse(value: unknown): ParsedWishlistEntry[] {
   });
 }
 
-export function parseAppDetailsResponse(value: unknown, appId: number): ParsedAppDetails {
+/**
+ * Parses one IStoreBrowseService/GetItems batch. Each requested app gets either its
+ * metadata or its own error, so one bad entry never hides the rest of the batch.
+ */
+export function parseStoreItemsResponse(
+  value: unknown,
+  appIds: readonly number[],
+): Map<number, ParsedStoreItem | SteamWishlistError> {
+  if (!isObject(value) || !isObject(value.response)) {
+    schemaError('Steam GetItems response must contain an object response field');
+  }
+
+  const storeItems = value.response.store_items ?? [];
+  if (!Array.isArray(storeItems)) {
+    schemaError('Steam GetItems store_items must be an array');
+  }
+
+  const byAppId = new Map<number, JsonObject>();
+  for (const item of storeItems) {
+    if (isObject(item) && typeof item.id === 'number') {
+      byAppId.set(item.id, item);
+    }
+  }
+
+  return new Map(appIds.map((appId) => [appId, settle(() => parseStoreItem(byAppId.get(appId), appId))]));
+}
+
+function parseStoreItem(item: JsonObject | undefined, appId: number): ParsedStoreItem {
+  if (item === undefined) {
+    schemaError(`Steam GetItems response is missing app ${appId}`);
+  }
+
+  if (item.success !== 1) {
+    throw new SteamWishlistError('STEAM_APP_NOT_FOUND', `Steam GetItems did not find app ${appId}`);
+  }
+
+  if (typeof item.name !== 'string' || item.name.trim() === '') {
+    schemaError(`Steam GetItems name for app ${appId} must be a non-empty string`);
+  }
+
+  if (item.is_free !== undefined && typeof item.is_free !== 'boolean') {
+    schemaError(`Steam GetItems is_free for app ${appId} must be a boolean`);
+  }
+
+  const headerImageUrl = storeItemArtworkUrl(item.assets, appId);
+  return {
+    name: item.name,
+    isFree: item.is_free === true,
+    ...(headerImageUrl ? { headerImageUrl } : {}),
+  };
+}
+
+function storeItemArtworkUrl(assets: unknown, appId: number): string | undefined {
+  if (
+    !isObject(assets)
+    || typeof assets.asset_url_format !== 'string'
+    || typeof assets.header !== 'string'
+  ) {
+    return undefined;
+  }
+
+  const path = assets.asset_url_format.replace('${FILENAME}', assets.header);
+  return steamArtworkUrl(`${steamAssetBaseUrl}${path}`, appId);
+}
+
+/**
+ * Parses one batched `appdetails?filters=price_overview` response. Steam returns an
+ * empty `data` array for apps without a price (unreleased, free, or not for sale).
+ */
+export function parsePriceOverviewResponse(
+  value: unknown,
+  appIds: readonly number[],
+): Map<number, ParsedPriceEntry | SteamWishlistError> {
   if (!isObject(value)) {
     schemaError('Steam appdetails response must be an object');
   }
 
-  const appDetails = value[String(appId)];
-  if (!isObject(appDetails) || typeof appDetails.success !== 'boolean') {
+  return new Map(appIds.map((appId) => [appId, settle(() => parsePriceEntry(value[String(appId)], appId))]));
+}
+
+function parsePriceEntry(entry: unknown, appId: number): ParsedPriceEntry {
+  if (!isObject(entry) || typeof entry.success !== 'boolean') {
     schemaError(`Steam appdetails response is missing app ${appId}`);
   }
 
-  if (!appDetails.success) {
+  if (!entry.success) {
     throw new SteamWishlistError(
       'STEAM_APP_NOT_FOUND',
       `Steam appdetails did not find app ${appId}`,
     );
   }
 
-  if (!isObject(appDetails.data)) {
+  if (Array.isArray(entry.data)) {
+    return null;
+  }
+
+  if (!isObject(entry.data)) {
     schemaError(`Steam appdetails data for app ${appId} must be an object`);
   }
 
-  const data = appDetails.data;
-  if (integerField(data.steam_appid, 'data.steam_appid', { min: 1 }) !== appId) {
-    schemaError(`Steam appdetails app ID does not match requested app ${appId}`);
+  const priceOverview = entry.data.price_overview;
+  if (priceOverview === undefined || priceOverview === null) {
+    return null;
   }
 
-  if (typeof data.name !== 'string' || data.name.trim() === '') {
-    schemaError(`Steam appdetails name for app ${appId} must be a non-empty string`);
-  }
-
-  if (data.is_free !== undefined && typeof data.is_free !== 'boolean') {
-    schemaError(`Steam appdetails is_free for app ${appId} must be a boolean`);
-  }
-
-  const headerImageUrl = steamArtworkUrl(data.header_image, appId);
-  const artwork = headerImageUrl ? { headerImageUrl } : {};
-
-  if (data.is_free === true) {
-    return {
-      name: data.name, ...artwork,
-      price: {
-        currency: null,
-        initialMinor: 0,
-        finalMinor: 0,
-        discountPercent: 0,
-        isFree: true,
-      },
-    };
-  }
-
-  if (data.price_overview === undefined || data.price_overview === null) {
-    return { name: data.name, ...artwork, price: null };
-  }
-
-  if (!isObject(data.price_overview)) {
+  if (!isObject(priceOverview)) {
     schemaError(`Steam price_overview for app ${appId} must be an object`);
   }
 
-  const priceOverview = data.price_overview;
+  return parsePriceOverview(priceOverview, appId);
+}
+
+function settle<T>(parse: () => T): T | SteamWishlistError {
+  try {
+    return parse();
+  } catch (error: unknown) {
+    if (error instanceof SteamWishlistError) {
+      return error;
+    }
+    throw error;
+  }
+}
+
+function parsePriceOverview(priceOverview: JsonObject, appId: number): SalePrice {
   if (
     typeof priceOverview.currency !== 'string' ||
     !/^[a-z]{3}$/i.test(priceOverview.currency)
@@ -175,13 +245,10 @@ export function parseAppDetailsResponse(value: unknown, appId: number): ParsedAp
   }
 
   return {
-    name: data.name, ...artwork,
-    price: {
-      currency: priceOverview.currency.toUpperCase(),
-      initialMinor,
-      finalMinor,
-      discountPercent,
-      isFree: false,
-    },
+    currency: priceOverview.currency.toUpperCase(),
+    initialMinor,
+    finalMinor,
+    discountPercent,
+    isFree: false,
   };
 }
