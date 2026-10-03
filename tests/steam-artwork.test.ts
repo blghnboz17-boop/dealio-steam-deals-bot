@@ -25,7 +25,7 @@ it.each(['tr', 'en'] as const)('renders actual artwork for unpriced games in eve
     const config = new UserConfigRepository(db).upsert('u', '76561198000000000', language, 'TR', '2026-09-30T00:00:00Z');
     const item = { appId, name: 'Black Flag', headerImageUrl: artwork, price: null, onSale: null, priority: null, dateAdded: null };
     const data = { config, items: [item], capturedAt: '2026-09-30T00:00:00Z', rules: new Map(),
-      preference: new WishlistStateRepository(db).assistant.preference('u'), history: [], prices: [] };
+      preference: new WishlistStateRepository(db).assistant.preference('u'), history: [] };
     for (const screen of ['wishlist', 'detail'] as const) {
       const panel = buildAssistantView(data, { screen, page: 0, query: '', eligibleOnly: false, selectedAppId: appId }, 'session');
       const json = JSON.stringify(panel.toJSON());

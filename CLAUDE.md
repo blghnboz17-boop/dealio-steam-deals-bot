@@ -26,7 +26,7 @@ Dealio is in **limited beta** on a single Azure VM. Implemented:
 - Per-game rules: inherit the global discount threshold, a game-specific percentage, or a currency-bound target price; muting is independent.
 - Notify only when a game changes from not-on-sale to on-sale, or crosses a rule threshold. Saving a rule or finishing setup records a baseline and never sends an initial alert for an existing discount.
 - Notification timing: on detection, IANA-timezone quiet hours, or a daily digest. Pending offers are revalidated before delivery.
-- Sale alerts show Steam's historical low for the user's Store region from the IsThereAnyDeal API (optional `ITAD_API_KEY`; same currency only, never converted; after a regional currency switch such as Turkey's, the low since that switch; failures omit the line and never delay or block delivery).
+- Sale alerts and the `/wishlist` game detail show Steam's historical low (the detail also lists recent price changes) for the user's Store region from the IsThereAnyDeal API (optional `ITAD_API_KEY`; same currency only, never converted; after a regional currency switch such as Turkey's, the low since that switch; failures omit the line and never delay or block delivery).
 - Persistent deduplication per sale episode; delivery history, DM access test, and `/delete-data`.
 - Price observations kept 90 days, notification history shown for 30 days; shared five-minute price cache.
 - Operations: encrypted off-site backup and restore rehearsal (GitHub Actions), independent Healthchecks alerts, a static public site (privacy, terms, help) on GitHub Pages, release gate (`npm run release:check`), and anonymous latency metrics (`npm run metrics:report`).

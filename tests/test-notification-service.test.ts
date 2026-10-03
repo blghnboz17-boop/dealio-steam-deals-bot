@@ -33,7 +33,7 @@ describe('TestNotificationService', () => {
       expect(sender.plan).toHaveBeenCalledWith(
         [expect.objectContaining({
           discordUserId: 'invoking-user', appId: 620, saleEpisodeId: 'test-notification',
-          gameName: 'Portal 2', discountPercent: 90, currency: 'TRY',
+          gameName: 'Portal 2', discountPercent: 80, currency: 'USD',
         })],
         'en',
         { test: true },

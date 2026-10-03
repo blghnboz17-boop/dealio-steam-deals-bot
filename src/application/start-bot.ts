@@ -143,6 +143,12 @@ export async function startBot(
       initialWishlistSummaryService,
       userOperationCoordinator,
     );
+    const priceHistory = environment.isThereAnyDealApiKey
+      ? new IsThereAnyDealClient({
+        apiKey: environment.isThereAnyDealApiKey,
+        lifecycleSignal: applicationAbortController.signal,
+      })
+      : undefined;
     const notificationService = new NotificationService(
       userConfigRepository,
       wishlistStateRepository,
@@ -154,17 +160,12 @@ export async function startBot(
           return result.status === 'success';
         },
         lifecycleSignal: applicationAbortController.signal,
-        ...(environment.isThereAnyDealApiKey ? {
-          priceHistory: new IsThereAnyDealClient({
-            apiKey: environment.isThereAnyDealApiKey,
-            lifecycleSignal: applicationAbortController.signal,
-          }),
-        } : {}),
+        ...(priceHistory ? { priceHistory } : {}),
       },
     );
     const testNotificationService = new TestNotificationService(notificationSender);
     const assistantService = new AssistantService(wishlistStateRepository.assistant,userConfigRepository,userOperationCoordinator,
-      config=>testNotificationService.send(config.discordUserId,config.language,config.storeCountryCode));
+      config=>testNotificationService.send(config.discordUserId,config.language,config.storeCountryCode),priceHistory);
     const wishlistViewService = new WishlistViewService(
       userConfigRepository,
       steamClient,

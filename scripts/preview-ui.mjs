@@ -40,7 +40,8 @@ for (const language of ['tr', 'en']) {
   const wishlist = (value) => buildWishlistV2Page(value, language, 0, 'preview').components.map(c => c.toJSON());
   const assistantData={config,items,capturedAt:date,rules:new Map([[620,{mode:'target',targetMinor:299,currency:'USD',percent:null,muted:false,revision:1}]]),
     preference:{mode:'quiet',timezone:'Europe/Istanbul',quietStart:1380,quietEnd:480,digestMinute:null},
-    prices:[{final_minor:999,initial_minor:1999,observed_at:'2026-08-15T12:00:00Z'},{final_minor:199,initial_minor:1999,observed_at:date}],
+    priceHistory:{status:'ready',history:{low:{currency:'USD',amountMinor:99,discountPercent:90,recordedAt:'2025-06-26T17:00:00Z',since:'2024-02-11T00:59:31Z'},
+      recent:[{currency:'USD',amountMinor:199,discountPercent:80,recordedAt:date},{currency:'USD',amountMinor:999,discountPercent:0,recordedAt:'2026-08-15T12:00:00Z'}]}},
     history:[{game_name:'Portal 2',app_id:620,status:'sent',reason:'target:299:USD',created_at:date,delivered_at:date,discord_message_id:'123'},
       {game_name:'Cyberpunk 2077',app_id:1091500,status:'candidate',reason:'discount',created_at:date,delivered_at:null,discord_message_id:null}]};
   const personal=screen=>[buildAssistantView(assistantData,{screen,page:0,query:'',eligibleOnly:false,selectedAppId:620},'preview').toJSON()];

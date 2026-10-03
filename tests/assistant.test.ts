@@ -99,11 +99,48 @@ describe('personal assistant durable rules',()=>{
    const items=[10,20,30].map(appId=>({...f.item(600),appId,name:'A long game title '.repeat(8)}));
    for(const screen of ['wishlist','detail','history','rhythm'] as const){
     const panel=buildAssistantView({config:{...f.config,language},items,capturedAt:f.clock().toISOString(),rules:new Map(),
-     preference:{mode:'instant',timezone:null,quietStart:null,quietEnd:null,digestMinute:null},prices:[],history:[]},
+     preference:{mode:'instant',timezone:null,quietStart:null,quietEnd:null,digestMinute:null},history:[]},
      {screen,page:0,query:'',eligibleOnly:false,selectedAppId:10},'123');
     expect(panel.toJSON().type).toBe(17);
    }
   }finally{f.db.close();}
+ });
+});
+
+describe('game detail price history',()=>{
+ const render=(priceHistory:Parameters<typeof buildAssistantView>[0]['priceHistory'],language:'tr'|'en'='tr')=>{
+  const f=fixture();try{
+   return JSON.stringify(buildAssistantView({config:{...f.config,language},items:[f.item(115)],capturedAt:f.clock().toISOString(),rules:new Map(),
+    preference:{mode:'instant',timezone:null,quietStart:null,quietEnd:null,digestMinute:null},history:[],
+    ...(priceHistory?{priceHistory}:{})},{screen:'detail',page:0,query:'',eligibleOnly:false,selectedAppId:10},'123').toJSON()).replace(/ /g,' ');
+  }finally{f.db.close();}
+ };
+ const history={low:{currency:'USD',amountMinor:57,discountPercent:90,recordedAt:'2024-11-21T18:00:00.000Z',since:'2024-02-11T00:59:31.000Z'},
+  recent:[{currency:'USD',amountMinor:115,discountPercent:80,recordedAt:'2026-10-01T18:26:44.000Z'},
+   {currency:'USD',amountMinor:579,discountPercent:0,recordedAt:'2026-07-09T17:17:12.000Z'}]};
+
+ it('replaces Dealio observations with Steam price history from IsThereAnyDeal',()=>{
+  const text=render({status:'ready',history});
+  expect(text).toContain('Steam fiyat geçmişi');
+  expect(text).toContain('Şubat 2024 sonrası en düşük: **USD 0,57** (%90 · Kasım 2024)');
+  expect(text).toContain(`<t:${Date.parse('2026-10-01T18:26:44.000Z')/1000}:d> · **USD 1,15** · %80`);
+  expect(text).toContain(`<t:${Date.parse('2026-07-09T17:17:12.000Z')/1000}:d> · **USD 5,79**"`);
+  expect(text).toContain('[IsThereAnyDeal](https://isthereanydeal.com/)');
+  expect(text).not.toMatch(/gözlem|observation/i);
+ });
+
+ it.each([
+  [{status:'loading'} as const,'Fiyat geçmişi yükleniyor…'],
+  [{status:'ready',history:null} as const,'Fiyat geçmişi şu anda alınamadı.'],
+  [{status:'ready',history:{low:null,recent:[]}} as const,'Bu bölge için Steam fiyat geçmişi bulunamadı.'],
+ ])('explains a %j price history state',(state,expected)=>{
+  expect(render(state)).toContain(expected);
+ });
+
+ it('omits the section when price history is not configured',()=>{
+  const text=render(undefined,'en');
+  expect(text).not.toContain('Steam price history');
+  expect(text).not.toMatch(/observation/i);
  });
 });
 

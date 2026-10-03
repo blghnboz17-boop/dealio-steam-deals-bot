@@ -18,7 +18,7 @@ import type {
   InitialWishlistSummary,
 } from '../application/initial-wishlist-summary-service.js';
 import type { NotificationSendOptions, SaleNotification } from '../application/notification-service.js';
-import { historicalLowStanding } from '../domain/price-history.js';
+import { historicalLowLine, priceHistoryCredit } from './price-history-text.js';
 import { storeCountryLabel } from '../domain/store-country.js';
 import type { Language } from '../domain/user-config.js';
 import { formatMinorPrice, sanitizeGameName } from './notification-messages.js';
@@ -83,10 +83,7 @@ export function buildSaleNotificationPanel(
     );
   }
   if (notifications.some((notification) => historicalLowLines(notification, language).length > 0)) {
-    // IsThereAnyDeal asks API users to credit the service.
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(
-      `-# ${language === 'tr' ? 'Fiyat geçmişi' : 'Price history'}: [IsThereAnyDeal](https://isthereanydeal.com/)`,
-    ));
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(priceHistoryCredit(language)));
   }
   container
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
@@ -108,32 +105,9 @@ export function buildSaleNotificationPanel(
 }
 
 function historicalLowLines(notification: SaleNotification, language: Language): string[] {
-  const low = notification.historicalLow;
-  const standing = low && historicalLowStanding(notification.finalPriceMinor, notification.currency, low);
-  if (!low || !standing) {
-    return [];
-  }
-  const monthYear = (value: string) => new Intl.DateTimeFormat(language === 'tr' ? 'tr-TR' : 'en-US', {
-    month: 'long', year: 'numeric', timeZone: 'UTC',
-  }).format(new Date(value));
-  // A low limited to the current currency's period must not be called "all-time".
-  // "sonrası" avoids a Turkish suffix that would depend on how the year is read.
-  const since = low.since ? monthYear(low.since) : null;
-  if (standing === 'new-low') {
-    return [language === 'tr'
-      ? since ? `🏆 **${since} sonrasının en düşük fiyatı!**` : '🏆 **Tüm zamanların en düşük fiyatı!**'
-      : since ? `🏆 **Lowest price since ${since}!**` : '🏆 **Lowest price ever!**'];
-  }
-  if (standing === 'matches-low') {
-    return [language === 'tr'
-      ? since ? `🏆 **${since} sonrasının en düşük fiyatına eşit**` : '🏆 **Tarihî en düşük fiyata eşit**'
-      : since ? `🏆 **Matches the lowest price since ${since}**` : '🏆 **Matches the all-time low**'];
-  }
-  const price = formatMinorPrice(low.amountMinor, low.currency, language);
-  const details = `${language === 'tr' ? `%${low.discountPercent}` : `${low.discountPercent}% off`} · ${monthYear(low.recordedAt)}`;
-  return [language === 'tr'
-    ? `📉 ${since ? `${since} sonrası en düşük` : 'Tarihî en düşük'}: **${price}** (${details})`
-    : `📉 ${since ? `Lowest since ${since}` : 'All-time low'}: **${price}** (${details})`];
+  const line = notification.historicalLow
+    && historicalLowLine(notification.finalPriceMinor, notification.currency, notification.historicalLow, language);
+  return line ? [line] : [];
 }
 
 export interface InitialWishlistV2Page {
