@@ -1,9 +1,9 @@
 
-import { ChatInputCommandInteraction, LabelBuilder, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle,
+import { ChatInputCommandInteraction, LabelBuilder, MessageFlags, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle,
   type MessageComponentInteraction } from 'discord.js';
 import type { AssistantService } from '../../application/assistant-service.js';
 import type { WishlistViewService } from '../../application/wishlist-view-service.js';
-import { buildAssistantView, type AssistantView, type AssistantViewData, type GameHistoryState, filteredAssistantItems } from '../assistant-view.js';
+import { buildAssistantView, effectiveTimezone, type AssistantView, type AssistantViewData, type GameHistoryState, filteredAssistantItems } from '../assistant-view.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { buildNoticePanel, dealioV2Flags, dealioEphemeralV2Flags, dealioUiSessionTimeoutMs } from '../ui/components-v2.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
@@ -20,9 +20,10 @@ export function parseTargetMinor(raw:string):number|null {
   const result=Number(whole)*100+Number(fraction.padEnd(2,'0'));
   return Number.isSafeInteger(result)?result:null;
 }
-function parseClock(value:string):number {
-  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) throw new Error('HH:MM');
-  const [h,m]=value.split(':').map(Number); return h*60+m;
+const nightStart=23*60, nightEnd=8*60, eveningDigest=19*60;
+/** The stored fields a timing change keeps, so switching modes does not forget earlier hours. */
+function savedPreference(p:NotificationPreference):NotificationPreference {
+  return {mode:p.mode,timezone:p.timezone,quietStart:p.quietStart,quietEnd:p.quietEnd,digestMinute:p.digestMinute};
 }
 
 export async function handleAssistant(interaction:ChatInputCommandInteraction, service:AssistantService,
@@ -33,6 +34,11 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
   if(!ui.inPlace) await measureDiscordOperation(interaction,'assistant.ack',()=>interaction.deferReply({flags:MessageFlags.Ephemeral}));
   const user=interaction.user.id, config=service.config(user), language=config?.language??languageFromDiscordLocale(interaction.locale);
   const tr=language==='tr';
+  const chooseTimezoneFirst=tr?'Önce aşağıdan saat dilimini seç.':'Choose your time zone below first.';
+  const timingSaved=tr?'Bildirim zamanın kaydedildi.':'Alert timing saved.';
+  const hourField=(id:string,label:string,selectedMinute:number)=>new LabelBuilder().setLabel(label)
+    .setStringSelectMenuComponent(new StringSelectMenuBuilder().setCustomId(id).setRequired(true).setMinValues(1).setMaxValues(1)
+      .addOptions(Array.from({length:24},(_,hour)=>({label:String(hour).padStart(2,'0')+':00',value:String(hour*60),default:hour*60===selectedMinute}))));
   const cooldownNotice=(seconds:number)=>tr?`Yeniden yenilemek için ${seconds} saniye bekle. Bu sınır tüm panellerinde ortaktır.`
     :`Wait ${seconds} seconds before refreshing again. This limit is shared across all your panels.`;
   if(!config) {
@@ -90,7 +96,8 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
     await interaction.followUp({flags:dealioEphemeralV2Flags,components:[buildNoticePanel(language,'warning',
       tr?'İşlem tamamlanamadı':'Could not complete',
       error instanceof Error && error.message==='Invalid amount' ? (tr?'Tutarı 19,99 gibi, en fazla iki ondalık basamakla gir.':'Enter an amount such as 19.99 with at most two decimals.')
-      : error instanceof Error && (error.message.includes('timezone') || error.message==='HH:MM') ? (tr?'Europe/Istanbul gibi bir IANA saat dilimi ve 23:00-08:00 veya 19:00 biçiminde saat gir.':'Use an IANA timezone such as Europe/London and a time such as 23:00-08:00 or 19:00.')
+      : error instanceof Error && error.message==='Invalid quiet hours' ? (tr?'Başlangıç ve bitiş saati farklı olmalı.':'Start and end must be different hours.')
+      : error instanceof Error && error.message.includes('timezone') ? chooseTimezoneFirst
       : error instanceof Error && error.message==='Invalid percent' ? (tr?'İndirim oranı 0–100 arasında tam sayı olmalı.':'Discount must be a whole number from 0 to 100.')
       : tr?'Bilgileri kontrol et. Hesap veya bölge değiştiyse /dealio ile paneli yeniden aç.':'Check the input. If account or region changed, reopen /dealio.')]});
   });
@@ -133,18 +140,23 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
     if(['search','target','percent','quiet','digest'].includes(action)){
       const selected=items.find(i=>i.appId===view.selectedAppId);
       if((action==='target'||action==='percent')&&!selected){void acknowledge().catch(()=>undefined);return;}
+      const zone=effectiveTimezone(data());
+      if((action==='quiet'||action==='digest')&&!zone){
+        void operations.enqueue(acknowledge(),async()=>{view.notice=chooseTimezoneFirst;await render();});return;
+      }
       const id='assistant-modal:'+interaction.id+':'+(++sequence);
       const modal=new ModalBuilder().setCustomId(id).setTitle(action==='search'?(tr?'Wishlistinde ara':'Search your wishlist'):
         action==='target'?(tr?'Hedef fiyatını seç':'Choose your target price'):action==='percent'?(tr?'Minimum indirim':'Minimum discount'):
-        action==='quiet'?(tr?'Sessiz saatlerini seç':'Choose quiet hours'):(tr?'Günlük özet saati':'Daily digest time'));
+        action==='quiet'?(tr?'Rahatsız etme saatleri':'Do-not-disturb hours'):(tr?'Günlük özet saati':'Daily digest time'));
       const field=(id:string,label:string,placeholder:string,value?:string)=>new LabelBuilder().setLabel(label)
         .setTextInputComponent(new TextInputBuilder().setCustomId(id).setStyle(TextInputStyle.Short).setRequired(true)
           .setMaxLength(100).setPlaceholder(placeholder).setValue(value??''));
       if(action==='quiet'||action==='digest'){
         const p=service.repository.preference(user);
-        modal.addLabelComponents(field('timezone',tr?'IANA saat dilimi':'IANA timezone','Europe/Istanbul',p.timezone??undefined));
-        modal.addLabelComponents(field('time',action==='quiet'?(tr?'Başlangıç - bitiş':'Start - end'):(tr?'Özet saati':'Digest time'),
-          action==='quiet'?'23:00-08:00':'19:00'));
+        if(action==='quiet') modal.addLabelComponents(
+          hourField('start',tr?'Bildirimler şu saatte dursun':'Pause alerts from',p.quietStart??nightStart),
+          hourField('end',tr?'Şu saatte yeniden başlasın':'Resume alerts at',p.quietEnd??nightEnd));
+        else modal.addLabelComponents(hourField('time',tr?'Özet şu saatte gelsin':'Send the digest at',p.digestMinute??eveningDigest));
       } else modal.addLabelComponents(field('value',action==='target'?(tr?'Hedef fiyat · ':'Target price · ')+(selected?.price?.currency??''):
         action==='percent'?(tr?'Yüzde (0–100)':'Percent (0–100)'):(tr?'Oyun adı (temizlemek için *)':'Game name (* to clear)'),
         action==='target'?'19.99':action==='percent'?'50':tr?'Oyun adı':'Game name'));
@@ -158,14 +170,12 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
         await operations.enqueue(ack,async()=>{
           if(action==='search'){view.query=submit.fields.getTextInputValue('value').trim();if(view.query==='*')view.query='';view.page=0;}
           else if(action==='quiet'||action==='digest'){
-            const timezone=submit.fields.getTextInputValue('timezone').trim(),raw=submit.fields.getTextInputValue('time').trim();
-            let p:NotificationPreference;
-            if(action==='quiet'){
-              const [start,end]=raw.split('-');
-              p={mode:'quiet',timezone,quietStart:parseClock(start),quietEnd:parseClock(end??''),digestMinute:null};
-            }else p={mode:'digest',timezone,quietStart:null,quietEnd:null,digestMinute:parseClock(raw)};
-            await service.preference(user,config.configurationId,p,config.configVersion);
-            view.screen='rhythm';view.notice=tr?'Bildirim ritmin kaydedildi.':'Alert timing saved.';
+            const hour=(id:string)=>Number(submit.fields.getStringSelectValues(id)[0]);
+            const p=savedPreference(service.repository.preference(user));
+            await service.preference(user,config.configurationId,action==='quiet'
+              ?{...p,mode:'quiet',timezone:zone,quietStart:hour('start'),quietEnd:hour('end')}
+              :{...p,mode:'digest',timezone:zone,digestMinute:hour('time')},config.configVersion);
+            view.screen='rhythm';view.notice=timingSaved;
           }else if(selected){
             const raw=submit.fields.getTextInputValue('value').trim();
             const existing=service.repository.rule(config,selected.appId);
@@ -204,7 +214,21 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
         view.screen=action as AssistantView['screen'];view.page=0;
         if(action==='wishlist'&&!loaded){if(loadTask)await render();else await startLoad(false);return;}
       }
-      else if(action==='instant')await service.preference(user,config.configurationId,{mode:'instant',timezone:null,quietStart:null,quietEnd:null,digestMinute:null},config.configVersion);
+      else if(action==='instant'||action==='quiet-night'||action==='digest-evening'){
+        const zone=effectiveTimezone(data()), p=savedPreference(service.repository.preference(user));
+        if(action!=='instant'&&!zone)view.notice=chooseTimezoneFirst;
+        else{
+          await service.preference(user,config.configurationId,action==='instant'?{...p,mode:'instant',timezone:zone}
+            :action==='quiet-night'?{...p,mode:'quiet',timezone:zone,quietStart:nightStart,quietEnd:nightEnd}
+            :{...p,mode:'digest',timezone:zone,digestMinute:eveningDigest},config.configVersion);
+          view.notice=timingSaved;
+        }
+      }
+      else if(action==='timezone'&&component.isStringSelectMenu()){
+        const p=savedPreference(service.repository.preference(user));
+        await service.preference(user,config.configurationId,{...p,timezone:component.values[0]??p.timezone},config.configVersion);
+        view.notice=tr?'Saat dilimin kaydedildi.':'Time zone saved.';
+      }
       else if((action==='inherit'||action==='mute')&&view.selectedAppId){
         const existing=service.repository.rule(config,view.selectedAppId)??{mode:'inherit',percent:null,targetMinor:null,currency:null,muted:false,revision:0};
         const rule=action==='mute'?{...existing,muted:!existing.muted}:{mode:'inherit' as const,percent:null,targetMinor:null,currency:null,muted:existing.muted};
