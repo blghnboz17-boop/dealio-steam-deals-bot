@@ -9,8 +9,11 @@ import {
   type StoreCountryCode,
 } from '../domain/store-country.js';
 import {
-  parseAppDetailsResponse,
+  parsePriceOverviewResponse,
+  parseStoreItemsResponse,
   parseWishlistResponse,
+  type ParsedPriceEntry,
+  type ParsedStoreItem,
 } from './wishlist-parser.js';
 import {
   globalSteamRequestLimiter,
@@ -32,11 +35,18 @@ export interface SteamClientOptions {
   readonly maxRetryDelayMs?: number;
   readonly lifecycleSignal?: AbortSignal;
   readonly cacheTtlMs?: number;
+  readonly metadataCacheTtlMs?: number;
   readonly now?: () => number;
 }
 
+/** Apps per batched Steam request; appdetails rejects 200 IDs, GetItems URLs fail near 300. */
+export const steamBatchSize = 100;
+
 const wishlistEndpoint = 'https://api.steampowered.com/IWishlistService/GetWishlist/v1/';
 const appDetailsEndpoint = 'https://store.steampowered.com/api/appdetails';
+const storeItemsEndpoint = 'https://api.steampowered.com/IStoreBrowseService/GetItems/v1/';
+const defaultMetadataCacheTtlMs = 6 * 60 * 60 * 1000;
+const maxCacheEntries = 20_000;
 const defaultTimeoutMs = 10_000;
 const defaultMaxConcurrency = 3;
 const defaultMaxRetries = 2;
@@ -100,33 +110,56 @@ function errorForStatus(response: Response): SteamWishlistError {
 async function runWithConcurrency<T>(
   values: readonly T[],
   maxConcurrency: number,
-  worker: (value: T) => Promise<WishlistItem | null>,
-): Promise<Array<WishlistItem | null>> {
-  const results: Array<WishlistItem | null> = new Array(values.length).fill(null);
+  worker: (value: T) => Promise<void>,
+): Promise<void> {
   let nextIndex = 0;
 
   async function consume(): Promise<void> {
-    while (true) {
+    while (nextIndex < values.length) {
       const index = nextIndex;
       nextIndex += 1;
-
-      if (index >= values.length) {
-        return;
-      }
-
-      results[index] = await worker(values[index]);
+      await worker(values[index]);
     }
   }
 
   const workerCount = Math.min(values.length, maxConcurrency);
   await Promise.all(Array.from({ length: workerCount }, () => consume()));
+}
 
-  return results;
+/** A per-app outcome: a value with its observation time, or that app's own Steam error. */
+type Lookup<V> =
+  | { readonly value: V; readonly observedAt: string }
+  | { readonly error: SteamWishlistError };
+
+interface BatchCache<V> {
+  readonly entries: Map<string, { readonly lookup: Lookup<V>; readonly expiresAt: number }>;
+  readonly inflight: Map<string, Promise<Lookup<V>>>;
+}
+
+interface BatchSource<V> {
+  readonly cache: BatchCache<V>;
+  readonly ttlMs: number;
+  readonly key: (appId: number) => string;
+  readonly fetch: (appIds: readonly number[]) => Promise<Map<number, V | SteamWishlistError>>;
+  readonly cacheable: (value: V) => boolean;
+}
+
+function createBatchCache<V>(): BatchCache<V> {
+  return { entries: new Map(), inflight: new Map() };
+}
+
+function chunk<T>(values: readonly T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
 }
 
 export class SteamClient {
-  private readonly cache = new Map<string, {value: ReturnType<typeof parseAppDetailsResponse>; observedAt: string; expiresAt:number}>();
-  private readonly inflight = new Map<string, Promise<{value: ReturnType<typeof parseAppDetailsResponse>; observedAt:string}>>();
+  private readonly priceCache = createBatchCache<ParsedPriceEntry>();
+  private readonly metadataCache = createBatchCache<ParsedStoreItem>();
+  private readonly metadataCacheTtlMs: number;
   private readonly cacheTtlMs: number;
   private readonly now: () => number;
   private readonly fetchImpl: SteamFetch;
@@ -140,6 +173,7 @@ export class SteamClient {
 
   public constructor(options: SteamClientOptions = {}) {
     this.cacheTtlMs = options.cacheTtlMs ?? 300_000;
+    this.metadataCacheTtlMs = options.metadataCacheTtlMs ?? defaultMetadataCacheTtlMs;
     this.now = options.now ?? Date.now;
     this.fetchImpl = options.fetchImpl ?? defaultFetch;
     this.timeoutMs = options.timeoutMs ?? defaultTimeoutMs;
@@ -150,7 +184,9 @@ export class SteamClient {
     this.maxRetryDelayMs = options.maxRetryDelayMs ?? defaultMaxRetryDelayMs;
     this.lifecycleSignal = options.lifecycleSignal;
 
-    if (!Number.isSafeInteger(this.cacheTtlMs) || this.cacheTtlMs < 0) throw new Error('Steam cache TTL must be a non-negative integer');
+    for (const ttl of [this.cacheTtlMs, this.metadataCacheTtlMs]) {
+      if (!Number.isSafeInteger(ttl) || ttl < 0) throw new Error('Steam cache TTL must be a non-negative integer');
+    }
     if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs <= 0) {
       throw new Error('Steam timeout must be a positive safe integer');
     }
@@ -205,75 +241,182 @@ export class SteamClient {
       );
     }
     const wishlistEntries = await this.getWishlistEntries(steamId64);
+    const appIds = [...new Set(wishlistEntries.map((entry) => entry.appId))];
+    const [metadata, prices] = await Promise.all([
+      this.loadBatched(appIds, this.metadataSource(storeCountryCode, language)),
+      this.loadBatched(appIds, this.priceSource(storeCountryCode)),
+    ]);
+
+    const items: WishlistItem[] = [];
     const errors: SteamWishlistResult['errors'] = [];
+    for (const entry of wishlistEntries) {
+      const details = metadata.get(entry.appId)!;
+      const priced = prices.get(entry.appId)!;
+      if ('error' in details || 'error' in priced) {
+        const error = 'error' in details ? details.error : (priced as { error: SteamWishlistError }).error;
+        errors.push({ appId: entry.appId, code: error.code });
+        continue;
+      }
 
-    const results = await runWithConcurrency(
-      wishlistEntries,
-      this.maxConcurrency,
-      async (entry): Promise<WishlistItem | null> => {
-        try {
-          const appDetailsUrl = new URL(appDetailsEndpoint);
-          appDetailsUrl.searchParams.set('appids', String(entry.appId));
-          appDetailsUrl.searchParams.set('cc', storeCountryCode);
-          appDetailsUrl.searchParams.set('l', language === 'tr' ? 'turkish' : 'english');
+      // A listed price wins over a possibly stale cached free flag.
+      const price = priced.value ?? (details.value.isFree ? freePrice : null);
+      items.push({
+        appId: entry.appId,
+        priceObservedAt: priced.observedAt,
+        name: details.value.name,
+        ...(details.value.headerImageUrl ? { headerImageUrl: details.value.headerImageUrl } : {}),
+        priority: entry.priority,
+        dateAdded: entry.dateAdded,
+        price,
+        onSale: price === null ? null : !price.isFree && price.discountPercent > 0,
+      });
+    }
 
-          const cached = await this.appDetails(appDetailsUrl.toString(), entry.appId);
-          const appDetails = cached.value;
+    return { items, errors };
+  }
 
-          return {
-            appId: entry.appId,
-            priceObservedAt: cached.observedAt,
-            name: appDetails.name,
-            ...(appDetails.headerImageUrl ? { headerImageUrl: appDetails.headerImageUrl } : {}),
-            priority: entry.priority,
-            dateAdded: entry.dateAdded,
-            price: appDetails.price,
-            onSale:
-              appDetails.price === null
-                ? null
-                : !appDetails.price.isFree && appDetails.price.discountPercent > 0,
-          };
-        } catch (error: unknown) {
-          if (error instanceof SteamWishlistError) {
-            if (error.code === 'STEAM_CANCELLED') {
-              throw error;
-            }
-            errors.push({ appId: entry.appId, code: error.code });
-            return null;
-          }
+  public clearPriceCache(): void { this.priceCache.entries.clear(); }
 
-          throw error;
-        }
-      },
-    );
-
+  private priceSource(storeCountryCode: StoreCountryCode): BatchSource<ParsedPriceEntry> {
     return {
-      items: results.filter((item): item is WishlistItem => item !== null),
-      errors,
+      cache: this.priceCache,
+      ttlMs: this.cacheTtlMs,
+      key: (appId) => `${storeCountryCode}:${appId}`,
+      // Unpriced/unavailable products are not reusable successful prices.
+      cacheable: (price) => price !== null,
+      fetch: async (appIds) => parsePriceOverviewResponse(
+        await this.requestJson(
+          `${appDetailsEndpoint}?appids=${appIds.join(',')}&cc=${storeCountryCode}&filters=price_overview`,
+        ),
+        appIds,
+      ),
     };
   }
 
+  private metadataSource(
+    storeCountryCode: StoreCountryCode,
+    language: Language,
+  ): BatchSource<ParsedStoreItem> {
+    return {
+      cache: this.metadataCache,
+      ttlMs: this.metadataCacheTtlMs,
+      key: (appId) => `${storeCountryCode}:${language}:${appId}`,
+      cacheable: () => true,
+      fetch: async (appIds) => {
+        const input = JSON.stringify({
+          ids: appIds.map((appid) => ({ appid })),
+          context: {
+            language: language === 'tr' ? 'turkish' : 'english',
+            country_code: storeCountryCode,
+            steam_realm: 1,
+          },
+          data_request: { include_assets: true },
+        });
+        return parseStoreItemsResponse(
+          await this.requestJson(`${storeItemsEndpoint}?input_json=${encodeURIComponent(input)}`),
+          appIds,
+        );
+      },
+    };
+  }
 
-  public clearPriceCache(): void { this.cache.clear(); }
+  /**
+   * Resolves every app from cache, from a request another caller already started, or
+   * from new batched requests. Requests are registered before they run, so concurrent
+   * scans of overlapping wishlists share them instead of asking Steam twice.
+   */
+  private async loadBatched<V>(
+    appIds: readonly number[],
+    source: BatchSource<V>,
+  ): Promise<Map<number, Lookup<V>>> {
+    if (this.lifecycleSignal?.aborted) {
+      throw cancelledError();
+    }
 
-  private async appDetails(key: string, appId: number): Promise<{value: ReturnType<typeof parseAppDetailsResponse>; observedAt:string}> {
-    if (this.lifecycleSignal?.aborted) throw cancelledError();
-    const cached = this.cache.get(key);
-    if (cached && cached.expiresAt > this.now()) return cached;
-    const running = this.inflight.get(key);
-    if (running) return running;
-    const request = (async () => {
-      const value = parseAppDetailsResponse(await this.requestJson(key), appId);
-      const observedAt = new Date(this.now()).toISOString();
-      // Unpriced/unavailable products are not reusable successful prices.
-      if (value.price !== null && value.price.currency !== null) {
-        if (this.cache.size >= 10000) this.cache.delete(this.cache.keys().next().value!);
-        this.cache.set(key, {value,observedAt,expiresAt:this.now()+this.cacheTtlMs});
+    const results = new Map<number, Lookup<V>>();
+    const waiting: Array<readonly [number, Promise<Lookup<V>>]> = [];
+    const missing: number[] = [];
+    const nowMs = this.now();
+    for (const appId of appIds) {
+      const key = source.key(appId);
+      const cached = source.cache.entries.get(key);
+      const running = source.cache.inflight.get(key);
+      if (cached && cached.expiresAt > nowMs) {
+        results.set(appId, cached.lookup);
+      } else if (running) {
+        waiting.push([appId, running]);
+      } else {
+        missing.push(appId);
       }
-      return {value,observedAt};
-    })();
-    this.inflight.set(key,request);
-    try { return await request; } finally { this.inflight.delete(key); }
+    }
+
+    const batches = chunk(missing, steamBatchSize).map((batchAppIds) => {
+      let start!: () => void;
+      const request = new Promise<void>((resolve) => { start = resolve; })
+        .then(() => this.fetchLookups(batchAppIds, source));
+      for (const appId of batchAppIds) {
+        const key = source.key(appId);
+        const lookup = request.then((lookups) => lookups.get(appId)!);
+        source.cache.inflight.set(key, lookup);
+        waiting.push([appId, lookup]);
+        const release = (): void => {
+          if (source.cache.inflight.get(key) === lookup) {
+            source.cache.inflight.delete(key);
+          }
+        };
+        void lookup.then(release, release);
+      }
+      return { start, request };
+    });
+
+    // Every batch must start, even after a failure, or callers sharing it would wait forever.
+    await runWithConcurrency(batches, this.maxConcurrency, async (batch) => {
+      batch.start();
+      await batch.request.catch(() => undefined);
+    });
+
+    for (const [appId, lookup] of waiting) {
+      results.set(appId, await lookup);
+    }
+    return results;
+  }
+
+  private async fetchLookups<V>(
+    appIds: readonly number[],
+    source: BatchSource<V>,
+  ): Promise<Map<number, Lookup<V>>> {
+    let parsed: Map<number, V | SteamWishlistError>;
+    try {
+      parsed = await source.fetch(appIds);
+    } catch (error: unknown) {
+      if (!(error instanceof SteamWishlistError) || error.code === 'STEAM_CANCELLED') {
+        throw error;
+      }
+      return new Map(appIds.map((appId) => [appId, { error }]));
+    }
+
+    const observedAt = new Date(this.now()).toISOString();
+    const expiresAt = this.now() + source.ttlMs;
+    const lookups = new Map<number, Lookup<V>>();
+    for (const appId of appIds) {
+      const value = parsed.get(appId)!;
+      if (value instanceof SteamWishlistError) {
+        lookups.set(appId, { error: value });
+        continue;
+      }
+
+      const lookup = { value, observedAt };
+      lookups.set(appId, lookup);
+      if (source.cacheable(value)) {
+        const key = source.key(appId);
+        source.cache.entries.delete(key);
+        if (source.cache.entries.size >= maxCacheEntries) {
+          source.cache.entries.delete(source.cache.entries.keys().next().value!);
+        }
+        source.cache.entries.set(key, { lookup, expiresAt });
+      }
+    }
+    return lookups;
   }
 
   private async getWishlistEntries(
@@ -445,6 +588,14 @@ export class SteamClient {
     }
   }
 }
+
+const freePrice = {
+  currency: null,
+  initialMinor: 0,
+  finalMinor: 0,
+  discountPercent: 0,
+  isFree: true,
+} as const;
 
 function cancelledError(): SteamWishlistError {
   return new SteamWishlistError('STEAM_CANCELLED', 'Steam request cancelled');

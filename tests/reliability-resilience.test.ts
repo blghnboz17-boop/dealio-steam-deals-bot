@@ -7,13 +7,15 @@ import { fileURLToPath } from 'node:url';
 
 afterEach(() => vi.restoreAllMocks());
 
-it('bounds Steam concurrency for 50 distinct 500-game wishlists without relying on cache overlap', async () => {
+it('batches 50 distinct 500-game wishlists into 100-app Steam requests without relying on cache overlap', async () => {
   const transport = new SteamFixture(500, false);
   const client = new SteamClient({ fetchImpl: transport.fetch, requestLimiter: new SteamRequestLimiter(3) });
   const results = await Promise.all(Array.from({ length: 50 }, (_, n) =>
     client.getWishlistWithErrors(String(76561198000000000n + BigInt(n)), 'US', 'en')));
   expect(results.every(result => result.items.length === 500 && result.errors.length === 0)).toBe(true);
-  expect(transport.priceRequests).toBe(25_000);
+  // One request per 100 games instead of one per game (previously 25,000 price requests).
+  expect(transport.priceRequests).toBe(250);
+  expect(transport.metadataRequests).toBe(250);
   expect(transport.peak).toBeLessThanOrEqual(3);
   expect(new Set(results.flatMap(result => result.items.map(item => item.appId))).size).toBe(25_000);
 }, 20_000);
@@ -215,12 +217,14 @@ it('pauses all users behind Steam 429 and recovers without exceeding the shared 
   const scans = Array.from({ length: 20 }, (_, n) => client.getWishlistWithErrors(String(76561198000000000n + BigInt(n)), 'US', 'en'));
   try {
     await vi.waitFor(() => expect(sleep).toHaveBeenCalledWith(1_000, undefined));
-    const requestsBefore = transport.wishlistRequests + transport.priceRequests;
+    const requestsBefore = transport.wishlistRequests + transport.metadataRequests + transport.priceRequests;
     await new Promise<void>(resolve => setImmediate(resolve));
-    expect(transport.wishlistRequests + transport.priceRequests).toBe(requestsBefore);
+    expect(transport.wishlistRequests + transport.metadataRequests + transport.priceRequests).toBe(requestsBefore);
   } finally { gate.resolve(); }
   const results = await Promise.all(scans);
   expect(results.every(result => result.items.length === 20 && result.errors.length === 0)).toBe(true);
   expect(transport.peak).toBeLessThanOrEqual(3);
-  expect(transport.priceRequests).toBe(20);
+  // Twenty users share one in-flight batch for the same twenty games.
+  expect(transport.priceRequests).toBe(1);
+  expect(transport.metadataRequests).toBe(1);
 });

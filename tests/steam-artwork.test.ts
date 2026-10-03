@@ -1,5 +1,6 @@
-import { expect, it, vi } from 'vitest';
-import { parseAppDetailsResponse } from '../src/steam/wishlist-parser.js';
+import { expect, it } from 'vitest';
+import { parseStoreItemsResponse } from '../src/steam/wishlist-parser.js';
+import { routeSteam, storeItem, storeItemsResponse, wishlistResponse } from './helpers/steam-fakes.js';
 import { SteamClient } from '../src/steam/steam-client.js';
 import { buildWishlistV2Page } from '../src/discord/wishlist-view.js';
 import { createDatabase } from '../src/persistence/database.js';
@@ -10,9 +11,13 @@ import { buildHomePanel } from '../src/discord/home-view.js';
 
 const appId = 3751950;
 const artwork = `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/9b046115b1663a4be2b252712328e4f6c162da68/header.jpg?t=1787915122`;
-const response = (extra: object = {}) => ({ [appId]: { success: true, data: {
-  steam_appid: appId, name: 'Black Flag', header_image: artwork, ...extra,
-} } });
+const assets = {
+  asset_url_format: `steam/apps/${appId}/\${FILENAME}?t=1787915122`,
+  header: '9b046115b1663a4be2b252712328e4f6c162da68/header.jpg',
+};
+const item = (extra: object = {}) => storeItem(appId, { name: 'Black Flag', assets, ...extra });
+const parse = (extra: object = {}) =>
+  parseStoreItemsResponse({ response: { store_items: [item(extra)] } }, [appId]).get(appId);
 
 it.each(['tr', 'en'] as const)('renders actual artwork for unpriced games in every assistant screen (%s)', language => {
   const db = createDatabase(':memory:');
@@ -34,16 +39,12 @@ it.each(['tr', 'en'] as const)('renders actual artwork for unpriced games in eve
   } finally { db.close(); }
 });
 
-it.each([{}, { is_free: true }, { price_overview: {
-  currency: 'USD', initial: 4799, final: 4319, discount_percent: 10,
-} }])('keeps Steam artwork independently of price availability: %j', extra => {
-  expect(parseAppDetailsResponse(response(extra), appId)).toMatchObject({ headerImageUrl: artwork });
+it.each([{}, { is_free: true }, { is_free: false }])('builds Steam artwork from GetItems assets independently of price: %j', extra => {
+  expect(parse(extra)).toMatchObject({ headerImageUrl: artwork });
 });
 
 it('carries unpriced artwork through Steam loading, persisted snapshots and the wishlist', async () => {
-  const fetchImpl = vi.fn()
-    .mockResolvedValueOnce(new Response(JSON.stringify({ response: { items: [{ appid: appId }] } }), { headers: { 'X-EResult': '1' } }))
-    .mockResolvedValueOnce(new Response(JSON.stringify(response())));
+  const fetchImpl = routeSteam({ wishlist: () => wishlistResponse([appId]), items: () => storeItemsResponse([item()]) });
   const result = await new SteamClient({ fetchImpl }).getWishlistWithErrors('76561198000000000', 'TR', 'en');
   expect(result.items[0]).toMatchObject({ price: null, onSale: null, headerImageUrl: artwork });
   const db = createDatabase(':memory:');
@@ -68,11 +69,14 @@ it('renders old snapshots without inventing a broken image URL', () => {
   expect(json).toContain(`https://store.steampowered.com/app/${appId}/`);
 });
 
-it.each(['https://evil.example/header.jpg', 'https://shared.akamai.steamstatic.com.evil.example/header.jpg',
-  'http://shared.akamai.steamstatic.com/steam/apps/3751950/header.jpg',
-  'https://shared.akamai.steamstatic.com/steam/apps/10/header.jpg', 'not-a-url'])
-('ignores invalid artwork without rejecting valid game metadata: %s', header_image => {
-  const parsed = parseAppDetailsResponse(response({ header_image }), appId);
-  expect(parsed).toMatchObject({ name: 'Black Flag', price: null });
+it.each([
+  { asset_url_format: 'steam/apps/10/${FILENAME}', header: 'header.jpg' },
+  { asset_url_format: `steam/apps/${appId}/\${FILENAME}`, header: 'header.exe' },
+  { asset_url_format: `../../evil/${appId}/\${FILENAME}`, header: 'header.jpg' },
+  { asset_url_format: `steam/apps/${appId}/\${FILENAME}` },
+  'not-an-object',
+])('ignores invalid artwork without rejecting valid game metadata: %j', invalid => {
+  const parsed = parse({ assets: invalid });
+  expect(parsed).toMatchObject({ name: 'Black Flag', isFree: false });
   expect(parsed).not.toHaveProperty('headerImageUrl');
 });

@@ -4,6 +4,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { reliabilityFixture } from '../tests/helpers/reliability-fixture.js';
+import { steamBatchSize } from '../src/steam/steam-client.js';
 
 // This is a controlled local profile, never a live Steam/Discord load generator.
 const userCount = 50;
@@ -46,10 +47,10 @@ async function scan(phase: string, candidatesPerUser: number) {
 
 try {
   await scan('baseline', 0);
-  assert.equal(f.steamTransport.priceRequests, gamesPerUser);
+  assert.equal(f.steamTransport.priceRequests, Math.ceil(gamesPerUser / steamBatchSize));
   f.steamTransport.mode = 'sale'; f.advance(301_000);
   await scan('sale', gamesPerUser);
-  assert.equal(f.steamTransport.priceRequests, gamesPerUser * 2);
+  assert.equal(f.steamTransport.priceRequests, Math.ceil(gamesPerUser / steamBatchSize) * 2);
   f.restart();
   assert.deepEqual(f.counts().map(row => ({ ...row })), [{ status: 'candidate', count: userCount * gamesPerUser }]);
   const deliveryStarted = performance.now();
@@ -82,7 +83,7 @@ try {
     phases, totalMs: Math.round(performance.now() - started),
     sampledPeakRssMiB: Math.round(Math.max(...observedRss) / 1048576),
     eventLoopDelayP99Ms: Math.round(loop.percentile(99) / 1e6), eventLoopDelayMaxMs: Math.round(loop.max / 1e6),
-    steam: { peakConcurrency: f.steamTransport.peak, wishlistRequests: f.steamTransport.wishlistRequests, priceRequests: f.steamTransport.priceRequests },
+    steam: { peakConcurrency: f.steamTransport.peak, wishlistRequests: f.steamTransport.wishlistRequests, metadataRequests: f.steamTransport.metadataRequests, priceRequests: f.steamTransport.priceRequests },
     notifications: { candidates: userCount * gamesPerUser, sent: userCount * gamesPerUser, messages: deliveredMessages, lost: 0, duplicateMessages: 0 },
     caveats: ['Synthetic shared catalog; not a live API or VM SLA.', 'Memory is sampled process RSS, not whole-host usage.', 'Long ambiguous delivery can duplicate after Discord nonce expiry; see resilience tests.'],
   };
