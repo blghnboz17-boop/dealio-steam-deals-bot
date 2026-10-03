@@ -47,7 +47,7 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
     : '⏸️ ' + t({ tr: 'Takip duraklatıldı', en: 'Tracking paused', de: 'Überwachung pausiert', fr: 'Suivi en pause' });
   root.addTextDisplayComponents(display(
     panelHeader('home', language,
-      t({ tr: 'İstek listen, senin kuralların.', en: 'Your wishlist. Your rules.', de: 'Deine Wunschliste. Deine Regeln.', fr: 'Ta liste. Tes règles.' }),
+      t({ tr: 'Senin istek listen, senin kuralların!', en: 'Your wishlist. Your rules.', de: 'Deine Wunschliste. Deine Regeln.', fr: 'Ta liste. Tes règles.' }),
       t({
         tr: 'İstediğin oyunu, istediğin fiyata yakala.',
         en: 'Get the games you want at the price you choose.',

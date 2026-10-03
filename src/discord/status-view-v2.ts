@@ -140,7 +140,7 @@ function buildSettingsPanel(
       config.enabled
         ? button('disable', t({ tr: 'Bildirimleri durdur', en: 'Pause alerts', de: 'Pausieren', fr: 'Mettre en pause' }), '🔕')
         : button('enable', t({ tr: 'Bildirimleri aç', en: 'Resume alerts', de: 'Wieder einschalten', fr: 'Réactiver' }), '🔔', ButtonStyle.Success),
-      button('minimum-discount', t({ tr: 'En az indirim', en: 'Minimum discount', de: 'Mindestrabatt', fr: 'Réduction minimale' }), '🏷️'),
+      button('minimum-discount', t({ tr: 'İndirim yüzdesini belirle', en: 'Set discount %', de: 'Rabatt-% festlegen', fr: 'Fixer le % de réduction' }), '🏷️'),
       button('test', t({ tr: 'Test DM', en: 'Test DM', de: 'Test-DM', fr: 'MP de test' }), '✉️'),
     ),
     new ActionRowBuilder<ButtonBuilder>().addComponents(

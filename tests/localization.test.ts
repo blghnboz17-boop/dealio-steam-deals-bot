@@ -146,3 +146,14 @@ describe('localization', () => {
     }
   });
 });
+
+describe('owner-requested Turkish wording', () => {
+  it('keeps the long alerts title on one line with a smaller heading, and other titles large', () => {
+    const [home, , , , , rhythm] = everyScreen('tr');
+    expect(rhythm).toContain('### Sen bildirimlere değil, bildirimler sana uysun');
+    expect(rhythm).toContain('Şu an: **🌙 Rahatsız etme saatleri');
+    expect(rhythm).toContain('"label":"Anında"');
+    expect(home).toContain('\\n# Senin istek listen, senin kuralların!');
+    expect(everyScreen('tr')[1]).toContain('"label":"İndirim yüzdesini belirle"');
+  });
+});

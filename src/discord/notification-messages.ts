@@ -1,14 +1,4 @@
-import { artworkEmbed } from './ui/game-artwork.js';
-import type { APIEmbed } from 'discord.js';
-import type {
-  NotificationSendOptions,
-  SaleNotification,
-} from '../application/notification-service.js';
 import { languageLocale, type Language } from '../domain/user-config.js';
-import { storeCountryLabel } from '../domain/store-country.js';
-import { localizer, percentText } from './i18n.js';
-import { messagesFor } from './messages.js';
-import { dealioBrand } from './ui/brand.js';
 
 const maxGameNameLength = 256;
 
@@ -49,67 +39,4 @@ export function formatMinorPrice(
   const symbol = narrow.formatToParts(0).find((part) => part.type === 'currency')?.value ?? '';
   const owner = sharedNarrowSymbols.get(symbol);
   return (owner === undefined || owner === currency ? narrow : format('symbol')).format(minorValue / 100);
-}
-
-export function buildSaleNotificationEmbed(
-  notification: SaleNotification,
-  language: Language,
-  options: NotificationSendOptions = {},
-): APIEmbed {
-  const messages = messagesFor(language);
-  const normalPrice = formatMinorPrice(
-    notification.normalPriceMinor,
-    notification.currency,
-    language,
-  );
-  const finalPrice = formatMinorPrice(
-    notification.finalPriceMinor,
-    notification.currency,
-    language,
-  );
-  const storeUrl = `https://store.steampowered.com/app/${notification.appId}/`;
-  const gameName = sanitizeGameName(notification.gameName);
-
-  return {
-    color: dealioBrand.colors.primary,
-    author: options.test
-      ? { name: messages.testNotificationTitle }
-      : { name: 'Dealio · ' + localizer(language)({
-          tr: 'Steam indirim bildirimi', en: 'Steam sale alert', de: 'Steam-Angebotsalarm', fr: 'Alerte promo Steam',
-        }) },
-    title: gameName,
-    url: storeUrl,
-    description: options.test
-      ? messages.testNotificationDescription
-      : messages.saleNotificationDescription,
-    fields: [
-      {
-        name: messages.discountLabel,
-        value: percentText(notification.discountPercent, language),
-        inline: true,
-      },
-      { name: messages.normalPriceLabel, value: `~~${normalPrice}~~`, inline: true },
-      { name: messages.salePriceLabel, value: `**${finalPrice}**`, inline: true },
-      { name: '\u200b', value: `[${messages.openSteamStore}](${storeUrl})` },
-    ],
-    ...artworkEmbed(notification),
-    footer: {
-      text: `${messages.notificationFooter} · ${storeCountryLabel(
-        notification.storeCountryCode,
-        language,
-      )}`,
-    },
-    timestamp: notification.createdAt,
-  };
-}
-
-export function embedTextLength(embed: APIEmbed): number {
-  return (embed.title?.length ?? 0)
-    + (embed.description?.length ?? 0)
-    + (embed.author?.name.length ?? 0)
-    + (embed.footer?.text.length ?? 0)
-    + (embed.fields ?? []).reduce(
-      (total, field) => total + field.name.length + field.value.length,
-      0,
-    );
 }

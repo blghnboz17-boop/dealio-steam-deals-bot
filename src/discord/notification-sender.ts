@@ -4,7 +4,6 @@ import {
   Events,
   MessageFlags,
   Routes,
-  type APIEmbed,
   type Client,
   type Interaction,
 } from 'discord.js';
@@ -21,10 +20,6 @@ import {
   type NotificationSender,
   type SaleNotification,
 } from '../application/notification-service.js';
-import {
-  buildSaleNotificationEmbed,
-  embedTextLength,
-} from './notification-messages.js';
 import {
   parseInitialSummaryPageAction,
   type InitialSummaryPresentationOptions,
@@ -44,8 +39,11 @@ import { dealioUiSessions } from './ui/session-manager.js';
 import { PanelOperationQueue } from './ui/operation-queue.js';
 import { measureDiscordOperation } from './interaction-timing.js';
 
-const maximumEmbedsPerMessage = 5;
-const maximumEmbedTextPerMessage = 6_000;
+/**
+ * Games in one sale DM. Discord fits ten game sections in one panel (and the
+ * durable batch holds ten), so a big sale arrives as one message, not a stream.
+ */
+export const maximumGamesPerMessage = 10;
 const initialSummarySessionLifetimeMs = 15 * 60 * 1_000;
 
 interface InitialSummaryPaginationSession {
@@ -122,10 +120,14 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
     options: NotificationSendOptions = {},
   ): readonly NotificationBatch<T>[] {
     const sorted = [...notifications].sort(compareNotifications);
-    return partitionNotificationBatches(
-      sorted,
-      (notification) => buildSaleNotificationEmbed(notification, language, options),
-    );
+    return partitionNotificationBatches(sorted, (batch) => {
+      try {
+        buildSaleNotificationPanel(batch, language, options);
+        return true;
+      } catch (_error: unknown) {
+        return false;
+      }
+    });
   }
 
   public async send(
@@ -372,37 +374,31 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
   }
 }
 
+/**
+ * Fills each DM with as many games as one Dealio panel holds, in order. A new
+ * message starts only when the next game would not fit within Discord's limits.
+ */
 export function partitionNotificationBatches<T>(
   notifications: readonly T[],
-  renderEmbed: (notification: T) => APIEmbed,
+  fitsOnePanel: (batch: readonly T[]) => boolean,
 ): readonly NotificationBatch<T>[] {
   const batches: NotificationBatch<T>[] = [];
   let current: T[] = [];
-  let currentTextLength = 0;
-
   for (const notification of notifications) {
-    const textLength = embedTextLength(renderEmbed(notification));
-    if (textLength > maximumEmbedTextPerMessage) {
-      throw new Error('A notification embed exceeds Discord limits');
+    if (!fitsOnePanel([notification])) {
+      throw new Error('A notification exceeds Discord limits');
     }
-
-    if (
-      current.length === maximumEmbedsPerMessage
-      || (current.length > 0 && currentTextLength + textLength > maximumEmbedTextPerMessage)
-    ) {
+    const next = [...current, notification];
+    if (current.length > 0 && (next.length > maximumGamesPerMessage || !fitsOnePanel(next))) {
       batches.push({ notifications: current as [T, ...T[]] });
-      current = [];
-      currentTextLength = 0;
+      current = [notification];
+    } else {
+      current = next;
     }
-
-    current.push(notification);
-    currentTextLength += textLength;
   }
-
   if (current.length > 0) {
     batches.push({ notifications: current as [T, ...T[]] });
   }
-
   return batches;
 }
 

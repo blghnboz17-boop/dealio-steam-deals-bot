@@ -35,7 +35,14 @@ export function panelKicker(tab: DealioTab, language: Language): string {
 
 /** The tab's kicker, a large title and an optional one-line subtitle. */
 export function panelHeader(tab: DealioTab, language: Language, title: string, subtitle?: string): string {
-  return `${panelKicker(tab, language)}\n# ${title}${subtitle ? `\n${subtitle}` : ''}`;
+  return `${panelKicker(tab, language)}\n${titleHeading(title)} ${title}${subtitle ? `\n${subtitle}` : ''}`;
+}
+
+/** Past this length a large title wraps on a phone; a smaller heading keeps it on one line. */
+const oneLineTitleLength = 40;
+
+function titleHeading(title: string): string {
+  return title.length > oneLineTitleLength ? '###' : '#';
 }
 
 /** "Fiyatı Steam’den 5 dakika önce aldım": when a shown price was read, around a Discord relative time. */

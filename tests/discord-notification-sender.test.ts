@@ -301,7 +301,7 @@ describe('DiscordNotificationSender', () => {
     expect(walkComponents(body.components).filter((component) => component.type === 9)).toHaveLength(2);
   });
 
-  it('plans at most five games per modern notification panel with deterministic ordering', () => {
+  it('plans up to ten games per notification panel with deterministic ordering', () => {
     const sender = new DiscordNotificationSender({ rest: { post: vi.fn() } } as never);
     const notifications = Array.from({ length: 11 }, (_, index) => ({
       ...candidate,
@@ -312,7 +312,7 @@ describe('DiscordNotificationSender', () => {
 
     const batches = sender.plan(notifications, 'en');
 
-    expect(batches.map((planned) => planned.notifications.length)).toEqual([5, 5, 1]);
+    expect(batches.map((planned) => planned.notifications.length)).toEqual([10, 1]);
     expect(batches.flatMap((planned) => planned.notifications).map((item) => item.appId))
       .toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
     expect(notifications[0]?.appId).toBe(20);
@@ -331,22 +331,13 @@ describe('DiscordNotificationSender', () => {
       .toEqual(['episode-a', 'episode-b', 'episode-c']);
   });
 
-  it('splits batches deterministically at the 6000 embed-character limit', () => {
-    const exactlyAtLimit = partitionNotificationBatches(
-      [1, 2],
-      () => ({ description: 'x'.repeat(3_000) }),
-    );
-    const overLimit = partitionNotificationBatches(
-      [1, 2],
-      (value) => ({ description: 'x'.repeat(value === 1 ? 3_000 : 3_001) }),
-    );
-
-    expect(exactlyAtLimit.map((planned) => planned.notifications)).toEqual([[1, 2]]);
-    expect(overLimit.map((planned) => planned.notifications)).toEqual([[1], [2]]);
-    expect(() => partitionNotificationBatches(
-      [1],
-      () => ({ description: 'x'.repeat(6_001) }),
-    )).toThrow('exceeds Discord limits');
+  it('starts a new DM only when the next game would not fit one panel', () => {
+    const fitsTwo = (batch: readonly number[]) => batch.length <= 2;
+    expect(partitionNotificationBatches([1, 2, 3, 4, 5], fitsTwo).map((planned) => planned.notifications))
+      .toEqual([[1, 2], [3, 4], [5]]);
+    expect(partitionNotificationBatches(Array.from({ length: 12 }, (_, index) => index), () => true)
+      .map((planned) => planned.notifications.length)).toEqual([10, 2]);
+    expect(() => partitionNotificationBatches([1], () => false)).toThrow('exceeds Discord limits');
   });
 
   it('sends the initial setup summary as one banner plus one game with navigation', async () => {

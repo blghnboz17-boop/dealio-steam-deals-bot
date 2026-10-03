@@ -1,7 +1,6 @@
 import { buildSaleNotificationPanel } from '../src/discord/notification-components-v2.js';
 import { describe, expect, it } from 'vitest';
 import {
-  buildSaleNotificationEmbed,
   formatMinorPrice,
   sanitizeGameName,
 } from '../src/discord/notification-messages.js';
@@ -37,39 +36,13 @@ describe('notification messages', () => {
   });
 
   it('displays the Steam currency without conversion', () => {
-    const embed = buildSaleNotificationEmbed({ ...candidate, currency: 'EUR' }, 'en');
-    const serialized = JSON.stringify(embed);
+    const serialized = JSON.stringify(buildSaleNotificationPanel([{ ...candidate, currency: 'EUR' }], 'en').toJSON());
 
     expect(serialized).toContain('€');
     expect(serialized).not.toContain('₺');
     expect(serialized).toContain('123.45');
-  });
-
-  it('builds a Turkish sale embed with all sale details', () => {
-    const embed = buildSaleNotificationEmbed(candidate, 'tr');
-    const serialized = JSON.stringify(embed);
-
-    expect(embed.title).toBe('Test Game');
-    expect(embed.url).toBe('https://store.steampowered.com/app/10/');
-    expect(embed.image?.url).toContain('/steam/apps/10/header.jpg');
-    expect(serialized).toContain('%20');
-    expect(serialized).toContain('123,45');
-    expect(serialized).toContain('98,76');
-    expect(serialized).toContain('₺');
-    expect(serialized).toContain('İndirimli fiyat');
-  });
-
-  it('builds an English sale embed with all sale details', () => {
-    const embed = buildSaleNotificationEmbed(candidate, 'en');
-    const serialized = JSON.stringify(embed);
-
-    expect(embed.title).toBe('Test Game');
-    expect(serialized).toContain('20%');
-    expect(serialized).toContain('123.45');
     expect(serialized).toContain('98.76');
-    expect(serialized).toContain('₺');
     expect(serialized).toContain('https://store.steampowered.com/app/10/');
-    expect(serialized).toContain('Sale price');
   });
 
   it('clearly labels localized test notifications and says where the game came from', () => {

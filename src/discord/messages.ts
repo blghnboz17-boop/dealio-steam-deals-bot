@@ -72,15 +72,9 @@ interface MessageCatalog {
   readonly discountThresholdInvalid: string;
   readonly testNotificationFailed: string;
   readonly testNotificationCooldown: (retryAfterSeconds: number) => string;
-  readonly saleNotificationDescription: string;
-  readonly testNotificationTitle: string;
   readonly testNotificationDescription: string;
   readonly testNotificationExampleDescription: string;
-  readonly discountLabel: string;
-  readonly normalPriceLabel: string;
-  readonly salePriceLabel: string;
   readonly openSteamStore: string;
-  readonly notificationFooter: string;
   readonly regionSaved: (country: string) => string;
   readonly regionUnchanged: (country: string) => string;
   readonly wishlistFailedItems: (count: number) => string;
@@ -171,15 +165,9 @@ const catalog: Record<Language, MessageCatalog> = {
     testNotificationFailed: 'Deneme mesajını gönderemedim. Discord\'da geçici bir sorun olabilir ya da DM\'lerin kapalı olabilir. Gizlilik ayarlarına bir göz atıp yeniden dene.',
     testNotificationCooldown: (retryAfterSeconds) =>
       `Yeni bir deneme mesajı için ${retryAfterSeconds} saniye bekle.`,
-    saleNotificationDescription: 'İstek listendeki bir oyun indirime girdi.',
-    testNotificationTitle: 'Dealio deneme bildirimi',
     testNotificationDescription: 'Bu bir deneme: gerçek bildirimlerin tam olarak böyle görünecek. Oyun ve fiyat senin istek listenden.',
     testNotificationExampleDescription: 'Bu bir deneme: gerçek bildirimlerin böyle görünecek. İstek listende şu an indirim olmadığı için örnek bir oyun gösteriyorum.',
-    discountLabel: 'İndirim',
-    normalPriceLabel: 'Normal fiyat',
-    salePriceLabel: 'İndirimli fiyat',
     openSteamStore: 'Steam\'de aç',
-    notificationFooter: 'Dealio · İstek listesi bildirimi',
     regionSaved: (country) => `Mağaza bölgen artık ${country}. Bu bölgedeki ilk kontrolde yalnızca fiyatları not alacağım, DM atmayacağım.`,
     regionUnchanged: (country) => `Mağaza bölgen zaten ${country}.`,
     wishlistFailedItems: (count) => `${count} oyunun bilgilerini Steam'den alamadım.`,
@@ -268,15 +256,9 @@ const catalog: Record<Language, MessageCatalog> = {
     testNotificationFailed: 'I couldn’t send the test message. Discord may be having a moment, or your DMs may be closed. Check your privacy settings and try again.',
     testNotificationCooldown: (retryAfterSeconds) =>
       `Wait ${retryAfterSeconds} seconds before sending another test.`,
-    saleNotificationDescription: 'A game on your wishlist just went on sale.',
-    testNotificationTitle: 'Dealio test alert',
     testNotificationDescription: 'This is a test: your real alerts will look exactly like this. The game and price come from your wishlist.',
     testNotificationExampleDescription: 'This is a test: your real alerts will look like this. Nothing on your wishlist is on sale right now, so here’s an example game.',
-    discountLabel: 'Discount',
-    normalPriceLabel: 'Regular price',
-    salePriceLabel: 'Sale price',
     openSteamStore: 'Open on Steam',
-    notificationFooter: 'Dealio · Wishlist alert',
     regionSaved: (country) => `Your Store region is now ${country}. On the first check there I’ll just note prices, without DMs.`,
     regionUnchanged: (country) => `Your Store region is already ${country}.`,
     wishlistFailedItems: (count) => `Steam didn’t send details for ${count} ${count === 1 ? 'game' : 'games'}.`,
@@ -365,15 +347,9 @@ const catalog: Record<Language, MessageCatalog> = {
     testNotificationFailed: 'Die Testnachricht konnte ich nicht senden. Vielleicht hakt Discord gerade, oder deine DMs sind geschlossen. Prüf deine Privatsphäre-Einstellungen und versuch es noch mal.',
     testNotificationCooldown: (retryAfterSeconds) =>
       `Warte ${retryAfterSeconds} Sekunden bis zum nächsten Test.`,
-    saleNotificationDescription: 'Ein Spiel von deiner Wunschliste ist gerade im Angebot.',
-    testNotificationTitle: 'Dealio-Testbenachrichtigung',
     testNotificationDescription: 'Das ist ein Test: Deine echten Benachrichtigungen sehen genau so aus. Spiel und Preis stammen von deiner Wunschliste.',
     testNotificationExampleDescription: 'Das ist ein Test: So sehen deine echten Benachrichtigungen aus. Gerade ist nichts auf deiner Wunschliste im Angebot, deshalb siehst du ein Beispielspiel.',
-    discountLabel: 'Rabatt',
-    normalPriceLabel: 'Normalpreis',
-    salePriceLabel: 'Angebotspreis',
     openSteamStore: 'Auf Steam öffnen',
-    notificationFooter: 'Dealio · Wunschlisten-Benachrichtigung',
     regionSaved: (country) => `Deine Shop-Region ist jetzt ${country}. Bei der ersten Prüfung dort merke ich mir nur die Preise, ohne DMs.`,
     regionUnchanged: (country) => `Deine Shop-Region ist bereits ${country}.`,
     wishlistFailedItems: (count) => `Für ${count} ${count === 1 ? 'Spiel' : 'Spiele'} hat Steam keine Details geliefert.`,
@@ -462,15 +438,9 @@ const catalog: Record<Language, MessageCatalog> = {
     testNotificationFailed: 'Je n’ai pas pu envoyer le message de test. Discord a peut-être un souci passager, ou tes MP sont fermés. Vérifie tes paramètres de confidentialité et réessaie.',
     testNotificationCooldown: (retryAfterSeconds) =>
       `Attends ${retryAfterSeconds} secondes avant un nouveau test.`,
-    saleNotificationDescription: 'Un jeu de ta liste de souhaits vient de passer en promo.',
-    testNotificationTitle: 'Alerte de test Dealio',
     testNotificationDescription: 'Ceci est un test : tes vraies alertes ressembleront exactement à ça. Le jeu et le prix viennent de ta liste de souhaits.',
     testNotificationExampleDescription: 'Ceci est un test : tes vraies alertes ressembleront à ça. Rien n’est en promo sur ta liste en ce moment, alors voici un jeu d’exemple.',
-    discountLabel: 'Réduction',
-    normalPriceLabel: 'Prix normal',
-    salePriceLabel: 'Prix promo',
     openSteamStore: 'Ouvrir sur Steam',
-    notificationFooter: 'Dealio · Alerte liste de souhaits',
     regionSaved: (country) => `Ta région de boutique est maintenant ${country}. Au premier passage là-bas, je note juste les prix, sans MP.`,
     regionUnchanged: (country) => `Ta région de boutique est déjà ${country}.`,
     wishlistFailedItems: (count) => `Steam n’a pas envoyé les détails de ${count} ${count === 1 ? 'jeu' : 'jeux'}.`,

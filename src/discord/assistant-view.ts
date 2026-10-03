@@ -248,14 +248,14 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       button(prefix+'retry',t({tr:'DM erişimini dene',en:'Test DM access',de:'DM-Zugang testen',fr:'Tester les MP'}),'✉️')));
   }else{
     const p=data.preference, zone=effectiveTimezone(data);
-    const instant=t({tr:'Hemen',en:'Right away',de:'Sofort',fr:'Tout de suite'});
+    const instant=t({tr:'Anında',en:'Right away',de:'Sofort',fr:'Tout de suite'});
     const quiet=t({tr:'Rahatsız etme saatleri',en:'Do not disturb',de:'Nicht stören',fr:'Ne pas déranger'});
     const digest=t({tr:'Günlük özet',en:'Daily digest',de:'Tägliche Zusammenfassung',fr:'Résumé quotidien'});
     const colon=lang==='fr'?' :':':';
     const current=p.mode==='quiet'?`🌙 ${quiet} · ${clock(p.quietStart)}–${clock(p.quietEnd)}`
       :p.mode==='digest'?`📬 ${digest} · ${clock(p.digestMinute)}`
       :`⚡ ${instant}`;
-    add(panelHeader('alerts',lang,t({tr:'Bildirimler sana uysun',en:'Alerts on your terms',de:'Benachrichtigungen, wie du sie willst',fr:'Des alertes à ton rythme'}),
+    add(panelHeader('alerts',lang,t({tr:'Sen bildirimlere değil, bildirimler sana uysun',en:'Alerts on your terms',de:'Benachrichtigungen, wie du sie willst',fr:'Des alertes à ton rythme'}),
       t({tr:'Şu an: ',en:'Now: ',de:'Aktuell: ',fr:'Actuellement : '})+'**'+current+'**\n🌍 '+t({tr:'Saat dilimi: ',en:'Time zone: ',de:'Zeitzone: ',fr:'Fuseau horaire : '})+
       (zone?timezoneLabel(zone):t({tr:'seçilmedi, aşağıdan seç',en:'not set, choose below',de:'nicht gewählt, unten auswählen',fr:'non choisi, choisis-le ci-dessous'}))));
     notice();

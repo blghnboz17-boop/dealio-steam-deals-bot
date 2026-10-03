@@ -21,8 +21,3 @@ export function addArtwork(container: ContainerBuilder, game: GameArtwork): Cont
     .setURL(url).setDescription((game.name ?? game.gameName ?? 'Steam').slice(0, 100))));
   return container;
 }
-
-export function artworkEmbed(game: GameArtwork): { image?: { url: string } } {
-  const url = steamArtworkUrl(game.headerImageUrl, game.appId);
-  return url ? { image: { url } } : {};
-}

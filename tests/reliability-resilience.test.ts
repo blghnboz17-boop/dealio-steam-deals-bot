@@ -136,10 +136,10 @@ describe('offline service integration with a reopened SQLite file', () => {
       const results = await Promise.all(Array.from({ length: 20 }, () => f.services.notifications.deliverPending('fixture-user')));
       expect(results.reduce((sum, r) => sum + r.sentCount, 0)).toBe(17);
       expect(f.counts()).toEqual([{ status: 'sent', count: 17 }]);
-      expect(f.discordTransport.accepted).toHaveLength(4);
+      expect(f.discordTransport.accepted).toHaveLength(2); // 17 games: one full ten-game DM, then seven.
       f.restart();
       await f.services.notifications.deliverPending('fixture-user');
-      expect(f.discordTransport.accepted).toHaveLength(4);
+      expect(f.discordTransport.accepted).toHaveLength(2);
     } finally { f.close(); }
   });
 

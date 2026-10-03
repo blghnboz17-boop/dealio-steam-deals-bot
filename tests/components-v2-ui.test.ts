@@ -188,7 +188,7 @@ describe('Dealio Components V2 UI', () => {
     });
     expect(countComponentsV2([panel])).toBeLessThanOrEqual(40);
     const serialized = JSON.stringify(panel.toJSON());
-    expect(serialized).toContain(mode === 'home' ? 'İstek listen, senin kuralların.' : 'Hesabın ve tercihlerin');
+    expect(serialized).toContain(mode === 'home' ? 'Senin istek listen, senin kuralların!' : 'Hesabın ve tercihlerin');
     expect(serialized).toContain(mode === 'home' ? 'İlk kontrol birazdan' : 'Henüz kontrol yapılmadı');
     const rows = panel.toJSON().components.filter((component) => component.type === 1);
     // Home: check + refresh, then the four tabs.
@@ -207,9 +207,11 @@ describe('Dealio Components V2 UI', () => {
   it.each([
     [1, [1]],
     [5, [5]],
-    [6, [5, 1]],
-    [11, [5, 5, 1]],
-  ] as const)('partitions %i new sale alerts into five-game DMs', (count, expected) => {
+    [10, [10]],
+    [11, [10, 1]],
+    [20, [10, 10]],
+    [25, [10, 10, 5]],
+  ] as const)('puts %i new sale alerts into as few DMs as possible', (count, expected) => {
     const sender = new DiscordNotificationSender({ rest: { post: vi.fn() } } as never);
     expect(sender.plan(
       Array.from({ length: count }, (_, index) => notification(index)),

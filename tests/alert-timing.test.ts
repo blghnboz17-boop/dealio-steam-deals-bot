@@ -57,7 +57,7 @@ function render(country: StoreCountryCode, preference: NotificationPreference, l
 describe('alerts screen', () => {
   it('explains each choice and uses the Store region’s time zone', () => {
     const rendered = render('TR', instant);
-    expect(rendered).toContain('Şu an: **⚡ Hemen**');
+    expect(rendered).toContain('Şu an: **⚡ Anında**');
     expect(rendered).toContain('Saat dilimi: Istanbul (UTC+3)');
     expect(rendered).toContain('Bu saatlerde sessiz kalırım; saat bitince bekleyenleri gönderirim.');
     expect(rendered).toContain('Gece 23:00–08:00');
