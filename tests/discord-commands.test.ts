@@ -186,6 +186,8 @@ describe('Discord slash commands', () => {
         checkedCount: 2,
         notificationCandidates: [{ appId: 10 }],
         failedItems: [],
+        unavailableItems: [],
+        upcomingCount: 0,
         unknownPriceCount: 0,
       }),
     };
@@ -227,6 +229,8 @@ describe('Discord slash commands', () => {
         checkedCount: 1,
         notificationCandidates: [],
         failedItems: [],
+        unavailableItems: [],
+        upcomingCount: 0,
         unknownPriceCount: 0,
       }) } as never,
       statusService as never,

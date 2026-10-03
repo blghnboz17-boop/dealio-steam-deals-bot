@@ -317,6 +317,40 @@ describe('CheckService sale state', () => {
     services.database.close();
   });
 
+  it('treats unreleased, region-locked and removed games as facts, not as an incomplete check', async () => {
+    const upcoming: WishlistItem = { ...createItem(60, null), upcoming: { message: 'To be announced' } };
+    const steamClient = {
+      getWishlistWithErrors: vi.fn().mockResolvedValue({
+        items: [createItem(10, false), upcoming, createItem(40, null)],
+        errors: [
+          { appId: 70, code: 'STEAM_APP_REGION_UNAVAILABLE' as const },
+          { appId: 80, code: 'STEAM_APP_NOT_FOUND' as const },
+          { appId: 90, code: 'STEAM_SCHEMA_INVALID' as const },
+        ],
+      }),
+    };
+    const services = createServices(steamClient);
+
+    const result = await services.checkService.check('discord-user');
+    expect(result).toMatchObject({
+      status: 'success', upcomingCount: 1, unknownPriceCount: 1,
+      failedItems: [{ appId: 90 }], unavailableItems: [{ appId: 70 }, { appId: 80 }],
+    });
+    expect(services.checkStateRepository.findByDiscordUserId('discord-user')).toMatchObject({
+      lastStatus: 'success', lastSuccessUnknownPriceCount: 1, lastSuccessFailedItemCount: 1,
+    });
+  });
+
+  it('completes a check whose only items are unavailable in the region', async () => {
+    const steamClient = {
+      getWishlistWithErrors: vi.fn().mockResolvedValue({
+        items: [], errors: [{ appId: 70, code: 'STEAM_APP_REGION_UNAVAILABLE' as const }],
+      }),
+    };
+    const services = createServices(steamClient);
+    expect(await services.checkService.check('discord-user')).toMatchObject({ status: 'success', unavailableItems: [{ appId: 70 }] });
+  });
+
   it('persists successful wishlist metrics and preserves them after an unavailable check', async () => {
     const freeItem: WishlistItem = {
       ...createItem(30, false),
@@ -337,7 +371,7 @@ describe('CheckService sale state', () => {
             freeItem,
             createItem(40, null),
           ],
-          errors: [{ appId: 50, code: 'STEAM_APP_NOT_FOUND' as const }],
+          errors: [{ appId: 50, code: 'STEAM_SCHEMA_INVALID' as const }],
         })
         .mockRejectedValueOnce(new SteamWishlistError('STEAM_TIMEOUT', 'timed out'))
         .mockRejectedValueOnce(new TypeError('unexpected Steam defect')),

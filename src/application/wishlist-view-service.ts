@@ -2,6 +2,7 @@ import type { AssistantService } from './assistant-service.js';
 import type { AssistantRepository } from '../persistence/assistant-repository.js';
 import {
   SteamWishlistError,
+  isTransientItemError,
   type SteamWishlistErrorCode,
   type WishlistItem,
   type WishlistItemError,
@@ -126,11 +127,12 @@ export class WishlistViewService {
         config.storeCountryCode,
         config.language,
       ));
-      if (result.items.length === 0 && result.errors.length > 0) {
+      const failed = result.errors.filter(isTransientItemError);
+      if (result.items.length === 0 && failed.length > 0) {
         return {
           status: 'unavailable',
           language: config.language,
-          errorCode: result.errors[0]?.code ?? 'STEAM_UPSTREAM_ERROR',
+          errorCode: failed[0]?.code ?? 'STEAM_UPSTREAM_ERROR',
         };
       }
       if (!cached) this.assistant?.saveSnapshot(config, result, this.now().toISOString());
@@ -153,9 +155,10 @@ export class WishlistViewService {
     result: { readonly items: readonly WishlistItem[]; readonly errors: readonly WishlistItemError[] },
     capturedAt: string,
   ): WishlistViewResult {
-    if (result.items.length === 0 && result.errors.length > 0) {
+    const failed = result.errors.filter(isTransientItemError);
+    if (result.items.length === 0 && failed.length > 0) {
       return { status: 'unavailable', language: config.language,
-        errorCode: result.errors[0]?.code ?? 'STEAM_UPSTREAM_ERROR' };
+        errorCode: failed[0]?.code ?? 'STEAM_UPSTREAM_ERROR' };
     }
     return {
       status: 'success', language: config.language,

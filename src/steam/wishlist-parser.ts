@@ -3,6 +3,7 @@ import {
   SteamWishlistError,
   type SalePrice,
   type StoreFacts,
+  type UpcomingRelease,
 } from '../domain/steam.js';
 
 interface ParsedWishlistEntry {
@@ -14,6 +15,7 @@ interface ParsedWishlistEntry {
 export interface ParsedStoreItem {
   readonly headerImageUrl?: string;
   readonly storeFacts?: StoreFacts;
+  readonly upcoming?: UpcomingRelease;
   readonly name: string;
   readonly isFree: boolean;
 }
@@ -125,7 +127,10 @@ function parseStoreItem(item: JsonObject | undefined, appId: number): ParsedStor
   }
 
   if (item.success !== 1) {
-    throw new SteamWishlistError('STEAM_APP_NOT_FOUND', `Steam GetItems did not find app ${appId}`);
+    // Steam still names a region-locked app and flags it; a delisted app is just gone.
+    throw item.unvailable_for_country_restriction === true || item.unavailable_for_country_restriction === true
+      ? new SteamWishlistError('STEAM_APP_REGION_UNAVAILABLE', `Steam does not sell app ${appId} in this region`)
+      : new SteamWishlistError('STEAM_APP_NOT_FOUND', `Steam GetItems did not find app ${appId}`);
   }
 
   if (typeof item.name !== 'string' || item.name.trim() === '') {
@@ -138,11 +143,29 @@ function parseStoreItem(item: JsonObject | undefined, appId: number): ParsedStor
 
   const headerImageUrl = storeItemArtworkUrl(item.assets, appId);
   const storeFacts = parseStoreFacts(item);
+  const upcoming = parseUpcomingRelease(item.release);
   return {
     name: item.name,
     isFree: item.is_free === true,
     ...(headerImageUrl ? { headerImageUrl } : {}),
     ...(storeFacts ? { storeFacts } : {}),
+    ...(upcoming ? { upcoming } : {}),
+  };
+}
+
+const releasePrecisions = { date_full: 'day', date_month: 'month', date_quarter: 'quarter', date_year: 'year' } as const;
+
+/** Steam's planned release of a not-yet-released game; undefined once it is out or when malformed. */
+export function parseUpcomingRelease(release: unknown): UpcomingRelease | undefined {
+  if (!isObject(release) || release.is_coming_soon !== true) return undefined;
+  const precision = releasePrecisions[release.coming_soon_display as keyof typeof releasePrecisions];
+  const seconds = release.steam_release_date;
+  const message = typeof release.custom_release_date_message === 'string'
+    ? release.custom_release_date_message.trim().slice(0, 60) : '';
+  return {
+    ...(precision && Number.isSafeInteger(seconds) && (seconds as number) > 0
+      ? { date: new Date((seconds as number) * 1000).toISOString(), precision } : {}),
+    ...(message ? { message } : {}),
   };
 }
 

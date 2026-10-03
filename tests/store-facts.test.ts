@@ -112,3 +112,37 @@ describe('game detail', () => {
       .not.toContain('assistant:s:low');
   });
 });
+
+describe('unreleased and unavailable games', () => {
+  it('reads Steam’s planned release only while a game is not out yet', async () => {
+    const { parseUpcomingRelease } = await import('../src/steam/wishlist-parser.js');
+    expect(parseUpcomingRelease({ steam_release_date: 1791824400, is_coming_soon: true, coming_soon_display: 'date_full' }))
+      .toEqual({ date: new Date(1791824400 * 1000).toISOString(), precision: 'day' });
+    expect(parseUpcomingRelease({ is_coming_soon: true, custom_release_date_message: 'Duyurulacak', coming_soon_display: 'text_tba' }))
+      .toEqual({ message: 'Duyurulacak' });
+    expect(parseUpcomingRelease({ steam_release_date: 1303186800 })).toBeUndefined();
+  });
+
+  it('shows the release as precisely as Steam states it', async () => {
+    const { releaseDateText, noPriceText, unavailableGamesLine } = await import('../src/discord/ui/design.js');
+    const at = '2026-10-12T17:00:00.000Z';
+    expect(releaseDateText({ date: at, precision: 'day' }, 'tr')).toBe('12 Ekim 2026');
+    expect(releaseDateText({ date: at, precision: 'month' }, 'en')).toBe('October 2026');
+    expect(releaseDateText({ date: at, precision: 'quarter' }, 'tr')).toBe('2026 4. çeyrek');
+    expect(releaseDateText({ date: '2027-12-31T08:00:00.000Z', precision: 'year' }, 'en')).toBe('2027');
+    expect(releaseDateText({}, 'tr')).toBe('tarih açıklanmadı');
+    expect(noPriceText({ upcoming: { message: 'Duyurulacak' } }, 'tr')).toBe('🗓️ Yakında · Duyurulacak');
+    expect(unavailableGamesLine([{ code: 'STEAM_APP_REGION_UNAVAILABLE' }, { code: 'STEAM_APP_NOT_FOUND' },
+      { code: 'STEAM_TIMEOUT' }], 'TR', 'tr')).toBe("🚫 1 oyun Türkiye mağazasında satılmıyor · 🗑️ 1 oyun Steam'den kaldırılmış");
+    expect(unavailableGamesLine([{ code: 'STEAM_TIMEOUT' }], 'TR', 'en')).toBeNull();
+  });
+
+  it('tells a region-locked app apart from a removed one', () => {
+    const parsed = parseStoreItemsResponse({ response: { store_items: [
+      { id: 1, success: 15, visible: false, name: 'WolfTeam: Classic', unvailable_for_country_restriction: true },
+      { id: 2, success: 15, visible: false, name: '' },
+    ] } }, [1, 2]);
+    expect((parsed.get(1) as { code?: string }).code).toBe('STEAM_APP_REGION_UNAVAILABLE');
+    expect((parsed.get(2) as { code?: string }).code).toBe('STEAM_APP_NOT_FOUND');
+  });
+});

@@ -266,6 +266,8 @@ export class SteamClient {
         name: details.value.name,
         ...(details.value.headerImageUrl ? { headerImageUrl: details.value.headerImageUrl } : {}),
         ...(details.value.storeFacts ? { storeFacts: details.value.storeFacts } : {}),
+        // A listed price means it is on sale, whatever a cached release flag says.
+        ...(details.value.upcoming && !priced.value ? { upcoming: details.value.upcoming } : {}),
         priority: entry.priority,
         dateAdded: entry.dateAdded,
         price,
@@ -311,7 +313,10 @@ export class SteamClient {
             country_code: storeCountryCode,
             steam_realm: 1,
           },
-          data_request: { include_assets: true, include_platforms: true, include_reviews: true, include_all_purchase_options: true },
+          data_request: {
+            include_assets: true, include_platforms: true, include_reviews: true, include_all_purchase_options: true,
+            include_release: true,
+          },
         });
         return parseStoreItemsResponse(
           await this.requestJson(`${storeItemsEndpoint}?input_json=${encodeURIComponent(input)}`),

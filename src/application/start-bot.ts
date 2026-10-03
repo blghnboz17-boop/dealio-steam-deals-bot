@@ -186,7 +186,7 @@ export async function startBot(
       async user=>{
         const result=await checkService.checkWithinUserOperation(user,'manual',{bypassCooldown:true});
         if(result.status!=='success') throw new SteamWishlistError('STEAM_UPSTREAM_ERROR','Wishlist refresh failed');
-        return {items:[...result.wishlistItems],errors:[...result.failedItems]};
+        return {items:[...result.wishlistItems],errors:[...result.failedItems,...result.unavailableItems]};
       },
     );
     const retentionTimer=setInterval(()=>{try{wishlistStateRepository.assistant.cleanup();}catch(error){safeLogger.error('Retention cleanup failed',error);}},3600000);

@@ -38,7 +38,7 @@ it.each(['tr', 'en'] as const)('renders actual artwork for unpriced games in eve
       const panel = buildAssistantView(data, { screen, page: 0, query: '', eligibleOnly: false, selectedAppId: appId }, 'session');
       const json = JSON.stringify(panel.toJSON());
       expect(json).toContain(artwork);
-      expect(json).toContain(language === 'tr' ? 'Fiyat doğrulanamadı' : 'Price unavailable');
+      expect(json).toContain(language === 'tr' ? 'Fiyat şu an doğrulanamadı' : 'Price could not be confirmed right now');
     }
     const home = buildHomePanel({ status: 'ready', language, config, checkState: null,
       notificationQueue: { pending: 0, retry: 0, sending: 0, sent: 0, terminalFailed: 0, expired: 0 },
@@ -62,7 +62,7 @@ it('carries unpriced artwork through Steam loading, persisted snapshots and the 
     const snapshot = new WishlistStateRepository(db).assistant.snapshot(config)!;
     const json = JSON.stringify(wishlistPanel([...snapshot.items]).toJSON());
     expect(json).toContain(artwork);
-    expect(json).toContain('Price unavailable');
+    expect(json).toContain('Price could not be confirmed right now');
     expect(json).not.toContain('−100');
   } finally { db.close(); }
 });
