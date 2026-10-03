@@ -71,16 +71,15 @@ Gerçek fiyat hareketi yoksa o satır bekler.
 
 VM ve GitHub kontrolleri salt okunur yapılır. Günlükler VM'de mevcut
 scripts/metrics-report.mjs ile özetlenir; ham günlük dışarı taşınmaz.
-Günlük analiz Codex'in çalışabildiği zaman yapılır; Healthchecks alarmı ise
-Codex'ten bağımsız sürekli çalışır. Otomasyon kaçırılırsa yedi günlük jurnal
-saklama sınırı dikkate alınır ve kayıp gözlem açıklanır.
+Günlük analiz otomatik çalışmaz; operatör istediğinde yapılır. Healthchecks
+alarmı ise bundan bağımsız sürekli çalışır. Yedi günlük jurnal saklama sınırı
+dikkate alınır; incelenmeyen günler kayıp gözlem olarak açıklanır.
 Sonuçlar .runtime/phase4-observation/ altında anonim JSON olarak tutulur;
 önemli bulgular bu belgeye kaydedilir. Belgelenmiş kullanıcı sonucu olmadan
 kabul hücreleri otomatik geçti yapılmaz.
 
-Günlük inceleme otomasyonu: `dealio-beta-g-zlemi`, her gün 23:30
-Europe/Istanbul. Değişmeyen durumda sessiz; yalnız yeni anlamlı sorun veya
-kullanıcı eylemi gerektiğinde bildirir. Bu otomasyon Healthchecks'in yerine geçmez.
+Günlük inceleme otomasyonu (`dealio-beta-g-zlemi`) 3 Ekim 2026'da operatör
+kararıyla kapatıldı; yerine otomasyon kurulmadı. Healthchecks'in yerini zaten tutmazdı.
 
 İlk anonim başlangıç kaydı:
 `.runtime/phase4-observation/baseline-20260929.json`.
@@ -113,5 +112,5 @@ Daha fazla gönüllü katılımı planlanıyor; genel davet kapalı kalıyor.
 Ek doğrulama: üç katılımcı da bilgisayar kullandı, mağazayı Türkiye seçti ve
 Türkçe menü gördü. İngilizce/mobil kabul yapılmadı. İlk deneme tarihi henüz
 verilmedi; rapor tarihi 30 Eylül 2026, deneme tarihi yerine konulmaz.
-Günlük Codex incelemesi 30 Eylül kontrolünde PAUSED durumunda bulundu;
-yeniden etkinleştirilmedi. Bu kayıt Healthchecks durumunu doğrulamaz.
+Günlük inceleme otomasyonu 30 Eylül kontrolünde PAUSED durumunda bulundu;
+yeniden etkinleştirilmedi (3 Ekim'de kapatıldı). Bu kayıt Healthchecks durumunu doğrulamaz.

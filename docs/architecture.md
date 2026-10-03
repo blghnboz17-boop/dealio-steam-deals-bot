@@ -16,7 +16,9 @@ Notification retry scheduler -> durable notification queue -> Discord DM
 - `src/steam`: safe profile parsing, vanity resolution, wishlist retrieval, and price normalization
 - `src/domain`: sale, account-generation, and duplicate-notification rules
 - `src/persistence`: SQLite schema and repositories
-- `src/application`: checks, both schedulers, delivery, lifecycle, health, and locking
+- `src/application`: checks, both schedulers, delivery, assistant rules, lifecycle, health, and locking
+- `src/operations`: encrypted backup envelope and the independent health-ping logic
+- `scripts`: backup, restore, monitoring, metrics report, release gate, and public-site build (Node scripts run outside the bot process)
 
 ## Reliability Model
 
@@ -65,7 +67,17 @@ Price observations are retained for 90 days; notification history displays 30 da
 
 The current limited-beta deployment uses a pinned Linux machine identity and an application-ID process lock, in addition to the database lock. The application lock is shared across database paths under the same OS user. This is a single-host safeguard, not a distributed lease guarantee.
 
-Azure Blob leasing is implemented as the cloud production path: startup acquires a lease, renewal uncertainty disconnects Discord, and orderly shutdown releases it after disconnect. Remote backup, independent monitoring, and public-site infrastructure are prepared but not provisioned. The controlled VM rollout and rollback evidence are recorded in [`deploy/IMPLEMENTATION-STATUS.tr.md`](../deploy/IMPLEMENTATION-STATUS.tr.md).
+Azure Blob leasing (`src/application/azure-lease.ts`) is implemented but **not provisioned**: startup would acquire a lease, renewal uncertainty would disconnect Discord, and orderly shutdown would release it after disconnect. The project uses no paid cloud resources, so the single-host safeguard is what protects production today.
+
+### Operations outside the bot process
+
+- **Backup.** A scheduled GitHub Actions job connects over a forced-command SSH key that can only run `scripts/export-backup.mjs`. The VM returns a consistent SQLite copy encrypted with the public key (`src/operations/backup-envelope.ts`); the private key never lives on the VM. Artifacts are kept seven days.
+- **Restore rehearsal.** A second job downloads the artifact, decrypts it into a separate temporary copy, runs SQLite integrity and foreign-key checks, and applies the current migrations. It never touches the production database or Discord.
+- **Independent alerting.** `dealio-health.timer` runs a health ping every minute, separate from the bot process, and reports only health categories to Healthchecks (no user IDs, prices, or database). A missing signal, including a powered-off VM, raises an e-mail alert. Backup and restore have their own checks.
+- **Public site.** Only an allow-listed set of static files (privacy, terms, help, styles) is copied to a separate public Pages repository; the bot repository stays private.
+- **Release gate.** `npm run release:check` validates a release-evidence JSON, its artifact files, and the legal and help links for the exact commit. The general release gate stays closed until desktop/mobile acceptance and a week of measurements are recorded.
+
+Setup and recovery steps are in [`deploy/FREE-OPERATIONS.tr.md`](../deploy/FREE-OPERATIONS.tr.md); the controlled VM rollout, rollback, and live acceptance evidence are in [`deploy/IMPLEMENTATION-STATUS.tr.md`](../deploy/IMPLEMENTATION-STATUS.tr.md) and [`docs/phase3-acceptance.tr.md`](phase3-acceptance.tr.md).
 
 ## Local design review
 
