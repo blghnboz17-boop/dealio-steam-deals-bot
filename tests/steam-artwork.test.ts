@@ -2,7 +2,6 @@ import { expect, it } from 'vitest';
 import { parseStoreItemsResponse } from '../src/steam/wishlist-parser.js';
 import { routeSteam, storeItem, storeItemsResponse, wishlistResponse } from './helpers/steam-fakes.js';
 import { SteamClient } from '../src/steam/steam-client.js';
-import { buildWishlistV2Page } from '../src/discord/wishlist-view.js';
 import { createDatabase } from '../src/persistence/database.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
@@ -16,6 +15,15 @@ const assets = {
   header: '9b046115b1663a4be2b252712328e4f6c162da68/header.jpg',
 };
 const item = (extra: object = {}) => storeItem(appId, { name: 'Black Flag', assets, ...extra });
+function wishlistPanel(items: unknown[]) {
+  const db = createDatabase(':memory:');
+  try {
+    const config = new UserConfigRepository(db).upsert('u', '76561198000000000', 'en', 'TR', '2026-09-30T00:00:00Z');
+    return buildAssistantView({ config, items: items as never, capturedAt: '2026-09-30T00:00:00Z', rules: new Map(),
+      preference: new WishlistStateRepository(db).assistant.preference('u'), history: [] },
+    { screen: 'wishlist', page: 0, query: '', eligibleOnly: false }, 'session');
+  } finally { db.close(); }
+}
 const parse = (extra: object = {}) =>
   parseStoreItemsResponse({ response: { store_items: [item(extra)] } }, [appId]).get(appId);
 
@@ -52,8 +60,7 @@ it('carries unpriced artwork through Steam loading, persisted snapshots and the 
     const config = new UserConfigRepository(db).upsert('u', '76561198000000000', 'en', 'TR', '2026-09-30T00:00:00Z');
     new WishlistStateRepository(db).assistant.saveSnapshot(config, result, '2026-09-30T00:00:00Z');
     const snapshot = new WishlistStateRepository(db).assistant.snapshot(config)!;
-    const panel = buildWishlistV2Page({ ...snapshot, failedItemCount: 0 }, 'en', 0, 'session');
-    const json = JSON.stringify(panel.components.map(c => c.toJSON()));
+    const json = JSON.stringify(wishlistPanel([...snapshot.items]).toJSON());
     expect(json).toContain(artwork);
     expect(json).toContain('Price unavailable');
     expect(json).not.toContain('−100');
@@ -61,10 +68,8 @@ it('carries unpriced artwork through Steam loading, persisted snapshots and the 
 });
 
 it('renders old snapshots without inventing a broken image URL', () => {
-  const panel = buildWishlistV2Page({ items: [{ appId, name: 'Unpriced game', price: null,
-    onSale: null, priority: null, dateAdded: null }], failedItemCount: 0,
-    capturedAt: '2026-09-30T00:00:00Z' }, 'en', 0, 'session');
-  const json = JSON.stringify(panel.components.map(c => c.toJSON()));
+  const json = JSON.stringify(wishlistPanel([{ appId, name: 'Unpriced game', price: null,
+    onSale: null, priority: null, dateAdded: null }]).toJSON());
   expect(json).not.toContain('steamstatic.com');
   expect(json).toContain(`https://store.steampowered.com/app/${appId}/`);
 });

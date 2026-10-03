@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MessageFlags } from 'discord.js';
 import { storeCountryCodes } from '../src/domain/store-country.js';
 import type { WishlistItem } from '../src/domain/steam.js';
-import { buildWishlistV2Page } from '../src/discord/wishlist-view.js';
+import { buildAssistantView } from '../src/discord/assistant-view.js';
 import { buildStatusV2Panel } from '../src/discord/status-view-v2.js';
 import { buildSetupCountrySelectOptions } from '../src/discord/setup-view.js';
 import {
@@ -142,16 +142,17 @@ describe('Dealio Components V2 UI', () => {
   it.each([0, 1, 3, 4, 10, 11])(
     'renders a three-game wishlist panel safely for %i games',
     (count) => {
-      const page = buildWishlistV2Page({
-        items: wishlistItems(count),
-        failedItemCount: 0,
-        capturedAt: '2026-08-29T00:00:00.000Z',
-        storeCountryCode: 'TR',
-        globalMinimumDiscountPercent: 20,
-      }, 'tr', 0, 'session');
-      expect(page.items).toHaveLength(Math.min(3, count));
-      expect(page.pageCount).toBe(Math.max(1, Math.ceil(count / 3)));
-      expect(countComponentsV2(page.components)).toBeLessThanOrEqual(40);
+      const panel = buildAssistantView({
+        config: { discordUserId: 'u', configurationId: 'c', steamId64: '76561198000000000', configVersion: 1, language: 'tr',
+          storeCountryCode: 'TR', enabled: true, minimumDiscountPercent: 20, createdAt: '', updatedAt: '' } as never,
+        items: wishlistItems(count), capturedAt: '2026-08-29T00:00:00.000Z', rules: new Map(), history: [],
+        preference: { mode: 'instant', timezone: null, quietStart: null, quietEnd: null, digestMinute: null },
+      }, { screen: 'wishlist', page: 0, query: '', eligibleOnly: false }, 'session');
+      const json = JSON.stringify(panel.toJSON());
+      expect(json.match(/"type":9/g) ?? []).toHaveLength(Math.min(3, count));
+      const pages = Math.max(1, Math.ceil(count / 3));
+      if (pages > 1) expect(json).toContain(`1 / ${pages}`);
+      expect(countComponentsV2([panel])).toBeLessThanOrEqual(40);
     },
   );
 
@@ -187,11 +188,11 @@ describe('Dealio Components V2 UI', () => {
     });
     expect(countComponentsV2([panel])).toBeLessThanOrEqual(40);
     const serialized = JSON.stringify(panel.toJSON());
-    expect(serialized).toContain(mode === 'home' ? 'Wishlist’in. Senin kuralların.' : 'Dealio Durum ve Ayarlar');
-    expect(serialized).toContain('İlk kontrol bekleniyor');
+    expect(serialized).toContain(mode === 'home' ? 'Wishlist’in. Senin kuralların.' : 'Hesabın ve tercihlerin');
+    expect(serialized).toContain(mode === 'home' ? 'İlk kontrol bekleniyor' : 'Henüz tamamlanmış kontrol yok');
     const rows = panel.toJSON().components.filter((component) => component.type === 1);
     // Home: check + refresh, then the four tabs.
-    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [2, 4] : [2, 3]);
+    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [2, 4] : [3, 2]);
     expect(serialized).not.toContain('↻');
   });
 

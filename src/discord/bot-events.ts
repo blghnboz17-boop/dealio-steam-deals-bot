@@ -241,7 +241,6 @@ function isDealioComponent(customId: string): boolean {
     'assistant:',
     'dealio:',
     'status-v2:',
-    'wishlist-v2:',
     'country:',
     'delete-v2:',
     'setup:',

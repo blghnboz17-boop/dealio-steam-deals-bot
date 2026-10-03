@@ -172,11 +172,11 @@ function checkPresentation(
     title: text.checkSuccessTitle,
     description,
     metrics: [
-      { label: language === 'tr' ? 'İşlenen oyun' : 'Games processed', value: result.checkedCount },
-      { label: language === 'tr' ? 'İndirim adayı' : 'Sale candidates', value: result.notificationCandidates.length },
-      { label: language === 'tr' ? 'Gönderilen DM' : 'DMs sent', value: delivery.sentCount },
-      { label: language === 'tr' ? 'Eksik fiyat' : 'Unknown prices', value: result.unknownPriceCount },
-      { label: language === 'tr' ? 'Ayrıntı hatası' : 'Detail errors', value: result.failedItems.length },
+      { emoji: '🎮', label: language === 'tr' ? 'oyun işlendi' : 'games processed', value: result.checkedCount },
+      { emoji: '🔥', label: language === 'tr' ? 'indirim adayı' : 'sale candidates', value: result.notificationCandidates.length },
+      { emoji: '📨', label: language === 'tr' ? 'DM gönderildi' : 'DMs sent', value: delivery.sentCount },
+      { emoji: '❔', label: language === 'tr' ? 'fiyatı bilinmeyen' : 'unknown prices', value: result.unknownPriceCount },
+      { emoji: '⚠️', label: language === 'tr' ? 'ayrıntı hatası' : 'detail errors', value: result.failedItems.length },
     ],
   };
 }

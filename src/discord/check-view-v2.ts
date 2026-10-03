@@ -13,7 +13,7 @@ export interface CheckResultPresentation {
   readonly kind: 'success' | 'warning' | 'danger' | 'info';
   readonly title: string;
   readonly description: string;
-  readonly metrics?: readonly { readonly label: string; readonly value: number }[];
+  readonly metrics?: readonly { readonly label: string; readonly value: number; readonly emoji?: string }[];
 }
 
 export function buildCheckPanel(
@@ -32,14 +32,13 @@ export function buildCheckPanel(
   const container = new ContainerBuilder()
     .setAccentColor(colors[presentation.kind])
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(`# ${icons[presentation.kind]} ${presentation.title}`),
-      new TextDisplayBuilder().setContent(presentation.description),
+      new TextDisplayBuilder().setContent(`-# 🔄 DEALIO · ${language === 'tr' ? 'KONTROL' : 'CHECK'}\n# ${icons[presentation.kind]} ${presentation.title}\n${presentation.description}`),
     );
   if (presentation.metrics && presentation.metrics.length > 0) {
     container
       .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
       .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-        presentation.metrics.map((metric) => `**${metric.value}**\n-# ${metric.label}`).join('\n\n'),
+        presentation.metrics.map((metric) => `${metric.emoji ?? '•'} **${metric.value}** ${metric.label}`).join('\n'),
       ));
   }
   if (sessionId) {

@@ -2,12 +2,12 @@ import { buildAssistantView } from '../dist/discord/assistant-view.js';
 // Local design review from the production component builders. All values are demo fixtures.
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { buildStatusV2Panel } from '../dist/discord/status-view-v2.js';
-import { buildWishlistV2Page } from '../dist/discord/wishlist-view.js';
 import { buildSaleNotificationPanel } from '../dist/discord/notification-components-v2.js';
 const date = '2026-09-12T14:00:00.000Z';
 const games = [[620, 'Portal 2', 1999, 199, 90], [1091500, 'Cyberpunk 2077', 5999, 2099, 65], [1086940, 'Baldur’s Gate 3', 5999, 4499, 25]];
 const items = games.map(([appId, name, initialMinor, finalMinor, discountPercent]) => ({
-  appId, name, priority: null, dateAdded: null, onSale: true,
+  appId, name, priority: null, dateAdded: null, onSale: true, priceObservedAt: date,
+  headerImageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
   price: { currency: 'USD', initialMinor, finalMinor, discountPercent, isFree: false },
 }));
 const panels = {};
@@ -25,7 +25,7 @@ for (const language of ['tr', 'en']) {
       lastSuccessCompletedAt: date, lastSuccessCheckedCount: 24, lastSuccessOnSaleCount: 3,
       lastSuccessFreeCount: 0, lastSuccessUnknownPriceCount: 0, lastSuccessFailedItemCount: 0,
     },
-    notificationQueue: { pending: 2, retry: 0, sent: 18, terminalFailed: 0 },
+    notificationQueue: { pending: 2, retry: 0, sending: 0, sent: 18, terminalFailed: 0, expired: 0 },
     latestPriceCurrencies: ['USD'], gameDiscountOverrideCount: 2,
   };
   const snapshot = {
@@ -37,23 +37,23 @@ for (const language of ['tr', 'en']) {
     currency: 'USD', normalPriceMinor: item.price.initialMinor, finalPriceMinor: item.price.finalMinor,
     discountPercent: item.price.discountPercent, createdAt: date, storeCountryCode: 'TR',
   }));
-  const wishlist = (value) => buildWishlistV2Page(value, language, 0, 'preview').components.map(c => c.toJSON());
   const assistantData={config,items,capturedAt:date,rules:new Map([[620,{mode:'target',targetMinor:299,currency:'USD',percent:null,muted:false,revision:1}]]),
     preference:{mode:'quiet',timezone:'Europe/Istanbul',quietStart:1380,quietEnd:480,digestMinute:null},
     priceHistory:{status:'ready',history:{low:{currency:'USD',amountMinor:99,discountPercent:90,recordedAt:'2025-06-26T17:00:00Z',since:'2024-02-11T00:59:31Z'},
       recent:[{currency:'USD',amountMinor:199,discountPercent:80,recordedAt:date},{currency:'USD',amountMinor:999,discountPercent:0,recordedAt:'2026-08-15T12:00:00Z'}]}},
     history:[{game_name:'Portal 2',app_id:620,status:'sent',reason:'target:299:USD',created_at:date,delivered_at:date,discord_message_id:'123'},
       {game_name:'Cyberpunk 2077',app_id:1091500,status:'candidate',reason:'discount',created_at:date,delivered_at:null,discord_message_id:null}]};
-  const personal=screen=>[buildAssistantView(assistantData,{screen,page:0,query:'',eligibleOnly:false,selectedAppId:620},'preview').toJSON()];
+  const personal=(screen,data=assistantData)=>[buildAssistantView(data,{screen,page:0,query:'',eligibleOnly:false,selectedAppId:620},'preview').toJSON()];
   panels[language] = {
     detail:personal('detail'), history:personal('history'), rhythm:personal('rhythm'),
-    home: [buildStatusV2Panel(dashboard, 'preview', { mode: 'home',featuredDeal:items[0],eligibleDealCount:2 }).toJSON()],
+    home: [buildStatusV2Panel(dashboard, 'preview', { mode: 'home',featuredDeal:items[0],eligibleDealCount:2,trackedGameCount:24,
+      notificationPreference:assistantData.preference }).toJSON()],
     wishlist: personal('wishlist'),
-    settings: [buildStatusV2Panel(dashboard, 'preview').toJSON()],
+    settings: [buildStatusV2Panel(dashboard, 'preview', { tabs: true }).toJSON()],
     notification: [buildSaleNotificationPanel(notifications, language).toJSON()],
     blocked: [buildStatusV2Panel({ ...dashboard, config: { ...config, enabled: false, dmDeliveryBlockedAt: date } }, 'preview', { mode: 'home' }).toJSON()],
     partial: [buildStatusV2Panel({ ...dashboard, checkState: { ...dashboard.checkState, lastStatus: 'unavailable', lastSuccessUnknownPriceCount: 4 } }, 'preview', { mode: 'home' }).toJSON()],
-    empty: wishlist({ ...snapshot, items: [] }),
+    empty: personal('wishlist', { ...assistantData, items: [] }),
     expired: [buildStatusV2Panel(dashboard, 'preview', { mode: 'home', disabled: true }).toJSON()],
   };
 }
