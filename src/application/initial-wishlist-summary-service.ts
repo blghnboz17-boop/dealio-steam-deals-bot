@@ -1,3 +1,4 @@
+import type { StoreFacts } from '../domain/steam.js';
 import type { StoreCountryCode } from '../domain/store-country.js';
 import type { Language } from '../domain/user-config.js';
 import type { CheckService } from './check-service.js';
@@ -5,6 +6,7 @@ import { isDiscordDmBlocked } from './notification-service.js';
 
 export interface InitialWishlistSale {
   readonly headerImageUrl?: string;
+  readonly storeFacts?: StoreFacts;
   readonly appId: number;
   readonly gameName: string;
   readonly currency: string;
@@ -87,6 +89,7 @@ export class InitialWishlistSummaryService {
         appId: item.appId,
         gameName: item.name,
         ...(item.headerImageUrl ? { headerImageUrl: item.headerImageUrl } : {}),
+        ...(item.storeFacts ? { storeFacts: item.storeFacts } : {}),
         currency: price.currency,
         normalPriceMinor: price.initialMinor,
         finalPriceMinor: price.finalMinor,

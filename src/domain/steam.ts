@@ -32,8 +32,26 @@ export interface SalePrice {
   readonly isFree: boolean;
 }
 
+export type SteamDeckCompatibility = 'verified' | 'playable' | 'unsupported';
+
+/**
+ * Store context Steam returns with an app's metadata, shown next to prices.
+ * Every field is optional: a missing field is simply not shown.
+ */
+export interface StoreFacts {
+  /** Steam's localized review summary, such as "Very Positive". */
+  readonly reviewLabel?: string;
+  readonly reviewPercent?: number;
+  readonly reviewCount?: number;
+  readonly platforms?: { readonly windows: boolean; readonly mac: boolean; readonly linux: boolean };
+  readonly steamDeck?: SteamDeckCompatibility;
+  /** When the current Store-region discount ends (ISO time), if Steam states it. */
+  readonly saleEndsAt?: string;
+}
+
 export interface WishlistItem {
   readonly headerImageUrl?: string;
+  readonly storeFacts?: StoreFacts;
   readonly priceObservedAt?: string;
   readonly appId: number;
   readonly name: string;

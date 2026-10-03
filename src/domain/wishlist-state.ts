@@ -1,5 +1,5 @@
 import type { HistoricalLow } from './price-history.js';
-import type { WishlistItem } from './steam.js';
+import type { StoreFacts, WishlistItem } from './steam.js';
 import type { Language } from './user-config.js';
 import type { StoreCountryCode } from './store-country.js';
 
@@ -25,6 +25,8 @@ export interface WishlistItemState {
 
 export interface NotificationCandidate {
   readonly headerImageUrl?: string;
+  /** Presentation-only; never persisted or part of batch identity. */
+  readonly storeFacts?: StoreFacts;
   readonly reason?: string;
   readonly discordUserId: string;
   readonly steamId64: string;
