@@ -38,12 +38,26 @@ function steamLow(id: string, amount: number, currency = 'USD', shopId = 61) {
   };
 }
 
-function fixture(storeLows: (ids: string[]) => unknown = (ids) => ids.map((id) => steamLow(id, 6.59))) {
+const usd = (...appIds: number[]) => appIds.map((appId) => ({ appId, currency: 'USD' }));
+
+function historyEntry(timestamp: string, amount: number, currency: string, cut: number, shopId = 61) {
+  return {
+    timestamp,
+    shop: { id: shopId, name: 'Steam' },
+    deal: { price: { amount, amountInt: Math.round(amount * 100), currency }, regular: { amount: 5.79, currency }, cut },
+  };
+}
+
+function fixture(
+  storeLows: (ids: string[]) => unknown = (ids) => ids.map((id) => steamLow(id, 6.59)),
+  history: (url: string) => unknown = () => [],
+) {
   let now = Date.parse('2026-10-03T12:00:00Z');
   let failure: Response | null = null;
   const fetchImpl = vi.fn<PriceHistoryFetch>(async (input, init) => {
     if (failure) return failure.clone();
-    const body = JSON.parse(init.body) as string[];
+    if (init.method === 'GET') return jsonResponse(history(input));
+    const body = JSON.parse(init.body!) as string[];
     if (input.includes('/lookup/id/shop/61/v1')) {
       return jsonResponse(Object.fromEntries(body.map((key) => [key, key === 'app/404' ? null : `game-${key.slice(4)}`])));
     }
@@ -70,7 +84,7 @@ describe('historical low standing', () => {
 describe('IsThereAnyDeal client', () => {
   it('returns Steam lows for the Store country and keeps the key out of the URL', async () => {
     const f = fixture();
-    const lows = await f.client.historicalLows([220, 220, 404], 'TR');
+    const lows = await f.client.historicalLows(usd(220, 220, 404), 'TR');
 
     expect([...lows]).toEqual([[220, low]]);
     expect(f.fetchImpl).toHaveBeenCalledTimes(2);
@@ -86,16 +100,16 @@ describe('IsThereAnyDeal client', () => {
 
   it('caches game IDs and lows, per country', async () => {
     const f = fixture();
-    await f.client.historicalLows([220, 404], 'TR');
-    await f.client.historicalLows([220, 404], 'TR');
+    await f.client.historicalLows(usd(220, 404), 'TR');
+    await f.client.historicalLows(usd(220, 404), 'TR');
     expect(f.fetchImpl).toHaveBeenCalledTimes(2);
 
-    await f.client.historicalLows([220], 'US');
+    await f.client.historicalLows(usd(220), 'US');
     expect(f.fetchImpl).toHaveBeenCalledTimes(3);
     expect(f.fetchImpl.mock.calls[2]![0]).toContain('country=US');
 
     f.advance(6 * 60 * 60 * 1000 + 1);
-    await f.client.historicalLows([220], 'TR');
+    await f.client.historicalLows(usd(220), 'TR');
     expect(f.fetchImpl).toHaveBeenCalledTimes(4);
     expect(f.fetchImpl.mock.calls[3]![0]).toContain('/games/storelow/v2');
   });
@@ -103,7 +117,7 @@ describe('IsThereAnyDeal client', () => {
   it('splits requests at the 200-ID API limit', async () => {
     const f = fixture();
     const appIds = Array.from({ length: 250 }, (_, index) => index + 1);
-    const lows = await f.client.historicalLows(appIds, 'TR');
+    const lows = await f.client.historicalLows(usd(...appIds), 'TR');
 
     expect(lows.size).toBe(250);
     expect(f.fetchImpl.mock.calls.map(([, init]) => JSON.parse(init.body).length)).toEqual([200, 50, 200, 50]);
@@ -117,9 +131,50 @@ describe('IsThereAnyDeal client', () => {
       steamLow(ids[3]!, 4.99, 'EUR'),
       'not a game',
     ]);
-    const lows = await f.client.historicalLows([1, 2, 3, 4], 'TR');
+    const lows = await f.client.historicalLows([...usd(1, 2, 3), { appId: 4, currency: 'EUR' }], 'TR');
 
     expect([...lows]).toEqual([[4, { ...low, currency: 'EUR', amountMinor: 499 }]]);
+  });
+
+  it('uses the current currency period when the region changed currency', async () => {
+    // Turkey: the recorded store low is from the TRY era; Steam now prices in USD.
+    const f = fixture(
+      (ids) => ids.map((id) => steamLow(id, 1.8, 'TRY')),
+      () => [
+        historyEntry('2026-10-01T20:26:44+02:00', 1.15, 'USD', 80),
+        historyEntry('2026-07-09T19:17:12+02:00', 5.79, 'USD', 0),
+        historyEntry('2026-06-25T19:31:29+02:00', 1.15, 'USD', 80),
+        historyEntry('2025-01-01T00:00:00+00:00', 0.5, 'USD', 90, 16),
+        historyEntry('2024-11-15T22:48:21+01:00', 0, 'USD', 0),
+        historyEntry('2024-02-11T01:59:31+01:00', 5.79, 'USD', 0),
+        historyEntry('2024-01-04T19:19:01+01:00', 1.8, 'TRY', 90),
+        historyEntry('2023-01-01T00:00:00+00:00', 0.99, 'USD', 90),
+      ],
+    );
+    const lows = await f.client.historicalLows(usd(220), 'TR');
+
+    expect([...lows]).toEqual([[220, {
+      currency: 'USD',
+      amountMinor: 115,
+      discountPercent: 80,
+      recordedAt: '2026-10-01T18:26:44.000Z',
+      since: '2024-02-11T00:59:31.000Z',
+    }]]);
+    const [historyUrl, historyInit] = f.fetchImpl.mock.calls[2]!;
+    expect(historyUrl).toBe('https://api.isthereanydeal.com/games/history/v2?id=game-220&country=TR&shops=61&since=2000-01-01T00:00:00Z');
+    expect(historyInit).toMatchObject({ method: 'GET', headers: { 'ITAD-API-Key': 'secret-key' } });
+    expect(historyInit.body).toBeUndefined();
+
+    await f.client.historicalLows(usd(220), 'TR');
+    expect(f.fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows nothing when the current currency has no paid history', async () => {
+    const f = fixture(
+      (ids) => ids.map((id) => steamLow(id, 1.8, 'TRY')),
+      () => [historyEntry('2024-11-15T22:48:21+01:00', 0, 'USD', 0), historyEntry('2024-01-04T19:19:01+01:00', 1.8, 'TRY', 90)],
+    );
+    await expect(f.client.historicalLows(usd(220), 'TR')).resolves.toEqual(new Map());
   });
 
   it('returns nothing and pauses lookups while the service fails', async () => {
@@ -127,16 +182,16 @@ describe('IsThereAnyDeal client', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
       f.fail(jsonResponse({ reason_phrase: 'Server error' }, 500));
-      await expect(f.client.historicalLows([220], 'TR')).resolves.toEqual(new Map());
+      await expect(f.client.historicalLows(usd(220), 'TR')).resolves.toEqual(new Map());
       expect(String(warn.mock.calls[0]?.[0])).toContain('HTTP 500');
       expect(String(warn.mock.calls[0]?.[0])).not.toContain('secret-key');
 
       f.fail(null);
-      await f.client.historicalLows([220], 'TR');
+      await f.client.historicalLows(usd(220), 'TR');
       expect(f.fetchImpl).toHaveBeenCalledTimes(1);
 
       f.advance(60_001);
-      await expect(f.client.historicalLows([220], 'TR')).resolves.toEqual(new Map([[220, low]]));
+      await expect(f.client.historicalLows(usd(220), 'TR')).resolves.toEqual(new Map([[220, low]]));
     } finally {
       warn.mockRestore();
     }
@@ -147,13 +202,13 @@ describe('IsThereAnyDeal client', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
       f.fail(jsonResponse({}, 429, { 'retry-after': '120' }));
-      await f.client.historicalLows([220], 'TR');
+      await f.client.historicalLows(usd(220), 'TR');
       f.fail(null);
       f.advance(90_000);
-      await f.client.historicalLows([220], 'TR');
+      await f.client.historicalLows(usd(220), 'TR');
       expect(f.fetchImpl).toHaveBeenCalledTimes(1);
       f.advance(30_001);
-      await expect(f.client.historicalLows([220], 'TR')).resolves.toHaveProperty('size', 1);
+      await expect(f.client.historicalLows(usd(220), 'TR')).resolves.toHaveProperty('size', 1);
     } finally {
       warn.mockRestore();
     }
@@ -166,7 +221,7 @@ describe('IsThereAnyDeal client', () => {
     }));
     try {
       const client = new IsThereAnyDealClient({ apiKey: 'secret-key', fetchImpl, timeoutMs: 20 });
-      await expect(client.historicalLows([220], 'TR')).resolves.toEqual(new Map());
+      await expect(client.historicalLows(usd(220), 'TR')).resolves.toEqual(new Map());
       expect(String(warn.mock.calls[0]?.[0])).toContain('timeout');
     } finally {
       warn.mockRestore();
@@ -206,6 +261,19 @@ describe('sale alert price history', () => {
     const rendered = text([{ ...sale, historicalLow: { ...low, amountMinor } }], language);
     expect(rendered).toContain(expected);
     expect(rendered).toContain('[IsThereAnyDeal](https://isthereanydeal.com/)');
+  });
+
+  it.each([
+    ['tr', 150, 'Şubat 2024 sonrası en düşük: **USD 1,50** (%70 · Aralık 2022)'],
+    ['en', 150, 'Lowest since February 2024: **USD 1.50** (70% off · December 2022)'],
+    ['tr', 199, 'Şubat 2024 sonrasının en düşük fiyatına eşit'],
+    ['en', 199, 'Matches the lowest price since February 2024'],
+    ['tr', 250, 'Şubat 2024 sonrasının en düşük fiyatı!'],
+    ['en', 250, 'Lowest price since February 2024!'],
+  ] as const)('never calls a current-currency %s low of %i all-time', (language, amountMinor, expected) => {
+    const rendered = text([{ ...sale, historicalLow: { ...low, amountMinor, since: '2024-02-11T00:59:31.000Z' } }], language);
+    expect(rendered).toContain(expected);
+    expect(rendered).not.toMatch(/Tarihî|Tüm zamanların|all-time|ever/);
   });
 
   it('omits price history without data or in another currency', () => {
@@ -258,7 +326,7 @@ describe('notification delivery with price history', () => {
     const f = setup({ historicalLows });
     try {
       await expect(f.service.deliverPending('discord-user')).resolves.toMatchObject({ sentCount: 1 });
-      expect(historicalLows).toHaveBeenCalledWith([220], 'TR');
+      expect(historicalLows).toHaveBeenCalledWith([{ appId: 220, currency: 'USD' }], 'TR');
       expect(f.send.mock.calls[0]![0].notifications[0]).toMatchObject({ appId: 220, historicalLow: low });
       const stored = f.database.prepare('SELECT COUNT(*) AS n FROM notification_log WHERE status = ?').get('sent') as { n: number };
       expect(stored.n).toBe(1);

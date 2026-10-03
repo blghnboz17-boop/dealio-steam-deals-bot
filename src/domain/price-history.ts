@@ -4,6 +4,11 @@ export interface HistoricalLow {
   readonly amountMinor: number;
   readonly discountPercent: number;
   readonly recordedAt: string;
+  /**
+   * Set when the history covers only the current currency, for example Turkey's
+   * Steam prices since the 2023 switch to USD: the low is then "since" this date.
+   */
+  readonly since?: string;
 }
 
 export type HistoricalLowStanding = 'new-low' | 'matches-low' | 'above-low';

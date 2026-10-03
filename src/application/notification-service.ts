@@ -295,8 +295,9 @@ export class NotificationService {
     try {
       const lows = new Map<string, HistoricalLow>();
       for (const country of new Set(batch.notifications.map(item => item.storeCountryCode))) {
-        const appIds = batch.notifications.filter(item => item.storeCountryCode === country).map(item => item.appId);
-        for (const [appId, low] of await this.priceHistory.historicalLows(appIds, country)) {
+        const apps = batch.notifications.filter(item => item.storeCountryCode === country)
+          .map(item => ({ appId: item.appId, currency: item.currency }));
+        for (const [appId, low] of await this.priceHistory.historicalLows(apps, country)) {
           lows.set(`${country}:${appId}`, low);
         }
       }

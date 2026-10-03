@@ -113,20 +113,27 @@ function historicalLowLines(notification: SaleNotification, language: Language):
   if (!low || !standing) {
     return [];
   }
+  const monthYear = (value: string) => new Intl.DateTimeFormat(language === 'tr' ? 'tr-TR' : 'en-US', {
+    month: 'long', year: 'numeric', timeZone: 'UTC',
+  }).format(new Date(value));
+  // A low limited to the current currency's period must not be called "all-time".
+  // "sonrası" avoids a Turkish suffix that would depend on how the year is read.
+  const since = low.since ? monthYear(low.since) : null;
   if (standing === 'new-low') {
-    return [language === 'tr' ? '🏆 **Tüm zamanların en düşük fiyatı!**' : '🏆 **Lowest price ever!**'];
+    return [language === 'tr'
+      ? since ? `🏆 **${since} sonrasının en düşük fiyatı!**` : '🏆 **Tüm zamanların en düşük fiyatı!**'
+      : since ? `🏆 **Lowest price since ${since}!**` : '🏆 **Lowest price ever!**'];
   }
   if (standing === 'matches-low') {
-    return [language === 'tr' ? '🏆 **Tarihî en düşük fiyata eşit**' : '🏆 **Matches the all-time low**'];
+    return [language === 'tr'
+      ? since ? `🏆 **${since} sonrasının en düşük fiyatına eşit**` : '🏆 **Tarihî en düşük fiyata eşit**'
+      : since ? `🏆 **Matches the lowest price since ${since}**` : '🏆 **Matches the all-time low**'];
   }
-  const month = new Intl.DateTimeFormat(language === 'tr' ? 'tr-TR' : 'en-US', {
-    month: 'long', year: 'numeric', timeZone: 'UTC',
-  }).format(new Date(low.recordedAt));
   const price = formatMinorPrice(low.amountMinor, low.currency, language);
-  const discount = language === 'tr' ? `%${low.discountPercent}` : `${low.discountPercent}% off`;
+  const details = `${language === 'tr' ? `%${low.discountPercent}` : `${low.discountPercent}% off`} · ${monthYear(low.recordedAt)}`;
   return [language === 'tr'
-    ? `📉 Tarihî en düşük: **${price}** (${discount} · ${month})`
-    : `📉 All-time low: **${price}** (${discount} · ${month})`];
+    ? `📉 ${since ? `${since} sonrası en düşük` : 'Tarihî en düşük'}: **${price}** (${details})`
+    : `📉 ${since ? `Lowest since ${since}` : 'All-time low'}: **${price}** (${details})`];
 }
 
 export interface InitialWishlistV2Page {
