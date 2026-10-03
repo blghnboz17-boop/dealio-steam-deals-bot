@@ -14,6 +14,7 @@ import { messagesFor } from '../messages.js';
 import {
   buildNoticePanel,
   dealioV2Flags,
+  openPanelNoticeButton,
 } from '../ui/components-v2.js';
 
 export const regionCommand = new SlashCommandBuilder()
@@ -43,7 +44,7 @@ export async function handleRegion(
     await measureDiscordOperation(interaction, 'region.render', () => interaction.editReply({
       components: [buildNoticePanel(language, 'warning',
         language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
-        messages.notConfigured)],
+        messages.notConfigured, { button: openPanelNoticeButton(language, true) })],
       flags: dealioV2Flags,
     }));
     return;
@@ -59,7 +60,7 @@ export async function handleRegion(
         flags: dealioV2Flags,
         components: [buildNoticePanel(language, 'warning',
           language === 'tr' ? 'Dealio henüz kurulmamış' : 'Dealio is not configured',
-          messages.notConfigured)],
+          messages.notConfigured, { button: openPanelNoticeButton(language, true) })],
       }));
       return;
     }
@@ -76,6 +77,7 @@ export async function handleRegion(
         unchanged
           ? messagesFor(updated.language).regionUnchanged(label)
           : messagesFor(updated.language).regionSaved(label),
+        { button: openPanelNoticeButton(updated.language) },
       )],
     }));
   } catch (error: unknown) {

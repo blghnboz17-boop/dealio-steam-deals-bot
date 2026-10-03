@@ -83,14 +83,30 @@ export function buildNoticePanel(
   return container;
 }
 
+/**
+ * Opens a fresh /dealio panel from any message, DMs included. The id carries no
+ * session, so the button keeps working after restarts and expiry.
+ */
+export const openPanelCustomId = 'dealio-open:home';
+
+/** The notice button that opens /dealio; for a newcomer that is the setup welcome. */
+export function openPanelNoticeButton(language: Language, setup = false) {
+  return {
+    customId: openPanelCustomId,
+    label: setup ? (language === 'tr' ? 'Kurulumu başlat' : 'Start setup') : (language === 'tr' ? 'Dealio paneli' : 'Dealio panel'),
+    emoji: setup ? '✨' : '🏠',
+  };
+}
+
 export function buildExpiredPanel(language: Language): ContainerBuilder {
   return buildNoticePanel(
     language,
     'warning',
     language === 'tr' ? 'Bu panelin süresi doldu' : 'This panel has expired',
     language === 'tr'
-      ? 'Güvenliğin için paneller bir süre sonra kapanır. Yenisini açmak için **/dealio** yaz.'
-      : 'Panels close after a while for your security. Type **/dealio** to open a fresh one.',
+      ? 'Güvenliğin için paneller bir süre sonra kapanır. Yenisini hemen açabilirsin.'
+      : 'Panels close after a while for your security. You can open a fresh one right away.',
+    { button: openPanelNoticeButton(language) },
   );
 }
 

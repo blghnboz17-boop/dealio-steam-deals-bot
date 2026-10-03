@@ -29,13 +29,7 @@ import {
 } from '../language.js';
 import { messagesFor } from '../messages.js';
 import {
-  buildSetupCompleteEmbed,
-  buildSetupAlreadyCompletedEmbed,
   buildSetupCountrySelectOptions,
-  buildSetupConfirmationComponents,
-  buildSetupConfirmationEmbed,
-  buildSetupWelcomeComponents,
-  buildSetupWelcomeEmbed,
   canUseSetupComponent,
   parseSetupAction,
   type SetupPresentationOptions,
@@ -48,7 +42,6 @@ import {
 } from '../setup-view.js';
 import {
   buildNoticePanel,
-  dealioEphemeralV2Flags,
   dealioV2Flags,
 } from '../ui/components-v2.js';
 import { buildCountryListPanel, buildCountryRangePanel, buildCountrySearchModal, buildCountrySearchPanel } from '../ui/country-picker.js';
@@ -75,8 +68,10 @@ export async function handleSetup(
   const editPanel = (options: InteractionEditReplyOptions) => measureDiscordOperation(
     interaction, 'setup.render', () => interaction.editReply(options),
   );
-  await measureDiscordOperation(interaction, 'setup.ack',
-    () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
+  if (!ui.inPlace) {
+    await measureDiscordOperation(interaction, 'setup.ack',
+      () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
+  }
   const initialLanguage = languageFromDiscordLocale(interaction.locale ?? 'en-US');
   const avatarUrl = safeAvatarUrl(interaction);
   const viewOptions = { ...presentation, avatarUrl };
@@ -600,30 +595,6 @@ function buildSetupModal(
             .setMaxValues(1)
             .setRequired(true)
             .addOptions(buildSetupCountrySelectOptions(language, suggestedCountry)),
-        ),
-    );
-}
-
-function buildSetupRegionModal(
-  customId: string,
-  language: Language,
-  currentCountry: Parameters<typeof buildSetupCountrySelectOptions>[1],
-): ModalBuilder {
-  const messages = messagesFor(language);
-  return new ModalBuilder()
-    .setCustomId(customId)
-    .setTitle(messages.setupWizardRegionModalTitle)
-    .addLabelComponents(
-      new LabelBuilder()
-        .setLabel(messages.setupWizardCountryLabel)
-        .setStringSelectMenuComponent(
-          new StringSelectMenuBuilder()
-            .setCustomId('store-country')
-            .setPlaceholder(messages.setupWizardCountryPickerPlaceholder)
-            .setMinValues(1)
-            .setMaxValues(1)
-            .setRequired(true)
-            .addOptions(buildSetupCountrySelectOptions(language, currentCountry)),
         ),
     );
 }

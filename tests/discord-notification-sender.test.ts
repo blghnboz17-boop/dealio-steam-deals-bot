@@ -116,8 +116,11 @@ describe('initial-summary pagination ordering', () => {
       expect(f.patch).toHaveBeenCalledOnce();
       const expired = f.patch.mock.calls[0]?.[1]?.body.components;
       expect(componentText(expired)).toContain('Game 2');
-      const pagination = walkComponents(expired).filter(c => typeof c.custom_id === 'string');
+      const pagination = walkComponents(expired).filter(c => String(c.custom_id).startsWith('dealio-summary:'));
+      expect(pagination.length).toBeGreaterThan(0);
       expect(pagination.every(c => c.disabled === true)).toBe(true);
+      // The panel button has no session, so it keeps working after the pager expires.
+      expect(walkComponents(expired).find(c => c.custom_id === 'dealio-open:home')?.disabled).not.toBe(true);
     } finally { gate.resolve(); f.lifecycle.abort(); vi.useRealTimers(); }
   });
 });
@@ -213,8 +216,13 @@ describe('DiscordNotificationSender', () => {
       body: { recipient_id: candidate.discordUserId },
     });
     expect(post.mock.calls[1]?.[1]?.body.flags).toBe(MessageFlags.IsComponentsV2);
-    expect(componentText(post.mock.calls[1]?.[1]?.body.components)).toContain('Dealio test bildirimi');
-    expect(componentText(post.mock.calls[1]?.[1]?.body.components)).toContain('Test Game');
+    const text = componentText(post.mock.calls[1]?.[1]?.body.components);
+    // A test is the real alert with a TEST tag, so it looks exactly like what will arrive.
+    expect(text).toContain('DEALIO · TEST · İNDİRİM');
+    expect(text).toContain('Wishlistinde yeni bir indirim var');
+    expect(text).toContain('Bu bir test');
+    expect(text).toContain('Test Game');
+    expect(text).toContain('dealio-open:home');
   });
 
   it('propagates a Discord DM failure to the application service', async () => {

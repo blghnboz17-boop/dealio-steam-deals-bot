@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { buildStatusV2Panel } from '../dist/discord/status-view-v2.js';
 import { buildSaleNotificationPanel, buildInitialWishlistV2Page } from '../dist/discord/notification-components-v2.js';
 import { buildCountryRangePanel } from '../dist/discord/ui/country-picker.js';
-import { buildSetupConfirmationPanel } from '../dist/discord/setup-view.js';
+import { buildSetupConfirmationPanel, buildSetupWelcomePanel } from '../dist/discord/setup-view.js';
 const date = '2026-09-12T14:00:00.000Z';
 const games = [[620, 'Portal 2', 1999, 199, 90], [1091500, 'Cyberpunk 2077', 5999, 2099, 65], [1086940, 'Baldur’s Gate 3', 5999, 4499, 25]];
 const items = games.map(([appId, name, initialMinor, finalMinor, discountPercent]) => ({
@@ -53,6 +53,9 @@ for (const language of ['tr', 'en']) {
     wishlist: personal('wishlist'),
     settings: [buildStatusV2Panel(dashboard, 'preview', { tabs: true }).toJSON()],
     notification: [buildSaleNotificationPanel(notifications, language).toJSON()],
+    test: [buildSaleNotificationPanel([{ ...notifications[0], headerImageUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${notifications[0].appId}/header.jpg` }],
+      language, { test: true, testSource: 'wishlist' }).toJSON()],
+    welcome: [buildSetupWelcomePanel(language, 'preview').toJSON()],
     blocked: [buildStatusV2Panel({ ...dashboard, config: { ...config, enabled: false, dmDeliveryBlockedAt: date } }, 'preview', { mode: 'home' }).toJSON()],
     partial: [buildStatusV2Panel({ ...dashboard, checkState: { ...dashboard.checkState, lastStatus: 'unavailable', lastSuccessUnknownPriceCount: 4 } }, 'preview', { mode: 'home' }).toJSON()],
     empty: personal('wishlist', { ...assistantData, items: [] }),

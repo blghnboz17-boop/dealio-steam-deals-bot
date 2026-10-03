@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { resolveStoreCountry } from '../src/domain/store-country.js';
 import { suggestedStoreCountryFromDiscordLocale } from '../src/discord/language.js';
 import {
-  buildSetupConfirmationComponents,
-  buildSetupConfirmationEmbed,
+  buildSetupConfirmationPanel,
   buildSetupCountrySelectOptions,
-  buildSetupWelcomeComponents,
-  buildSetupWelcomeEmbed,
+  buildSetupWelcomePanel,
   canUseSetupComponent,
   parseSetupAction,
 } from '../src/discord/setup-view.js';
@@ -29,23 +27,17 @@ describe('guided setup presentation', () => {
     expect(suggestedStoreCountryFromDiscordLocale('en')).toBeUndefined();
   });
 
-  it('builds a branded Turkish welcome card with owner-session controls', () => {
-    const embed = buildSetupWelcomeEmbed('tr', {
+  it('builds a branded Turkish welcome panel that says what Dealio does', () => {
+    const json = JSON.stringify(buildSetupWelcomePanel('tr', 'session', {
       bannerUrl: 'https://example.com/dealio.png',
-    });
-    const components = buildSetupWelcomeComponents('session', 'tr');
+    }).toJSON());
 
-    expect(embed).toMatchObject({
-      title: expect.stringContaining("Dealio'ya hoş geldin"),
-      image: { url: 'https://example.com/dealio.png' },
-    });
-    expect(components[0]?.components).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        custom_id: 'setup:session:start',
-        label: 'Kurulumu Başlat',
-      }),
-      expect.objectContaining({ custom_id: 'setup:session:how' }),
-    ]));
+    expect(json).toContain("Dealio'ya hoş geldin");
+    expect(json).toContain('https://example.com/dealio.png');
+    expect(json).toContain('İndirim başlayınca DM');
+    expect(json).toContain('"custom_id":"setup:session:start"');
+    expect(json).toContain('"label":"Kurulumu Başlat"');
+    expect(json).toContain('"custom_id":"setup:session:how"');
   });
 
   it('shows the verified profile, region, language, frequency and explicit consent', () => {
@@ -55,40 +47,32 @@ describe('guided setup presentation', () => {
       language: 'en' as const,
       storeCountryCode: 'US' as const,
     };
-    const embed = buildSetupConfirmationEmbed(prepared, {
+    const json = JSON.stringify(buildSetupConfirmationPanel(prepared, 'session', {
       pollIntervalHours: 6,
       regionSelectionSource: 'discord-locale',
-    });
-    const controls = buildSetupConfirmationComponents('session', 'en');
-    const serialized = JSON.stringify(embed);
+    }).toJSON());
 
-    expect(serialized).toContain('United States (US)');
-    expect(serialized).toContain('Every 6 hours');
-    expect(serialized).toContain('Suggested automatically from your Discord language');
-    expect(serialized).toContain('allow Dealio to send proactive sale DMs');
-    expect(serialized).toContain('76561••••••••0000');
-    expect(serialized).toContain(`https://steamcommunity.com/profiles/${prepared.steamId64}`);
-    expect(controls[0]?.components[0]).toMatchObject({
-      custom_id: 'setup:session:confirm',
-      label: 'Correct, Enable Notifications',
-    });
-    expect(controls[0]?.components[1]).toMatchObject({
-      custom_id: 'setup:session:region',
-      label: 'Change Region',
-    });
+    expect(json).toContain('United States');
+    expect(json).toContain('Every 6 hours');
+    expect(json).toContain('Suggested automatically from your Discord language');
+    expect(json).toContain('allow Dealio to send proactive sale DMs');
+    expect(json).toContain('76561••••••••0000');
+    expect(json).toContain(`https://steamcommunity.com/profiles/${prepared.steamId64}`);
+    expect(json).toMatch(/"custom_id":"setup:session:confirm"[^}]*"label":"Correct, Enable Notifications"|"label":"Correct, Enable Notifications"[^}]*"custom_id":"setup:session:confirm"/);
+    expect(json).toContain('"custom_id":"setup:session:region"');
   });
 
   it.each([
     ['tr', 'Her 30 dakikada bir'],
     ['en', 'Every 30 minutes'],
   ] as const)('shows the default half-hour schedule in %s', (language, expected) => {
-    const embed = buildSetupConfirmationEmbed({
+    const panel = buildSetupConfirmationPanel({
       discordUserId: 'discord-user',
       steamId64: '76561198000000000',
       language,
       storeCountryCode: 'TR',
-    });
-    expect(JSON.stringify(embed)).toContain(expected);
+    }, 'session');
+    expect(JSON.stringify(panel.toJSON())).toContain(expected);
   });
 
   it('binds setup actions to the owner and rejects stale or unknown controls', () => {

@@ -308,6 +308,20 @@ describe('bot wiring', () => {
     }), { navigate: mocks.navigate });
   });
 
+  it('opens a fresh /dealio panel from the session-free panel button in DMs', async () => {
+    const { client } = await launch();
+    const input = Object.assign(interaction({ isChatInputCommand: () => false, isMessageComponent: () => true }), {
+      customId: 'dealio-open:home', isButton: () => true,
+    });
+    client.emit(Events.InteractionCreate, input);
+    await vi.waitFor(() => expect(mocks.dealio).toHaveBeenCalledOnce());
+    expect(mocks.dealio).toHaveBeenCalledWith(input, expect.objectContaining({
+      statusService: expect.any(StatusService),
+      lifecycleSignal: expect.any(AbortSignal),
+    }), { navigate: mocks.navigate });
+    expect(input.reply).not.toHaveBeenCalled();
+  });
+
   it('replies ephemerally to an unknown chat command', async () => {
     const { client } = await launch();
     const input = interaction({ commandName: 'unknown' });

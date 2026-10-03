@@ -1,3 +1,4 @@
+import { buildSaleNotificationPanel } from '../src/discord/notification-components-v2.js';
 import { describe, expect, it } from 'vitest';
 import {
   buildSaleNotificationEmbed,
@@ -71,14 +72,25 @@ describe('notification messages', () => {
     expect(serialized).toContain('Sale price');
   });
 
-  it('clearly labels localized test notifications', () => {
-    const turkish = buildSaleNotificationEmbed(candidate, 'tr', { test: true });
-    const english = buildSaleNotificationEmbed(candidate, 'en', { test: true });
+  it('clearly labels localized test notifications and says where the game came from', () => {
+    const text = (language: 'tr' | 'en', testSource: 'wishlist' | 'example') => JSON.stringify(
+      buildSaleNotificationPanel([candidate], language, { test: true, testSource }).toJSON());
 
-    expect(turkish.author?.name).toBe('Dealio test bildirimi');
-    expect(turkish.description).toContain('yalnızca örnektir');
-    expect(english.author?.name).toBe('Dealio test notification');
-    expect(english.description).toContain('only an example');
+    expect(text('tr', 'wishlist')).toContain('DEALIO · TEST');
+    expect(text('tr', 'wishlist')).toContain('wishlistinden alındı');
+    expect(text('tr', 'example')).toContain('örnek bir oyun');
+    expect(text('en', 'wishlist')).toContain('come from your wishlist');
+    expect(text('en', 'example')).toContain('an example game is shown');
+  });
+
+  it('keeps the flame for hot deals of 60% or more', () => {
+    const header = (discountPercent: number) => JSON.stringify(
+      buildSaleNotificationPanel([{ ...candidate, discountPercent }], 'en').toJSON());
+
+    expect(header(60)).toContain('# 🔥');
+    expect(header(60)).toContain('## 🔥 [Test Game]');
+    expect(header(59)).not.toContain('🔥');
+    expect(header(59)).toContain('# 🔔');
   });
 
   it('removes control characters, escapes formatting, and truncates game names', () => {

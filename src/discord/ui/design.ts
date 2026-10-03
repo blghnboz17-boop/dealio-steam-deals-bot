@@ -1,7 +1,9 @@
+import { ButtonBuilder, ButtonStyle } from 'discord.js';
 import { storeCountryName, type StoreCountryCode } from '../../domain/store-country.js';
 import type { Language } from '../../domain/user-config.js';
 import { formatMinorPrice } from '../notification-messages.js';
 import { dealioBrand } from './brand.js';
+import { openPanelCustomId } from './components-v2.js';
 import type { DealioTab } from './tab-bar.js';
 
 /**
@@ -40,9 +42,17 @@ export function flagEmoji(countryCode: string): string {
     : '🌍';
 }
 
-/** How strong a discount is at a glance: 🟢 big (70%+), 🟡 good (40%+), 🟠 small. */
+/** From this discount on a deal is "hot": 🔥 and the green dot are reserved for it. */
+export const hotDealPercent = 60;
+
+/** How strong a discount is at a glance: 🟢 hot (60%+), 🟡 good (30%+), 🟠 small. */
 export function discountTier(percent: number): string {
-  return percent >= 70 ? '🟢' : percent >= 40 ? '🟡' : '🟠';
+  return percent >= hotDealPercent ? '🟢' : percent >= 30 ? '🟡' : '🟠';
+}
+
+/** "🔥 " before a hot deal's name, nothing otherwise, so the flame keeps its meaning. */
+export function hotPrefix(percent: number | null | undefined): string {
+  return (percent ?? 0) >= hotDealPercent ? '🔥 ' : '';
 }
 
 /** "🟢 `−%90`": the tier dot and an inline-code pill, which Discord draws as a small badge. */
@@ -70,4 +80,11 @@ export function savingsLine(
   if (saved <= 0) return null;
   const amount = formatMinorPrice(saved, price.currency, language);
   return language === 'tr' ? `💰 ${amount} tasarruf` : `💰 You save ${amount}`;
+}
+
+/** "🏠 Dealio panel": opens a fresh /dealio panel from any message, DMs included. */
+
+export function openPanelButton(language: Language, style: ButtonStyle = ButtonStyle.Primary): ButtonBuilder {
+  return new ButtonBuilder().setCustomId(openPanelCustomId).setStyle(style).setEmoji('🏠')
+    .setLabel(language === 'tr' ? 'Dealio paneli' : 'Dealio panel');
 }

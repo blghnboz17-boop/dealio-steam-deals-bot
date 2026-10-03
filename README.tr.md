@@ -100,7 +100,7 @@ Dealio, her tarama bittikten **30 dakika sonra** yeniden kontrol eder. Kuralına
 | `/status` | Hesap, genel indirim eşiği ve bildirim durumu |
 | `/check` | Kısa bekleme sınırına tabi olarak kontrol iste |
 | `/region` | Steam Store ülkeni seç |
-| `/test-notification` | Kendine örnek bildirim gönder |
+| `/test-notification` | Wishlistinde şu an indirimde olan bir oyunla kendine test bildirimi gönder |
 | `/delete-data` | Onayından sonra aktif hesap verilerini sil |
 
 Paneller sana özeldir; düğmeler paneli açan kullanıcıya bağlıdır. Süre dolunca veya bot yeniden başlayınca yeni bir komut açarak devam edebilirsin.
@@ -133,9 +133,9 @@ Biraz bekleyip komutu bir kez daha dene; bekleme süresi gösteriliyorsa dolmas�
 <details>
 <summary><strong>Bot çalışıyor ama DM gelmiyor. Neyi kontrol etmeliyim?</strong></summary>
 
-Önce `/test-notification` ile bir örnek mesaj iste. O da gelmiyorsa botu engellemediğini ve ortak sunucudan DM almaya izin verdiğini kontrol et. Bildirimler DM engeli nedeniyle duraklatılmışsa ayarı düzelttikten sonra `/status` üzerinden yeniden aç.
+Önce `/test-notification` ile bir örnek mesaj iste. O da gelmiyorsa botu engellemediğini ve ortak sunucudan DM almaya izin verdiğini kontrol et. Bildirimler DM engeli nedeniyle duraklatılmışsa ayarı düzelttikten sonra `/dealio` → ⚙️ Ayarlar üzerinden yeniden aç.
 
-Test mesajı geliyor ama indirim bildirimi gelmiyorsa `/status` içindeki bildirim durumuna, oyunun hedef fiyatına veya indirim eşiğine, susturma seçeneğine ve sessiz saat/günlük özet ayarlarına bak. Test DM’si mesaj alabileceğini gösterir; her oyunun o anda bildirim koşulunu karşıladığı anlamına gelmez.
+Test mesajı geliyor ama indirim bildirimi gelmiyorsa `/dealio` → ⚙️ Ayarlar içindeki bildirim durumuna, oyunun hedef fiyatına veya indirim eşiğine, susturma seçeneğine ve sessiz saat/günlük özet ayarlarına bak. Test DM’si mesaj alabileceğini gösterir; her oyunun o anda bildirim koşulunu karşıladığı anlamına gelmez.
 
 </details>
 

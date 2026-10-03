@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TestNotificationService } from '../src/application/test-notification-service.js';
+import { TestNotificationService, wishlistTestSale } from '../src/application/test-notification-service.js';
 import { createDatabase } from '../src/persistence/database.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
@@ -36,13 +36,15 @@ describe('TestNotificationService', () => {
           gameName: 'Portal 2', discountPercent: 80, currency: 'USD',
         })],
         'en',
-        { test: true },
+        { test: true, testSource: 'example' },
       );
       expect(sender.send).toHaveBeenCalledWith(
         { notifications: [expect.objectContaining({ appId: 620 })] },
         'en',
-        { test: true },
+        { test: true, testSource: 'example' },
       );
+      // The example never carries invented price history.
+      expect(sender.plan.mock.calls[0]?.[0]?.[0]).not.toHaveProperty('historicalLow');
       expect(database.prepare('SELECT * FROM wishlist_item_state').all()).toEqual(stateBefore);
       expect(database.prepare('SELECT * FROM notification_log').all()).toEqual(
         notificationsBefore,
@@ -52,6 +54,45 @@ describe('TestNotificationService', () => {
     } finally {
       database.close();
     }
+  });
+
+  it('shows the deepest real discount from the wishlist, with its historical low', async () => {
+    const sender = createSender();
+    const config = { storeCountryCode: 'DE' } as never;
+    const item = (appId: number, discountPercent: number, onSale = true): WishlistItem => ({
+      appId, name: `Game ${appId}`, priority: null, dateAdded: null, onSale,
+      headerImageUrl: `https://cdn.example/${appId}.jpg`,
+      price: { currency: 'EUR', initialMinor: 2000, finalMinor: 2000 * (100 - discountPercent) / 100, discountPercent, isFree: false },
+    });
+    const historicalLows = vi.fn().mockResolvedValue(new Map([[3, {
+      currency: 'EUR', amountMinor: 300, discountPercent: 85, recordedAt: '2025-01-01T00:00:00.000Z',
+    }]]));
+    const service = new TestNotificationService(sender, {
+      sample: () => wishlistTestSale(config, [item(1, 40), item(2, 90), item(3, 75), item(4, 0, false)],
+        new Set([2]), { historicalLows }),
+    });
+
+    await service.send('invoking-user', 'en', 'DE');
+
+    expect(sender.plan).toHaveBeenCalledWith([expect.objectContaining({
+      appId: 3, gameName: 'Game 3', currency: 'EUR', finalPriceMinor: 500, normalPriceMinor: 2000,
+      discountPercent: 75, storeCountryCode: 'DE', headerImageUrl: 'https://cdn.example/3.jpg',
+      historicalLow: expect.objectContaining({ amountMinor: 300 }), saleEpisodeId: 'test-notification',
+    })], 'en', { test: true, testSource: 'wishlist' });
+    expect(historicalLows).toHaveBeenCalledWith([{ appId: 3, currency: 'EUR' }], 'DE');
+  });
+
+  it('falls back to the example when nothing is discounted or the lookup fails', async () => {
+    const sender = createSender();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await new TestNotificationService(sender, { sample: async () => null }).send('a', 'en', 'TR');
+      await new TestNotificationService(sender, { sample: async () => { throw new Error('db'); } }).send('b', 'en', 'TR');
+      expect(sender.plan.mock.calls.map((call) => [call[0][0].appId, call[2]])).toEqual([
+        [620, { test: true, testSource: 'example' }],
+        [620, { test: true, testSource: 'example' }],
+      ]);
+    } finally { error.mockRestore(); }
   });
 
   it('propagates delivery failures without persisting a retry candidate', async () => {

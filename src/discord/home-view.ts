@@ -8,7 +8,7 @@ import type { StatusV2Options } from './status-view-v2.js';
 import { sanitizeGameName } from './notification-messages.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { dealioBrand } from './ui/brand.js';
-import { countryDisplay, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
+import { countryDisplay, hotPrefix, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
@@ -42,7 +42,7 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
     ? '🌙 ' + clock(pref.quietStart) + '–' + clock(pref.quietEnd)
     : pref?.mode === 'digest' ? '📬 ' + t('Özet ', 'Digest ') + clock(pref.digestMinute) : '⚡ ' + t('Anında bildirim', 'Instant alerts');
   const tracking = blocked ? '🔴 ' + t('DM engelli', 'DMs blocked')
-    : config.enabled ? '🟢 ' + t('Takip açık', 'Tracking on') : '⏸️ ' + t('Duraklatıldı', 'Paused');
+    : config.enabled ? '✅ ' + t('Takip açık', 'Tracking on') : '⏸️ ' + t('Takip duraklatıldı', 'Tracking paused');
   root.addTextDisplayComponents(display(
     panelHeader('home', language, t('Wishlist’in. Senin kuralların.', 'Your wishlist. Your rules.'),
       t('İstediğin oyunu, istediğin fiyata yakala.', 'Get the games you want at the price you choose.')) +
@@ -54,12 +54,12 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
   const hero = options.featuredDeal ?? options.heroGame;
   if (hero) {
     root.addTextDisplayComponents(display('-# ' + (options.featuredDeal
-      ? '🔥 ' + t('KURALINA UYGUN FIRSAT', 'A DEAL THAT MATCHES YOUR RULE')
+      ? '🎯 ' + t('KURALINA UYGUN FIRSAT', 'A DEAL THAT MATCHES YOUR RULE')
       : '✨ ' + t('WISHLIST’İNDEN', 'FROM YOUR WISHLIST'))));
     addArtwork(root, hero);
     const price = hero.price?.currency ? { ...hero.price, currency: hero.price.currency } : null;
     const savings = price && savingsLine(price, language);
-    root.addTextDisplayComponents(display('## [' + sanitizeGameName(hero.name).slice(0, 100) +
+    root.addTextDisplayComponents(display('## ' + hotPrefix(price?.discountPercent) + '[' + sanitizeGameName(hero.name).slice(0, 100) +
       '](https://store.steampowered.com/app/' + hero.appId + ')\n' +
       (price ? priceLine(price, language) : t('Fiyat doğrulanamadı', 'Price unavailable')) +
       (savings ? '\n' + savings : '') +

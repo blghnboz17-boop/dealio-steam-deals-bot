@@ -12,7 +12,7 @@ import {
 import { UserConfigurationService } from '../../application/user-configuration-service.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
-import { buildNoticePanel, dealioV2Flags } from '../ui/components-v2.js';
+import { buildNoticePanel, dealioV2Flags, openPanelNoticeButton } from '../ui/components-v2.js';
 import { uiCopy } from '../ui/copy.js';
 
 export const testNotificationCommand = new SlashCommandBuilder()
@@ -56,6 +56,7 @@ export async function handleTestNotification(
 
   await measureDiscordOperation(interaction, 'test-notification.render', () => interaction.editReply({
     flags: dealioV2Flags,
-    components: [buildNoticePanel(language, kind, title, description)],
+    components: [buildNoticePanel(language, kind, title, description,
+      { button: openPanelNoticeButton(language, !config) })],
   }));
 }
