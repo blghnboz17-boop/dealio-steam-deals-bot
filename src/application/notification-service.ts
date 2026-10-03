@@ -1,5 +1,6 @@
 import { redactSecrets, safeLogger } from './safe-logger.js';
 import { deliveryAllowed } from '../domain/notification-preference.js';
+import type { HistoricalLow } from '../domain/price-history.js';
 import type { Language } from '../domain/user-config.js';
 import type { StoreCountryCode } from '../domain/store-country.js';
 import type {
@@ -10,6 +11,7 @@ import type {
 import { UserConfigRepository } from '../persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../persistence/wishlist-state-repository.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
+import type { HistoricalLowSource } from '../price-history/itad-client.js';
 
 export type { DeliveryReceipt } from '../domain/wishlist-state.js';
 import type { DeliveryReceipt } from '../domain/wishlist-state.js';
@@ -40,6 +42,8 @@ export interface SaleNotification {
   readonly finalPriceMinor: number;
   readonly discountPercent: number;
   readonly createdAt: string;
+  /** Presentation-only context added at delivery; never persisted or part of batch identity. */
+  readonly historicalLow?: HistoricalLow;
 }
 
 export interface NotificationSendOptions {
@@ -72,6 +76,7 @@ export interface NotificationServiceOptions {
   readonly maxRetryDelayMs?: number;
   readonly lifecycleSignal?: AbortSignal;
   readonly revalidate?: (user: string) => Promise<boolean>;
+  readonly priceHistory?: HistoricalLowSource;
 }
 
 const defaultSendingTimeoutMs = 15 * 60 * 1000;
@@ -88,6 +93,7 @@ export class NotificationService {
   private readonly maxRetryDelayMs: number;
   private readonly lifecycleSignal?: AbortSignal;
   private readonly revalidate?: (user: string) => Promise<boolean>;
+  private readonly priceHistory?: HistoricalLowSource;
 
   public constructor(
     private readonly userConfigRepository: UserConfigRepository,
@@ -103,6 +109,7 @@ export class NotificationService {
     this.maxRetryDelayMs = options.maxRetryDelayMs ?? defaultMaxRetryDelayMs;
     this.lifecycleSignal = options.lifecycleSignal;
     this.revalidate = options.revalidate;
+    this.priceHistory = options.priceHistory;
 
     if (!Number.isSafeInteger(this.sendingTimeoutMs) || this.sendingTimeoutMs <= 0) {
       throw new Error('Notification sending timeout must be a positive safe integer');
@@ -282,6 +289,27 @@ export class NotificationService {
     } catch { return batch; }
   }
 
+  private async withPriceHistory(batch: DurableNotificationBatch): Promise<DurableNotificationBatch> {
+    // Like artwork, price history is optional context and must never block delivery.
+    if (!this.priceHistory) return batch;
+    try {
+      const lows = new Map<string, HistoricalLow>();
+      for (const country of new Set(batch.notifications.map(item => item.storeCountryCode))) {
+        const apps = batch.notifications.filter(item => item.storeCountryCode === country)
+          .map(item => ({ appId: item.appId, currency: item.currency }));
+        for (const [appId, low] of await this.priceHistory.historicalLows(apps, country)) {
+          lows.set(`${country}:${appId}`, low);
+        }
+      }
+      const enrich = (item: NotificationCandidate): NotificationCandidate => {
+        const historicalLow = lows.get(`${item.storeCountryCode}:${item.appId}`);
+        return historicalLow ? { ...item, historicalLow } : item;
+      };
+      const [first, ...rest] = batch.notifications;
+      return { ...batch, notifications: [enrich(first), ...rest.map(enrich)] };
+    } catch { return batch; }
+  }
+
   private async deliverClaimedBatch(
     batch: DurableNotificationBatch,
   ): Promise<BatchDeliveryOutcome> {
@@ -292,7 +320,7 @@ export class NotificationService {
       const preferenceMode = this.wishlistStateRepository.assistant.preference(user).mode;
       const digest = preferenceMode === 'digest';
       deliveryMode = preferenceMode === 'instant' ? 'immediate' : preferenceMode;
-      const renderedBatch = this.withArtwork(batch);
+      const renderedBatch = await this.withPriceHistory(this.withArtwork(batch));
       receipt = digest ? await this.sender.send(renderedBatch,batch.language,{digest:true}) : await this.sender.send(renderedBatch,batch.language);
     } catch (error: unknown) {
       if (error instanceof NotificationDeliveryCancelledError) {

@@ -1,3 +1,4 @@
+import type { HistoricalLow } from './price-history.js';
 import type { WishlistItem } from './steam.js';
 import type { Language } from './user-config.js';
 import type { StoreCountryCode } from './store-country.js';
@@ -39,6 +40,8 @@ export interface NotificationCandidate {
   readonly discountPercent: number;
   readonly attemptCount: number;
   readonly createdAt: string;
+  /** Presentation-only context added at delivery; never persisted. */
+  readonly historicalLow?: HistoricalLow;
 }
 
 export interface NotificationBatch<T> {

@@ -9,7 +9,7 @@ own price rules, with the context needed to trust the alert.
 ## Rules
 
 - Use TypeScript with strict mode.
-- Keep Steam, Discord, persistence, and scheduling code in separate modules (`src/steam`, `src/discord`, `src/persistence`, `src/application`, `src/domain`, `src/operations`).
+- Keep Steam, Discord, persistence, and scheduling code in separate modules (`src/steam`, `src/discord`, `src/persistence`, `src/application`, `src/domain`, `src/operations`, `src/price-history`).
 - Never commit secrets. Read tokens and IDs from environment variables.
 - Use Node's built-in `node:sqlite` module; avoid native database dependencies.
 - Add tests for price-change, rule-matching, and duplicate-notification logic.
@@ -26,6 +26,7 @@ Dealio is in **limited beta** on a single Azure VM. Implemented:
 - Per-game rules: inherit the global discount threshold, a game-specific percentage, or a currency-bound target price; muting is independent.
 - Notify only when a game changes from not-on-sale to on-sale, or crosses a rule threshold. Saving a rule or finishing setup records a baseline and never sends an initial alert for an existing discount.
 - Notification timing: on detection, IANA-timezone quiet hours, or a daily digest. Pending offers are revalidated before delivery.
+- Sale alerts show Steam's historical low for the user's Store region from the IsThereAnyDeal API (optional `ITAD_API_KEY`; same currency only, never converted; after a regional currency switch such as Turkey's, the low since that switch; failures omit the line and never delay or block delivery).
 - Persistent deduplication per sale episode; delivery history, DM access test, and `/delete-data`.
 - Price observations kept 90 days, notification history shown for 30 days; shared five-minute price cache.
 - Operations: encrypted off-site backup and restore rehearsal (GitHub Actions), independent Healthchecks alerts, a static public site (privacy, terms, help) on GitHub Pages, release gate (`npm run release:check`), and anonymous latency metrics (`npm run metrics:report`).

@@ -8,6 +8,7 @@ export interface EnvironmentConfig {
   readonly pollIntervalHours: number;
   readonly notificationRetryIntervalSeconds: number;
   readonly steamWebApiKey?: string;
+  readonly isThereAnyDealApiKey?: string;
   readonly dealioBannerUrl?: string;
   readonly azureLeaseContainerUrl?: string;
   readonly production?: boolean;
@@ -66,6 +67,7 @@ export function loadEnvironment(
   const discordClientId = requiredValue(environment, 'DISCORD_CLIENT_ID');
   const discordGuildId = environment.DISCORD_GUILD_ID?.trim() || undefined;
   const steamWebApiKey = environment.STEAM_WEB_API_KEY?.trim() || undefined;
+  const isThereAnyDealApiKey = environment.ITAD_API_KEY?.trim() || undefined;
   const dealioBannerUrl = environment.DEALIO_BANNER_URL?.trim() || undefined;
 
   if (dealioBannerUrl !== undefined) {
@@ -129,6 +131,7 @@ export function loadEnvironment(
     pollIntervalHours,
     notificationRetryIntervalSeconds,
     ...(steamWebApiKey ? { steamWebApiKey } : {}),
+    ...(isThereAnyDealApiKey ? { isThereAnyDealApiKey } : {}),
     ...(dealioBannerUrl ? { dealioBannerUrl } : {}),
   };
 }
