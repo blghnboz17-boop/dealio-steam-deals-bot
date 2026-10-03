@@ -12,3 +12,9 @@ export class SteamIdentityError extends Error {
     super(message);
   }
 }
+
+/** How the Steam profile looks on Steam, so a user can recognize their own account during setup. */
+export interface SteamProfileSummary {
+  readonly personaName: string;
+  readonly avatarUrl?: string;
+}

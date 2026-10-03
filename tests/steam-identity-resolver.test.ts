@@ -214,3 +214,38 @@ describe('SteamIdentityResolver', () => {
     }
   });
 });
+
+describe('Steam profile summary', () => {
+  const player = (overrides: Record<string, unknown> = {}) => jsonResponse({ response: { players: [{
+    steamid: steamId64, personaname: '  Gabe\u0007N  ', avatarfull: 'https://avatars.steamstatic.com/abc_full.jpg', ...overrides,
+  }] } });
+
+  it('reads the persona name and avatar with the Web API key', async () => {
+    const fetchImpl = fetchMock().mockResolvedValue(player());
+    const resolver = new SteamIdentityResolver({ apiKey: 'key', fetchImpl });
+    await expect(resolver.summary(steamId64)).resolves.toEqual({
+      personaName: 'Gabe N', avatarUrl: 'https://avatars.steamstatic.com/abc_full.jpg',
+    });
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain('GetPlayerSummaries');
+  });
+
+  it('drops an avatar outside Steam’s image hosts but keeps the name', async () => {
+    const resolver = new SteamIdentityResolver({ apiKey: 'key', fetchImpl: fetchMock().mockResolvedValue(player({ avatarfull: 'https://evil.example/a.jpg' })) });
+    await expect(resolver.summary(steamId64)).resolves.toEqual({ personaName: 'Gabe N' });
+  });
+
+  it.each([
+    ['no API key', undefined, () => player()],
+    ['a Steam error', 'key', () => jsonResponse({}, 500)],
+    ['another account', 'key', () => player({ steamid: '76561198000000001' })],
+    ['an empty name', 'key', () => player({ personaname: '   ' })],
+  ] as const)('returns null for %s, never an error', async (_case, apiKey, response) => {
+    const resolver = new SteamIdentityResolver({ ...(apiKey ? { apiKey } : {}), fetchImpl: fetchMock().mockImplementation(async () => response()) });
+    await expect(resolver.summary(steamId64)).resolves.toBeNull();
+  });
+
+  it('gives up within the timeout', async () => {
+    const resolver = new SteamIdentityResolver({ apiKey: 'key', timeoutMs: 10, fetchImpl: fetchMock().mockReturnValue(new Promise(() => undefined)) });
+    await expect(resolver.summary(steamId64)).resolves.toBeNull();
+  });
+});

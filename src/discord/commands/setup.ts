@@ -495,23 +495,12 @@ export async function handleSetup(
         });
         return;
       }
-      if (action === 'language') {
+      if (action === 'language' && !prepared) {
+        // Chosen on the welcome screen: everything from here on, the setup form included, is in this language.
         const chosen = component.isStringSelectMenu() ? component.values[0] ?? '' : '';
         language = isLanguage(chosen) ? chosen : language;
-        if (!prepared) {
-          // Chosen on the welcome screen: everything from here on, the setup form included, is in this language.
-          await editPanel({
-            components: [buildSetupWelcomePanel(language, interaction.id, viewOptions, showingHow)],
-          });
-          return;
-        }
-        prepared = { ...prepared, language };
         await editPanel({
-          components: [buildSetupConfirmationPanel(
-            prepared,
-            interaction.id,
-            confirmationViewOptions(),
-          )],
+          components: [buildSetupWelcomePanel(language, interaction.id, viewOptions, showingHow)],
         });
         return;
       }

@@ -1,4 +1,4 @@
-import { SteamIdentityError } from '../domain/steam-identity.js';
+import { SteamIdentityError, type SteamProfileSummary } from '../domain/steam-identity.js';
 import { isSteamId64 } from '../domain/user-config.js';
 import {
   globalSteamRequestLimiter,
@@ -8,6 +8,8 @@ import type { SteamFetch } from './steam-client.js';
 
 const resolveVanityEndpoint =
   'https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/';
+const playerSummariesEndpoint =
+  'https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/';
 const defaultTimeoutMs = 10_000;
 const vanityPattern = /^[a-z0-9_-]{2,32}$/i;
 
@@ -135,13 +137,38 @@ export class SteamIdentityResolver {
     }
   }
 
-  private async resolveVanity(vanityName: string): Promise<string> {
-    if (this.lifecycleSignal?.aborted) {
-      throw cancelledIdentityError();
+  /**
+   * The public persona name and avatar, shown so a user can recognize their own
+   * profile before confirming. Presentation only: any failure returns null and
+   * never blocks setup.
+   */
+  public async summary(steamId64: string): Promise<SteamProfileSummary | null> {
+    if (!this.apiKey || !isSteamId64(steamId64) || this.lifecycleSignal?.aborted) {
+      return null;
     }
+    const url = new URL(playerSummariesEndpoint);
+    url.searchParams.set('key', this.apiKey);
+    url.searchParams.set('steamids', steamId64);
+    try {
+      const payload = await this.requestLimiter.run(() => this.fetchJson(url), this.lifecycleSignal);
+      return parsePlayerSummary(payload, steamId64);
+    } catch (_error: unknown) {
+      return null;
+    }
+  }
+
+  private async resolveVanity(vanityName: string): Promise<string> {
     const url = new URL(resolveVanityEndpoint);
     url.searchParams.set('key', this.apiKey!);
     url.searchParams.set('vanityurl', vanityName);
+    return parseVanityResponse(await this.fetchJson(url));
+  }
+
+  /** One Steam Web API read with a timeout, cancelled with the bot's lifecycle. */
+  private async fetchJson(url: URL): Promise<unknown> {
+    if (this.lifecycleSignal?.aborted) {
+      throw cancelledIdentityError();
+    }
 
     const controller = new AbortController();
     let rejectCancellation: ((error: SteamIdentityError) => void) | undefined;
@@ -179,12 +206,11 @@ export class SteamIdentityResolver {
       if (!response.ok) {
         throw unavailableIdentityError();
       }
-      const payload = await Promise.race([
+      return await Promise.race([
         response.json(),
         timeoutPromise,
         cancellationPromise,
       ]) as unknown;
-      return parseVanityResponse(payload);
     } catch (error: unknown) {
       if (error instanceof SteamIdentityError) {
         throw error;
@@ -222,6 +248,34 @@ function parseVanityResponse(payload: unknown): string {
     throw unavailableIdentityError();
   }
   return steamId64;
+}
+
+const avatarHosts = /(^|\.)(steamstatic\.com|akamaihd\.net)$/;
+
+function parsePlayerSummary(payload: unknown, steamId64: string): SteamProfileSummary | null {
+  const players = (payload as { response?: { players?: unknown } } | null)?.response?.players;
+  const player = Array.isArray(players) ? players[0] as Record<string, unknown> | undefined : undefined;
+  if (!player || player.steamid !== steamId64) {
+    return null;
+  }
+  const personaName = typeof player.personaname === 'string'
+    ? player.personaname.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 64)
+    : '';
+  if (!personaName) {
+    return null;
+  }
+  return { personaName, ...(steamAvatarUrl(player.avatarfull) ? { avatarUrl: steamAvatarUrl(player.avatarfull) } : {}) };
+}
+
+/** Only an https avatar on Steam's own image hosts is shown. */
+function steamAvatarUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && avatarHosts.test(url.hostname) ? url.toString() : undefined;
+  } catch (_error: unknown) {
+    return undefined;
+  }
 }
 
 function invalidProfileError(): SteamIdentityError {

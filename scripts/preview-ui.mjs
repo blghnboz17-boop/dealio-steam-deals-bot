@@ -71,7 +71,7 @@ for (const language of ['tr', 'en', 'de', 'fr']) {
     empty: personal('wishlist', { ...assistantData, items: [] }),
     expired: [buildStatusV2Panel(dashboard, 'preview', { mode: 'home', disabled: true }).toJSON()],
     region: [buildCountryRangePanel(language, 'preview', { selected: 'TR' }).toJSON()],
-    setup: [buildSetupConfirmationPanel({ discordUserId: 'preview-user', steamId64: '76561198000000000', language, storeCountryCode: 'TR' }, 'preview', { regionSelectionSource: 'discord-locale' }).toJSON()],
+    setup: [buildSetupConfirmationPanel({ discordUserId: 'preview-user', steamId64: '76561198000000000', language, storeCountryCode: 'TR', profile: { personaName: 'Bilgehan', avatarUrl: 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg' } }, 'preview', { regionSelectionSource: 'discord-locale' }).toJSON()],
     summary: buildInitialWishlistV2Page({ discordUserId: 'preview-user', steamId64: '76561198000000000', language, storeCountryCode: 'TR',
       minimumDiscountPercent: 30, totalGameCount: 24, failedItemCount: 0, capturedAt: date, upcomingCount: 8,
       unavailableItems: [{ appId: 1287290, code: 'STEAM_APP_REGION_UNAVAILABLE' }],

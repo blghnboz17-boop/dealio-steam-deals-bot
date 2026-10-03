@@ -1,4 +1,5 @@
 import { isLanguage, isSteamId64, type Language, type UserConfig } from '../domain/user-config.js';
+import type { SteamProfileSummary } from '../domain/steam-identity.js';
 import {
   resolveStoreCountry,
   type StoreCountryCode,
@@ -21,6 +22,8 @@ export interface WishlistAccessValidator {
 
 export interface SteamIdentityReader {
   resolve(profileInput: string): Promise<string>;
+  /** Optional, presentation only: the persona name and avatar shown before confirming. */
+  summary?(steamId64: string): Promise<SteamProfileSummary | null>;
 }
 
 export interface ConfigureUserOptions {
@@ -32,6 +35,8 @@ export interface PreparedUserConfiguration {
   readonly steamId64: string;
   readonly language: Language;
   readonly storeCountryCode: StoreCountryCode;
+  /** How the profile looks on Steam, when Steam told us; never stored. */
+  readonly profile?: SteamProfileSummary;
 }
 
 export class UserConfigurationService {
@@ -51,7 +56,7 @@ export class UserConfigurationService {
     options: ConfigureUserOptions = {},
   ): Promise<UserConfig> {
     if (!isLanguage(language)) {
-      throw new InvalidUserConfigurationError('Language must be tr or en');
+      throw new InvalidUserConfigurationError('Language must be tr, en, de or fr');
     }
     if (storeCountryInput !== undefined && !resolveStoreCountry(storeCountryInput)) {
       throw new InvalidUserConfigurationError(
@@ -78,7 +83,7 @@ export class UserConfigurationService {
     options: ConfigureUserOptions = {},
   ): Promise<UserConfig> {
     if (!isLanguage(language)) {
-      throw new InvalidUserConfigurationError('Language must be tr or en');
+      throw new InvalidUserConfigurationError('Language must be tr, en, de or fr');
     }
     const requestedStoreCountry = storeCountryInput === undefined
       ? undefined
@@ -123,7 +128,7 @@ export class UserConfigurationService {
     storeCountryInput: string,
   ): Promise<PreparedUserConfiguration> {
     if (!isLanguage(language)) {
-      throw new InvalidUserConfigurationError('Language must be tr or en');
+      throw new InvalidUserConfigurationError('Language must be tr, en, de or fr');
     }
     const storeCountryCode = resolveStoreCountry(storeCountryInput);
     if (!storeCountryCode) {
@@ -136,8 +141,12 @@ export class UserConfigurationService {
     if (!isSteamId64(steamId64)) {
       throw new InvalidUserConfigurationError('Resolved SteamID64 is invalid');
     }
-    await this.wishlistAccessValidator.validateWishlistAccess(steamId64);
-    return { discordUserId, steamId64, language, storeCountryCode };
+    // The profile summary is read beside the wishlist check, so it adds no wait; its failure is ignored.
+    const [, profile] = await Promise.all([
+      this.wishlistAccessValidator.validateWishlistAccess(steamId64),
+      this.identityResolver.summary?.(steamId64).catch(() => null) ?? Promise.resolve(null),
+    ]);
+    return { discordUserId, steamId64, language, storeCountryCode, ...(profile ? { profile } : {}) };
   }
 
   public configurePreparedWithinUserOperation(
@@ -187,7 +196,7 @@ export class UserConfigurationService {
 
   public setLanguage(discordUserId: string, language: Language): Promise<UserConfig | null> {
     if (!isLanguage(language)) {
-      throw new InvalidUserConfigurationError('Language must be tr or en');
+      throw new InvalidUserConfigurationError('Language must be tr, en, de or fr');
     }
     return this.coordinator.runExclusive(discordUserId, () =>
       this.repository.setLanguage(discordUserId, language, this.now().toISOString()),

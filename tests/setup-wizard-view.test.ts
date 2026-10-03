@@ -40,6 +40,17 @@ describe('guided setup presentation', () => {
     expect(json).toContain('"custom_id":"setup:session:how"');
   });
 
+  it('shows the Steam name under the ID and the avatar on the right when Steam sends them', () => {
+    const json = JSON.stringify(buildSetupConfirmationPanel({
+      discordUserId: 'discord-user', steamId64: '76561198000000000', language: 'tr', storeCountryCode: 'TR',
+      profile: { personaName: 'Gabe_*N*', avatarUrl: 'https://avatars.steamstatic.com/abc_full.jpg' },
+    }, 'session').toJSON());
+    expect(json).toContain('👤 **Steam hesabı:** [76561198000000000]');
+    // The name sits under the ID, with Markdown in it escaped (JSON doubles each backslash).
+    expect(json).toContain('\\n🏷️ **Steam adın:** Gabe\\\\_\\\\*N\\\\*');
+    expect(json).toMatch(/"type":9,[^]*"accessory":\{"type":11,"media":\{"url":"https:\/\/avatars\.steamstatic\.com\/abc_full\.jpg"/);
+  });
+
   it('shows the verified profile, region, language, frequency and explicit consent', () => {
     const prepared = {
       discordUserId: 'discord-user',
@@ -56,7 +67,10 @@ describe('guided setup presentation', () => {
     expect(json).toContain('Every 6 hours');
     expect(json).toContain('Guessed from your Discord language');
     expect(json).toContain('I can DM you when a game on your wishlist goes on sale');
-    expect(json).toContain('76561••••••••0000');
+    // The full ID, so the user can check it is theirs; no name or avatar when Steam did not send them.
+    expect(json).toContain(`[${prepared.steamId64}](https://steamcommunity.com/profiles/${prepared.steamId64})`);
+    expect(json).not.toContain('Steam name');
+    expect(json).not.toContain('"type":11');
     expect(json).toContain(`https://steamcommunity.com/profiles/${prepared.steamId64}`);
     expect(json).toMatch(/"custom_id":"setup:session:confirm"[^}]*"label":"Looks good, turn on alerts"|"label":"Looks good, turn on alerts"[^}]*"custom_id":"setup:session:confirm"/);
     expect(json).toContain('"custom_id":"setup:session:region"');

@@ -120,9 +120,10 @@ describe('localization', () => {
     expect(everyScreen('tr').map(visibleText).join()).not.toMatch(/[Ww]ishlist/);
   });
 
-  it('lets setup switch to any of the four languages', () => {
+  it('lets setup switch to any of the four languages on the welcome screen only', () => {
     const prepared = { discordUserId: 'u', steamId64: '76561198000000000', language: 'fr', storeCountryCode: 'FR' } as never;
-    const panel = buildSetupConfirmationPanel(prepared, 's').toJSON();
+    expect(JSON.stringify(buildSetupConfirmationPanel(prepared, 's').toJSON())).not.toContain('setup:s:language');
+    const panel = buildSetupWelcomePanel('fr', 's').toJSON();
     const select = panel.components.flatMap((component) => component.type === 1 ? component.components : [])
       .find((component) => 'custom_id' in component && component.custom_id === 'setup:s:language');
     expect(select).toMatchObject({

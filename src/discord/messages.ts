@@ -27,6 +27,7 @@ interface MessageCatalog {
   readonly setupWizardConfirmTitle: string;
   readonly setupWizardConfirmDescription: string;
   readonly setupWizardProfileField: string;
+  readonly setupWizardProfileNameField: string;
   readonly setupWizardRegionField: string;
   readonly setupWizardRegionSuggested: string;
   readonly setupWizardRegionSelected: string;
@@ -102,6 +103,7 @@ const catalog: Record<Language, MessageCatalog> = {
     setupWizardConfirmTitle: 'Her şey doğru mu?',
     setupWizardConfirmDescription: 'Bir göz at; onayladığında indirim DM\'lerin açılır.',
     setupWizardProfileField: 'Steam hesabı',
+    setupWizardProfileNameField: 'Steam adın',
     setupWizardRegionField: 'Mağaza bölgesi',
     setupWizardRegionSuggested: 'Discord dilinden tahmin ettim; yanlışsa aşağıdan değiştirebilirsin.',
     setupWizardRegionSelected: 'Senin seçtiğin bölge.',
@@ -193,6 +195,7 @@ const catalog: Record<Language, MessageCatalog> = {
     setupWizardConfirmTitle: 'Does this look right?',
     setupWizardConfirmDescription: 'Take a quick look. Once you confirm, your sale DMs are on.',
     setupWizardProfileField: 'Steam account',
+    setupWizardProfileNameField: 'Steam name',
     setupWizardRegionField: 'Store region',
     setupWizardRegionSuggested: 'Guessed from your Discord language. Change it below if it’s wrong.',
     setupWizardRegionSelected: 'The region you picked.',
@@ -284,6 +287,7 @@ const catalog: Record<Language, MessageCatalog> = {
     setupWizardConfirmTitle: 'Passt alles?',
     setupWizardConfirmDescription: 'Wirf kurz einen Blick drauf. Sobald du bestätigst, sind deine Angebots-DMs aktiv.',
     setupWizardProfileField: 'Steam-Konto',
+    setupWizardProfileNameField: 'Steam-Name',
     setupWizardRegionField: 'Shop-Region',
     setupWizardRegionSuggested: 'Aus deiner Discord-Sprache abgeleitet. Falls das nicht stimmt, ändere es unten.',
     setupWizardRegionSelected: 'Die Region, die du gewählt hast.',
@@ -375,6 +379,7 @@ const catalog: Record<Language, MessageCatalog> = {
     setupWizardConfirmTitle: 'Tout est bon ?',
     setupWizardConfirmDescription: 'Jette un œil rapide. Dès que tu confirmes, tes MP de promos sont activés.',
     setupWizardProfileField: 'Compte Steam',
+    setupWizardProfileNameField: 'Nom Steam',
     setupWizardRegionField: 'Région de la boutique',
     setupWizardRegionSuggested: 'Déduite de ta langue Discord. Change-la ci-dessous si elle n’est pas bonne.',
     setupWizardRegionSelected: 'La région que tu as choisie.',

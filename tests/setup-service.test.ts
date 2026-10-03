@@ -201,3 +201,23 @@ describe('SetupService', () => {
     fixture.database.close();
   });
 });
+
+describe('setup profile summary', () => {
+  const steamId = '76561198000000000';
+  const prepare = (identityResolver: object) => new UserConfigurationService(
+    new UserConfigRepository(createDatabase(':memory:')),
+    identityResolver as never,
+    { validateWishlistAccess: vi.fn().mockResolvedValue(undefined) },
+  ).prepare('discord-user', steamId, 'tr', 'TR');
+
+  it('carries the Steam name and avatar to the confirmation screen without storing them', async () => {
+    const profile = { personaName: 'Gabe', avatarUrl: 'https://avatars.steamstatic.com/a_full.jpg' };
+    await expect(prepare({ resolve: async () => steamId, summary: async () => profile }))
+      .resolves.toMatchObject({ steamId64: steamId, profile });
+  });
+
+  it('never lets a failing profile read block setup', async () => {
+    const prepared = await prepare({ resolve: async () => steamId, summary: async () => { throw new Error('Steam down'); } });
+    expect(prepared).toEqual({ discordUserId: 'discord-user', steamId64: steamId, language: 'tr', storeCountryCode: 'TR' });
+  });
+});

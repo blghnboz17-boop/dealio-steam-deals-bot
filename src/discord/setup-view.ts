@@ -12,6 +12,7 @@ import {
   SeparatorSpacingSize,
   TextDisplayBuilder,
   ThumbnailBuilder,
+  escapeMarkdown,
 } from 'discord.js';
 import type { PreparedUserConfiguration } from '../application/user-configuration-service.js';
 import {
@@ -107,10 +108,24 @@ export function buildSetupConfirmationPanel(
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(`-# ✨ DEALIO · ${setupStep(prepared.language, 2)}\n# 🧭 ${messages.setupWizardConfirmTitle}\n${messages.setupWizardConfirmDescription}`),
     )
-    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+  // The account as the user knows it on Steam: the full ID, their name and their avatar on the right.
+  const account = new TextDisplayBuilder().setContent([
+    `👤 **${messages.setupWizardProfileField}:** [${prepared.steamId64}](${profileUrl})`,
+    ...(prepared.profile
+      ? [`🏷️ **${messages.setupWizardProfileNameField}:** ${escapeMarkdown(prepared.profile.personaName)}`]
+      : []),
+  ].join('\n'));
+  if (prepared.profile?.avatarUrl) {
+    container.addSectionComponents(new SectionBuilder().addTextDisplayComponents(account)
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL(prepared.profile.avatarUrl)
+        .setDescription(prepared.profile.personaName.slice(0, 100))));
+  } else {
+    container.addTextDisplayComponents(account);
+  }
+  container
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent([
-        `👤 **${messages.setupWizardProfileField}:** [${maskSteamId(prepared.steamId64)}](${profileUrl})`,
         `🌍 **${messages.setupWizardRegionField}:** ${countryDisplay(prepared.storeCountryCode, prepared.language)}`,
         `-# ${regionSource}`,
         `🌐 **${messages.setupWizardLanguageField}:** ${languageChoice(prepared.language)}`,
@@ -123,9 +138,6 @@ export function buildSetupConfirmationPanel(
         new ButtonBuilder().setCustomId(`setup:${sessionId}:confirm`).setLabel(messages.setupWizardEnable).setEmoji('🔔').setStyle(ButtonStyle.Success).setDisabled(disabled),
       ),
     )
-    .addActionRowComponents(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(buildLanguageSelect(
-      `setup:${sessionId}:language`, prepared.language, disabled,
-    )))
     .addActionRowComponents(
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId(`setup:${sessionId}:region`).setLabel(messages.setupWizardChangeRegion).setEmoji('🌍').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
@@ -268,8 +280,4 @@ export function buildSetupCountrySelectOptions(
     default: false,
     emoji: { name: '🔎' },
   }];
-}
-
-function maskSteamId(steamId64: string): string {
-  return `${steamId64.slice(0, 5)}••••••••${steamId64.slice(-4)}`;
 }
