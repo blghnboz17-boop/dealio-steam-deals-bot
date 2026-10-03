@@ -1,6 +1,5 @@
 
-import { ChatInputCommandInteraction, LabelBuilder, MessageFlags, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle,
-  type MessageComponentInteraction } from 'discord.js';
+import { ChatInputCommandInteraction, LabelBuilder, MessageFlags, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import type { AssistantService } from '../../application/assistant-service.js';
 import type { WishlistViewService } from '../../application/wishlist-view-service.js';
 import { buildAssistantView, effectiveTimezone, type AssistantView, type AssistantViewData, type GameHistoryState, filteredAssistantItems } from '../assistant-view.js';

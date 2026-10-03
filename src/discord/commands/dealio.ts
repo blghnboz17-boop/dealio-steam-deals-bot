@@ -92,6 +92,11 @@ export async function handleDealio(
   let handedOff = false;
   const fallbackLanguage = languageFromDiscordLocale(interaction.locale);
   let current = services.statusService.getDashboard(interaction.user.id, fallbackLanguage);
+  // A newcomer's /dealio is the setup welcome itself, not a notice pointing to it.
+  if (current.status === 'not-configured' && services.setupService) {
+    return handleSetup(interaction, services.setupService, services.lifecycleSignal, services.setupPresentation,
+      { navigate, inPlace: true });
+  }
   let avatarUrl: string | undefined;
   try {
     avatarUrl = interaction.client.user?.displayAvatarURL({ extension: 'png', size: 128 });
@@ -105,7 +110,9 @@ export async function handleDealio(
     const snapshot=assistant.repository.snapshot(config);
     const items=snapshot?.items??[];
     const rules=assistant.repository.rules(config);
-    const matching=items.filter(item=>matchesRule(item,rules.get(item.appId),config.minimumDiscountPercent));
+    // The deepest discount leads, so Home always shows the best deal first.
+    const matching=items.filter(item=>matchesRule(item,rules.get(item.appId),config.minimumDiscountPercent))
+      .sort((a,b)=>(b.price?.discountPercent??0)-(a.price?.discountPercent??0));
     return {featuredDeal:matching[0],heroGame:matching[0]??items.find(item=>item.price?.currency),
       eligibleDealCount:snapshot?matching.length:undefined,trackedGameCount:snapshot?items.length:undefined,
       capturedAt:snapshot?.capturedAt,notificationPreference:assistant.repository.preference(config.discordUserId)};

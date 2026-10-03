@@ -4,7 +4,6 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
-  ComponentType,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   SectionBuilder,
@@ -12,23 +11,19 @@ import {
   SeparatorSpacingSize,
   TextDisplayBuilder,
   ThumbnailBuilder,
-  type APIActionRowComponent,
-  type APIButtonComponent,
-  type APIEmbed,
 } from 'discord.js';
 import type { PreparedUserConfiguration } from '../application/user-configuration-service.js';
 import {
-  storeCountryLabel,
   storeCountryName,
   type StoreCountryCode,
 } from '../domain/store-country.js';
 import type { Language } from '../domain/user-config.js';
 import { messagesFor } from './messages.js';
-import { dealioBrand, withDealioBrand } from './ui/brand.js';
+import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { uiCopy } from './ui/copy.js';
 import { commonStoreCountries } from './ui/country-picker.js';
-import { countryDisplay, flagEmoji } from './ui/design.js';
+import { countryDisplay, flagEmoji, openPanelButton } from './ui/design.js';
 
 export interface SetupPresentationOptions {
   readonly bannerUrl?: string;
@@ -77,6 +72,7 @@ export function buildSetupAlreadyCompletedPanel(
     new TextDisplayBuilder().setContent(`# 🔒 ${messages.setupWizardAlreadyCompletedTitle}`),
     new TextDisplayBuilder().setContent(messages.setupWizardAlreadyCompletedDescription),
   );
+  container.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(openPanelButton(language)));
   finishSetupPanel(container, language);
   return container;
 }
@@ -204,140 +200,6 @@ export function canUseSetupComponent(
   return componentUserId === ownerUserId && parseSetupAction(customId, sessionId) !== null;
 }
 
-export function buildSetupWelcomeEmbed(
-  language: Language,
-  options: SetupPresentationOptions = {},
-  showHow = false,
-): APIEmbed {
-  const messages = messagesFor(language);
-  return withDealioBrand({
-    color: dealioBrand.colors.primary,
-    title: `✨ ${messages.setupWizardTitle}`,
-    description: showHow
-      ? `${messages.setupWizardDescription}\n\n${messages.setupWizardHowDescription}`
-      : messages.setupWizardDescription,
-    footer: { text: messages.initialSummaryFooter },
-  }, options);
-}
-
-export function buildSetupAlreadyCompletedEmbed(
-  language: Language,
-  options: SetupPresentationOptions = {},
-): APIEmbed {
-  const messages = messagesFor(language);
-  return withDealioBrand({
-    color: dealioBrand.colors.warning,
-    title: `🔒 ${messages.setupWizardAlreadyCompletedTitle}`,
-    description: messages.setupWizardAlreadyCompletedDescription,
-    footer: { text: messages.initialSummaryFooter },
-  }, options);
-}
-
-export function buildSetupWelcomeComponents(
-  sessionId: string,
-  language: Language,
-  disabled = false,
-): APIActionRowComponent<APIButtonComponent>[] {
-  const messages = messagesFor(language);
-  return [{
-    type: ComponentType.ActionRow,
-    components: [{
-      type: ComponentType.Button,
-      style: ButtonStyle.Primary,
-      custom_id: `setup:${sessionId}:start`,
-      label: messages.setupWizardStart,
-      emoji: { name: '✨' },
-      disabled,
-    }, {
-      type: ComponentType.Button,
-      style: ButtonStyle.Secondary,
-      custom_id: `setup:${sessionId}:how`,
-      label: messages.setupWizardHow,
-      emoji: { name: '🛡️' },
-      disabled,
-    }],
-  }];
-}
-
-export function buildSetupConfirmationEmbed(
-  prepared: PreparedUserConfiguration,
-  options: SetupPresentationOptions = {},
-): APIEmbed {
-  const messages = messagesFor(prepared.language);
-  const profileUrl = `https://steamcommunity.com/profiles/${prepared.steamId64}`;
-  const hours = options.pollIntervalHours ?? defaultPollIntervalHours;
-  return withDealioBrand({
-    color: dealioBrand.colors.accent,
-    title: `🧭 ${messages.setupWizardConfirmTitle}`,
-    description: messages.setupWizardConfirmDescription,
-    fields: [{
-      name: messages.setupWizardProfileField,
-      value: `[${maskSteamId(prepared.steamId64)}](${profileUrl})`,
-      inline: true,
-    }, {
-      name: messages.setupWizardRegionField,
-      value: [
-        `**${storeCountryLabel(prepared.storeCountryCode, prepared.language)}**`,
-        options.regionSelectionSource === 'discord-locale'
-          ? messages.setupWizardRegionSuggested
-          : messages.setupWizardRegionSelected,
-      ].join('\n'),
-      inline: true,
-    }, {
-      name: messages.setupWizardLanguageField,
-      value: `**${prepared.language === 'tr' ? 'Türkçe' : 'English'}**`,
-      inline: true,
-    }, {
-      name: messages.setupWizardFrequencyField,
-      value: `**${messages.setupWizardFrequency(hours)}**`,
-      inline: true,
-    }, {
-      name: messages.setupWizardConsentField,
-      value: messages.setupWizardConsentValue,
-    }],
-    footer: { text: messages.initialSummaryFooter },
-  }, options);
-}
-
-export function buildSetupConfirmationComponents(
-  sessionId: string,
-  language: Language,
-  disabled = false,
-): APIActionRowComponent<APIButtonComponent>[] {
-  const messages = messagesFor(language);
-  return [{
-    type: ComponentType.ActionRow,
-    components: [{
-      type: ComponentType.Button,
-      style: ButtonStyle.Success,
-      custom_id: `setup:${sessionId}:confirm`,
-      label: messages.setupWizardEnable,
-      emoji: { name: '🔔' },
-      disabled,
-    }, {
-      type: ComponentType.Button,
-      style: ButtonStyle.Secondary,
-      custom_id: `setup:${sessionId}:region`,
-      label: messages.setupWizardChangeRegion,
-      emoji: { name: '🌍' },
-      disabled,
-    }, {
-      type: ComponentType.Button,
-      style: ButtonStyle.Secondary,
-      custom_id: `setup:${sessionId}:language`,
-      label: language === 'tr' ? 'English' : 'Türkçe',
-      emoji: { name: '🌐' },
-      disabled,
-    }, {
-      type: ComponentType.Button,
-      style: ButtonStyle.Danger,
-      custom_id: `setup:${sessionId}:cancel`,
-      label: messages.setupWizardCancel,
-      disabled,
-    }],
-  }];
-}
-
 export function buildSetupCountrySelectOptions(
   language: Language,
   selectedCountry: StoreCountryCode,
@@ -362,42 +224,6 @@ export function buildSetupCountrySelectOptions(
     default: false,
     emoji: { name: '🔎' },
   }];
-}
-
-export function buildSetupCompleteEmbed(
-  prepared: PreparedUserConfiguration,
-  status: 'sent' | 'dm-blocked' | 'dm-transient-failed' | 'steam-unavailable' | 'persistence-error',
-  options: SetupPresentationOptions = {},
-): APIEmbed {
-  const messages = messagesFor(prepared.language);
-  const detail = status === 'sent'
-    ? messages.setupSummarySent
-    : status === 'dm-blocked'
-      ? messages.setupWizardDmBlocked
-      : status === 'dm-transient-failed'
-        ? messages.setupWizardDmTransient
-        : messages.setupSummaryUnavailable;
-  return withDealioBrand({
-    color: status === 'sent'
-      ? dealioBrand.colors.success
-      : status === 'dm-blocked'
-        ? dealioBrand.colors.danger
-        : dealioBrand.colors.warning,
-    title: status === 'sent'
-      ? `✅ ${messages.initialSummaryTitle}`
-      : `⚠️ ${messages.setupWizardConfirmTitle}`,
-    description: `${messages.setupSuccess}\n\n${detail}`,
-    fields: [{
-      name: messages.setupWizardRegionField,
-      value: storeCountryLabel(prepared.storeCountryCode, prepared.language),
-      inline: true,
-    }, {
-      name: messages.setupWizardLanguageField,
-      value: prepared.language === 'tr' ? 'Türkçe' : 'English',
-      inline: true,
-    }],
-    footer: { text: messages.initialSummaryFooter },
-  }, options);
 }
 
 function maskSteamId(steamId64: string): string {

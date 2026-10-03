@@ -64,7 +64,6 @@ export async function handleCheck(
     ? statusService.get(interaction.user.id).config
     : config;
   const currentLanguage = currentConfig?.language ?? language;
-  const currentMessages = messagesFor(currentLanguage);
   const notificationsEnabled = currentConfig?.enabled === true;
   const delivery = result.status === 'success' && notificationsEnabled
     ? await notificationService.deliverPending(interaction.user.id)
@@ -150,7 +149,13 @@ function checkPresentation(
     return { kind: 'warning', title: text.checkFailedTitle, description: messages.notConfigured };
   }
   if (result.status === 'disabled') {
-    return { kind: 'warning', title: text.checkFailedTitle, description: messages.statusDisabled };
+    return {
+      kind: 'warning',
+      title: language === 'tr' ? 'Takip duraklatıldı' : 'Tracking is paused',
+      description: language === 'tr'
+        ? 'Bildirimlerin kapalı olduğu için kontrol yapılmadı. ⚙️ Ayarlar sekmesinden yeniden açabilirsin.'
+        : 'Alerts are turned off, so no check ran. Turn them back on in the ⚙️ Settings tab.',
+    };
   }
   const description = notificationsEnabled
     ? messages.checkCompleted(
@@ -173,7 +178,7 @@ function checkPresentation(
     description,
     metrics: [
       { emoji: '🎮', label: language === 'tr' ? 'oyun işlendi' : 'games processed', value: result.checkedCount },
-      { emoji: '🔥', label: language === 'tr' ? 'indirim adayı' : 'sale candidates', value: result.notificationCandidates.length },
+      { emoji: '🎯', label: language === 'tr' ? 'indirim adayı' : 'sale candidates', value: result.notificationCandidates.length },
       { emoji: '📨', label: language === 'tr' ? 'DM gönderildi' : 'DMs sent', value: delivery.sentCount },
       { emoji: '❔', label: language === 'tr' ? 'fiyatı bilinmeyen' : 'unknown prices', value: result.unknownPriceCount },
       { emoji: '⚠️', label: language === 'tr' ? 'ayrıntı hatası' : 'detail errors', value: result.failedItems.length },

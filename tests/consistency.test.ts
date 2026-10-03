@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { describe, expect, it, vi } from 'vitest';
-import { countryDisplay, discountTier, priceLine } from '../src/discord/ui/design.js';
+import { countryDisplay, discountTier, hotPrefix, priceLine } from '../src/discord/ui/design.js';
 import {
   buildCountryRangePanel,
   buildCountrySearchPanel,
@@ -9,6 +9,8 @@ import {
 } from '../src/discord/ui/country-picker.js';
 import { buildSetupCompletePanel } from '../src/discord/setup-view.js';
 import { handleStatus } from '../src/discord/commands/status.js';
+import { handleDealio } from '../src/discord/commands/dealio.js';
+import { buildExpiredPanel } from '../src/discord/ui/components-v2.js';
 
 const json = (value: { toJSON: () => unknown }) => JSON.stringify(value.toJSON()).replace(/ /g, ' ');
 
@@ -19,8 +21,9 @@ describe('price presentation', () => {
     expect(priceLine({ finalMinor: 2999, initialMinor: 5999, discountPercent: 50, currency: 'EUR' }, 'en'))
       .toBe('**€29.99**  ~~€59.99~~  🟡 `−50%`');
     expect(priceLine({ finalMinor: 999, initialMinor: 999, discountPercent: 0, currency: 'TRY' }, 'tr')).toBe('**₺9,99**');
-    expect([discountTier(90), discountTier(70), discountTier(69), discountTier(40), discountTier(39)])
+    expect([discountTier(90), discountTier(60), discountTier(59), discountTier(30), discountTier(29)])
       .toEqual(['🟢', '🟢', '🟡', '🟡', '🟠']);
+    expect([hotPrefix(60), hotPrefix(59), hotPrefix(null)]).toEqual(['🔥 ', '', '']);
   });
 
   it('shows a country the same way everywhere', () => {
@@ -109,5 +112,38 @@ describe('settings region flow', () => {
       collector.stop();
       await task;
     }
+  });
+});
+
+describe('first contact', () => {
+  it('greets a newcomer on /dealio with the setup welcome itself, in one message', async () => {
+    const collector = Object.assign(new EventEmitter(), { stop(reason = 'user') { this.emit('end', new Map(), reason); } });
+    const interaction = {
+      id: 'newcomer', user: { id: 'new-user' }, locale: 'tr', client: { user: null },
+      options: { getString: () => null },
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      editReply: vi.fn().mockResolvedValue({ createMessageComponentCollector: () => collector }),
+      followUp: vi.fn().mockResolvedValue(undefined),
+    };
+    const task = handleDealio(interaction as unknown as ChatInputCommandInteraction, {
+      statusService: { getDashboard: vi.fn().mockReturnValue({ status: 'not-configured', language: 'tr' }) },
+      setupService: { hasExistingConfiguration: () => false },
+    } as never);
+    try {
+      await vi.waitFor(() => expect(collector.listenerCount('collect')).toBe(1));
+      expect(interaction.deferReply).toHaveBeenCalledOnce();
+      const shown = JSON.stringify(interaction.editReply.mock.calls.at(-1));
+      expect(shown).toContain("Dealio'ya hoş geldin");
+      expect(shown).toContain('setup:newcomer:start');
+    } finally {
+      collector.stop();
+      await task;
+    }
+  });
+
+  it('offers the panel from expired panels, which keeps working after restarts', () => {
+    const shown = json(buildExpiredPanel('tr'));
+    expect(shown).toContain('"custom_id":"dealio-open:home"');
+    expect(shown).toContain('Dealio paneli');
   });
 });

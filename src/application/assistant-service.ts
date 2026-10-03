@@ -14,7 +14,7 @@ export class AssistantService {
   async rule(user:string,identity:string,appId:number,rule:Omit<GameRule,'revision'>,version:number):Promise<void> {
     await this.coordinator.runExclusive(user,()=>{
       const config=this.config(user);
-      if(!config || config.configurationId!==identity || config.configVersion!==version) throw new Error('Account changed. Reopen /wishlist.');
+      if(!config || config.configurationId!==identity || config.configVersion!==version) throw new Error('Account changed. Reopen /dealio.');
       const snapshot=this.repository.snapshot(config);
       const item=snapshot?.items.find(i=>i.appId===appId);
       if(!item) throw new Error('Game is no longer in the saved wishlist.');

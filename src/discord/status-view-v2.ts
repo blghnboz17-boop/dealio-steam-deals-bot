@@ -65,7 +65,7 @@ function buildSettingsPanel(
 
   const tracking = config.dmDeliveryBlockedAt
     ? '🔴 ' + t('DM teslimatı engellendi', 'DM delivery blocked')
-    : config.enabled ? '🟢 ' + t('Takip açık', 'Tracking on') : '⏸️ ' + t('Takip duraklatıldı', 'Tracking paused');
+    : config.enabled ? '✅ ' + t('Takip açık', 'Tracking on') : '⏸️ ' + t('Takip duraklatıldı', 'Tracking paused');
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(panelHeader('settings', language,
     t('Hesabın ve tercihlerin', 'Your account & preferences'),
     `**${tracking}** · Discord DM`)));
@@ -89,7 +89,7 @@ function buildSettingsPanel(
     `### 🗓️ ${t('Kontrol takvimi', 'Check schedule')}`,
     `🔜 ${t('Sonraki otomatik kontrol', 'Next automatic check')}: ${config.enabled ? displayTime(checkState?.nextScheduledAt, text.never) : t('takip duraklatıldı', 'tracking paused')}`,
     `${localizedCheckStatus(checkState?.lastStatus ?? null, language)} · ${displayTime(checkState?.lastCompletedAt, text.never)}`,
-    `-# 🎮 ${displayCount(checkState?.lastSuccessCheckedCount, '—')} ${t('oyun işlendi', 'games processed')} · 🔥 ${displayCount(checkState?.lastSuccessOnSaleCount, '—')} ${t('indirimde', 'on sale')} · 💱 ${result.latestPriceCurrencies.join(' / ') || text.never}`,
+    `-# 🎮 ${displayCount(checkState?.lastSuccessCheckedCount, '—')} ${t('oyun işlendi', 'games processed')} · 🏷️ ${displayCount(checkState?.lastSuccessOnSaleCount, '—')} ${t('indirimde', 'on sale')} · 💱 ${result.latestPriceCurrencies.join(' / ') || text.never}`,
   ].join('\n')));
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent([
     `### 📨 ${t('Bildirimler', 'Alerts')}`,

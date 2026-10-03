@@ -8,9 +8,11 @@ import type { GameRule, HistoryEntry } from '../persistence/assistant-repository
 import type { NotificationPreference } from '../domain/notification-preference.js';
 import type { GameHistory } from '../domain/price-history.js';
 import { formatMinorPrice } from './notification-messages.js';
+import { messagesFor } from './messages.js';
+import { defaultPollIntervalHours } from '../config/environment.js';
 import { historicalLowLine, priceChangeLine, priceHistoryCredit } from './price-history-text.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
-import { countryDisplay, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
+import { countryDisplay, hotDealPercent, hotPrefix, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 import { defaultTimezone, timezoneChoices, timezoneLabel } from '../domain/timezone.js';
 
@@ -79,7 +81,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       const rule=data.rules.get(item.appId), p=pricedItem(item);
       const matches=matchesRule(item,rule,data.config.minimumDiscountPercent);
       root.addSectionComponents(artworkAccessory(new SectionBuilder().addTextDisplayComponents(text(
-        `### ${matches?'🔥 ':''}${escapeMarkdown(item.name).slice(0,100)}\n${p?priceLine(p,lang):(tr?'Fiyat doğrulanamadı':'Price unavailable')}\n`+
+        `### ${hotPrefix(p?.discountPercent)}${escapeMarkdown(item.name).slice(0,100)}\n${p?priceLine(p,lang):(tr?'Fiyat doğrulanamadı':'Price unavailable')}\n`+
         `-# ${ruleText(rule)}${matches?(tr?' · ✅ Kuralına uygun':' · ✅ Matches your rule'):''}`)), item));
     });
     if(!visible.length) add('🫥 '+(tr?'Bu görünümde oyun yok. Aramayı veya filtreyi temizleyebilirsin.':'No games here. Clear the search or filter.'));
@@ -89,7 +91,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
         .setDisabled(disabled).addOptions(visible.map(item=>{
           const p=pricedItem(item);
           return {label:item.name.slice(0,100),value:String(item.appId),
-            emoji:matchesRule(item,data.rules.get(item.appId),data.config.minimumDiscountPercent)?'🔥':'🎮',
+            emoji:(p?.discountPercent??0)>=hotDealPercent?'🔥':matchesRule(item,data.rules.get(item.appId),data.config.minimumDiscountPercent)?'🎯':item.onSale?'🏷️':'🎮',
             ...(p?{description:(price(p.finalMinor,p.currency)+(p.discountPercent>0?(tr?` · %${p.discountPercent} indirim`:` · ${p.discountPercent}% off`):'')).slice(0,100)}:{})};
         }))));
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -118,7 +120,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       const eligible=matchesRule(item,rule,data.config.minimumDiscountPercent);
       add('### 🎯 '+(tr?'Kuralın':'Your rule')+'\n'+ruleText(rule)+
         (rule?.mode==='target'&&p?.currency!==rule.currency?(tr?' · ⚠️ Para birimi değişmiş; hedefi yeniden kaydet.':' · ⚠️ Currency changed; save a new target.'):'')+'\n'+
-        (eligible?(tr?'🟢 Şu anki fiyat kuralına uygun. Kural kaydı ayrıca DM göndermez.':'🟢 The current price matches your rule. Saving a rule does not send an initial DM.')
+        (eligible?(tr?'✅ Şu anki fiyat kuralına uygun. Kural kaydı ayrıca DM göndermez.':'✅ The current price matches your rule. Saving a rule does not send an initial DM.')
           :(tr?'⏳ Kuralına uyan bir fiyat gelince DM ile haber vereceğiz.':'⏳ We will DM you when a price meets your rule.')));
       root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
         button(prefix+'inherit',tr?'Genel kural':'Global rule','♻️'),
@@ -162,9 +164,9 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
     if(!entries.length) add('📭 '+(tr?'Henüz bildirim kaydı yok.':'No alerts yet.'));
     divider();
     root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button(prefix+'rhythm',tr?'Bildirim zamanı':'Alert timing','◀️'),
-      button(prefix+'prev',tr?'Önceki':'Previous').setDisabled(disabled||view.page===0),
-      button(prefix+'next',tr?'Sonraki':'Next').setDisabled(disabled||start+5>=data.history.length),
+      button(prefix+'rhythm',tr?'Geri':'Back','↩️'),
+      button(prefix+'prev',tr?'Önceki':'Previous','◀️').setDisabled(disabled||view.page===0),
+      button(prefix+'next',tr?'Sonraki':'Next','▶️').setDisabled(disabled||start+5>=data.history.length),
       button(prefix+'retry',tr?'DM erişimini dene':'Retry DM access','✉️')));
   }else{
     const p=data.preference, zone=effectiveTimezone(data);
@@ -194,8 +196,8 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
         .setPlaceholder('🌍 '+(tr?'Saat dilimini değiştir':'Change time zone'))
         .addOptions(timezoneChoices(data.config.storeCountryCode,zone).map(choice=>({
           label:timezoneLabel(choice),value:choice,default:choice===zone})))));
-    add(tr?'-# Kontroller yaklaşık 30 dakikada bir yapılır. Bekleyen bildirimlerin fiyatı göndermeden önce yeniden doğrulanır.'
-      :'-# Checks run about every 30 minutes. Waiting alerts are re-checked before they are sent.');
+    add('-# 🔄 '+(tr?'Kontrol sıklığı: ':'Check frequency: ')+messagesFor(lang).setupWizardFrequency(defaultPollIntervalHours)+
+      (tr?'. Bekleyen bildirimlerin fiyatı göndermeden önce yeniden doğrulanır.':'. Waiting alerts are re-checked before they are sent.'));
   }
   divider();
   root.addActionRowComponents(buildTabBar('assistant',session,lang,{active:games?'games':'alerts',

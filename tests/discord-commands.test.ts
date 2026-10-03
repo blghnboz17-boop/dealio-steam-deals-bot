@@ -332,7 +332,7 @@ describe('Discord slash commands', () => {
 
     expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0])).toContain(expectedText);
     expect(componentText(interaction.editReply.mock.calls[0]?.[0]))
-      .toContain('wishlist notifications are configured');
+      .toContain('wishlist tracking has started');
   });
 
   it('accepts the legacy steamid64 payload while global command changes propagate', async () => {

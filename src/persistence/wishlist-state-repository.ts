@@ -1,7 +1,5 @@
 import type { DeliveryReceipt } from '../domain/wishlist-state.js';
 import { AssistantRepository } from './assistant-repository.js';
-import type { UserConfig } from '../domain/user-config.js';
-import type { SteamWishlistResult } from '../domain/steam.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Language } from '../domain/user-config.js';
 import type {

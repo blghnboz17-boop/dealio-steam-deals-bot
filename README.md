@@ -100,7 +100,7 @@ Initial setup may send a summary of existing discounts, rather than a new-sale a
 | `/status` | Account settings, global discount threshold, and notification status |
 | `/check` | Request a check, subject to a short cooldown |
 | `/region` | Choose your Steam Store country |
-| `/test-notification` | Send yourself a sample notification |
+| `/test-notification` | Send yourself a test alert built from a game currently on sale on your wishlist |
 | `/delete-data` | Delete your active account data after confirmation |
 
 Panels are private and bound to the person who opened them. After a timeout or bot restart, open a fresh command to continue.
@@ -133,9 +133,9 @@ Give it a moment, then try the command once more. If a cooldown is shown, wait f
 <details>
 <summary><strong>The bot works, but I'm not getting DMs. What should I check?</strong></summary>
 
-Start with `/test-notification`. If the sample doesn't arrive either, check that you haven't blocked the bot and that you allow DMs from your shared server. If alerts were paused because DMs were blocked, re-enable them in `/status` after fixing the setting.
+Start with `/test-notification`. If the sample doesn't arrive either, check that you haven't blocked the bot and that you allow DMs from your shared server. If alerts were paused because DMs were blocked, re-enable them in `/dealio` → ⚙️ Settings after fixing the setting.
 
-If the test arrives but a sale alert doesn't, check your notification status in `/status`, the game's target or discount threshold, its mute setting, and your quiet hours or daily digest. A test DM confirms you can receive messages; it doesn't mean every game currently qualifies for an alert.
+If the test arrives but a sale alert doesn't, check your notification status in `/dealio` → ⚙️ Settings, the game's target or discount threshold, its mute setting, and your quiet hours or daily digest. A test DM confirms you can receive messages; it doesn't mean every game currently qualifies for an alert.
 
 </details>
 

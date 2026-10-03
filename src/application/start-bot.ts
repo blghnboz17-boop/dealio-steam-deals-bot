@@ -35,7 +35,7 @@ import { RuntimeHealth } from './runtime-health.js';
 import { WishlistScheduler } from './scheduler.js';
 import { SetupService } from './setup-service.js';
 import { StatusService } from './status-service.js';
-import { TestNotificationService } from './test-notification-service.js';
+import { TestNotificationService, wishlistTestSale } from './test-notification-service.js';
 import { UserConfigurationService } from './user-configuration-service.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
 import { WishlistViewService } from './wishlist-view-service.js';
@@ -163,7 +163,16 @@ export async function startBot(
         ...(priceHistory ? { priceHistory } : {}),
       },
     );
-    const testNotificationService = new TestNotificationService(notificationSender);
+    const testNotificationService = new TestNotificationService(notificationSender, {
+      sample: async (discordUserId) => {
+        const config = userConfigRepository.findByDiscordUserId(discordUserId);
+        const snapshot = config && wishlistStateRepository.assistant.snapshot(config);
+        if (!config || !snapshot) return null;
+        const muted = new Set([...wishlistStateRepository.assistant.rules(config)]
+          .filter(([, rule]) => rule.muted).map(([appId]) => appId));
+        return wishlistTestSale(config, snapshot.items, muted, priceHistory);
+      },
+    });
     const assistantService = new AssistantService(wishlistStateRepository.assistant,userConfigRepository,userOperationCoordinator,
       config=>testNotificationService.send(config.discordUserId,config.language,config.storeCountryCode),priceHistory);
     const wishlistViewService = new WishlistViewService(

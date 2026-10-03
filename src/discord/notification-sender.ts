@@ -299,8 +299,8 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
           'warning',
           session.summary.language === 'tr' ? 'Bu panel sana ait değil' : 'This panel is not yours',
           session.summary.language === 'tr'
-            ? 'Kendi Dealio panelini açmak için /wishlist komutunu kullan.'
-            : 'Use /wishlist to open your own Dealio panel.',
+            ? 'Kendi Dealio panelini açmak için /dealio komutunu kullan.'
+            : 'Use /dealio to open your own Dealio panel.',
         )],
         flags: dealioEphemeralV2Flags,
       }).catch(() => undefined);

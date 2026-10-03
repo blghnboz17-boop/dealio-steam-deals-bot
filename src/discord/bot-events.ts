@@ -1,5 +1,5 @@
 import { safeLogger } from '../application/safe-logger.js';
-import { Events, MessageFlags, type Client } from 'discord.js';
+import { Events, MessageFlags, type ChatInputCommandInteraction, type Client } from 'discord.js';
 import type { ApplicationTaskTracker } from '../application/application-task-tracker.js';
 import type { CheckService } from '../application/check-service.js';
 import type { DiscountThresholdService } from '../application/discount-threshold-service.js';
@@ -22,7 +22,7 @@ import { handleWishlist } from './commands/wishlist.js';
 import { createDealioNavigator, handleDealio } from './commands/dealio.js';
 import { handleStoreCountryAutocomplete } from './store-country-options.js';
 import type { SetupPresentationOptions } from './setup-view.js';
-import { buildExpiredPanel, buildNoticePanel, dealioEphemeralV2Flags } from './ui/components-v2.js';
+import { buildExpiredPanel, buildNoticePanel, dealioEphemeralV2Flags, openPanelCustomId } from './ui/components-v2.js';
 import { dealioUiSessions } from './ui/session-manager.js';
 import { languageFromDiscordLocale } from './language.js';
 
@@ -79,6 +79,19 @@ export function registerBotEvents(options: BotEventOptions): void {
           if (!interaction.responded) {
             await interaction.respond([]).catch(() => undefined);
           }
+        }
+      });
+      return;
+    }
+    if (typeof interaction.isButton === 'function' && interaction.isButton()
+      && interaction.customId === openPanelCustomId) {
+      // "🏠 Dealio panel" in DMs and expired panels: a fresh panel, like /dealio.
+      taskTracker.run(async () => {
+        try {
+          await handleDealio(interaction as unknown as ChatInputCommandInteraction,
+            { ...services, lifecycleSignal }, { navigate: createDealioNavigator({ ...services, lifecycleSignal }) });
+        } catch (error: unknown) {
+          safeLogger.error('Dealio open-panel button failed', error);
         }
       });
       return;

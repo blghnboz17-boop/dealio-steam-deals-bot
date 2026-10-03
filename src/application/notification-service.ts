@@ -48,6 +48,8 @@ export interface SaleNotification {
 
 export interface NotificationSendOptions {
   readonly test?: boolean;
+  /** Where a test alert's game came from: the user's wishlist, or a fixed example. */
+  readonly testSource?: 'wishlist' | 'example';
   readonly digest?: boolean;
 }
 
