@@ -19,7 +19,7 @@ import {
 } from '../../application/test-notification-service.js';
 import type { UserConfigurationService } from '../../application/user-configuration-service.js';
 import { isLanguage, languages, type Language } from '../../domain/user-config.js';
-import { languageNames, localizer } from '../i18n.js';
+import { languageChoice, localizer } from '../i18n.js';
 import { parseStoreCountryCode } from '../../domain/store-country.js';
 import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-bar.js';
 import { languageFromDiscordLocale } from '../language.js';
@@ -372,7 +372,7 @@ function buildLanguageModal(customId: string, language: Language): ModalBuilder 
             .setCustomId('notification-language')
             .setRequired(true)
             .addOptions(languages.map((option) => new RadioGroupOptionBuilder()
-              .setLabel(languageNames[option]).setValue(option).setDefault(option === language))),
+              .setLabel(languageChoice(option)).setValue(option).setDefault(option === language))),
         ),
     );
 }

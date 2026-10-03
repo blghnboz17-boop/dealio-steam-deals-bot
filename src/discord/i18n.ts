@@ -11,6 +11,19 @@ export const languageNames: Localized = {
   fr: 'Français',
 };
 
+/** The flag a language picker shows beside each language. */
+export const languageFlags: Localized = {
+  tr: '🇹🇷',
+  en: '🇬🇧',
+  de: '🇩🇪',
+  fr: '🇫🇷',
+};
+
+/** "🇹🇷 Türkçe": a language as every picker lists it. */
+export function languageChoice(language: Language): string {
+  return `${languageFlags[language]} ${languageNames[language]}`;
+}
+
 /** "%30", "30%", "30 %": the percent sign where each language puts it. */
 export function percentText(value: number, language: Language): string {
   return new Intl.NumberFormat(languageLocale[language], { style: 'percent', maximumFractionDigits: 0 })

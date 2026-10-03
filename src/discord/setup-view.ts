@@ -19,7 +19,7 @@ import {
   type StoreCountryCode,
 } from '../domain/store-country.js';
 import { languageLocale, languages, type Language } from '../domain/user-config.js';
-import { languageNames, localizer } from './i18n.js';
+import { languageChoice, languageFlags, languageNames, localizer } from './i18n.js';
 import { messagesFor } from './messages.js';
 import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
@@ -54,6 +54,13 @@ export function buildSetupWelcomePanel(
       fr: '01 TON PROFIL → 02 RÉGION ET LANGUE → 03 AUTORISATION DES MP',
     })),
     new TextDisplayBuilder().setContent(`# ✨ ${messages.setupWizardTitle}`),
+  );
+  // The language comes right under the greeting: someone greeted in a language
+  // they do not read can switch before reading anything else.
+  container.addActionRowComponents(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+    buildLanguageSelect(`setup:${sessionId}:language`, language, disabled),
+  ));
+  container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(showHow
       ? `${messages.setupWizardDescription}\n\n> 🛡️ ${messages.setupWizardHowDescription}`
       : messages.setupWizardDescription),
@@ -106,7 +113,7 @@ export function buildSetupConfirmationPanel(
         `👤 **${messages.setupWizardProfileField}:** [${maskSteamId(prepared.steamId64)}](${profileUrl})`,
         `🌍 **${messages.setupWizardRegionField}:** ${countryDisplay(prepared.storeCountryCode, prepared.language)}`,
         `-# ${regionSource}`,
-        `🌐 **${messages.setupWizardLanguageField}:** ${languageNames[prepared.language]}`,
+        `🌐 **${messages.setupWizardLanguageField}:** ${languageChoice(prepared.language)}`,
         `🔄 **${messages.setupWizardFrequencyField}:** ${messages.setupWizardFrequency(options.pollIntervalHours ?? defaultPollIntervalHours)}`,
       ].join('\n')),
       new TextDisplayBuilder().setContent(`### 🔔 ${messages.setupWizardConsentField}\n> ${messages.setupWizardConsentValue}`),
@@ -184,11 +191,11 @@ export function buildLanguageSelect(customId: string, selected: Language, disabl
   return new StringSelectMenuBuilder()
     .setCustomId(customId)
     .setDisabled(disabled)
-    .setPlaceholder(`🌐 ${languageNames[selected]}`)
+    .setPlaceholder(languageChoice(selected))
     .addOptions(languages.map((language) => ({
       label: languageNames[language],
       value: language,
-      emoji: { name: '🌐' },
+      emoji: { name: languageFlags[language] },
       default: language === selected,
     })));
 }

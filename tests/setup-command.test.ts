@@ -702,3 +702,32 @@ it('shows a usable retry panel when Steam profile preparation fails', async () =
   collector.emit('end', [], 'time');
   await handling;
 });
+
+it('lets a newcomer pick their language on the welcome screen before anything else', async () => {
+  const collector = new SetupCollectorFake();
+  const interaction = setupInteraction(collector, 'en-US');
+  const handling = handleSetup(interaction as never, setupService() as never);
+  try {
+    await vi.waitFor(() => expect(interaction.editReply).toHaveBeenCalledOnce());
+    const welcome = JSON.stringify(interaction.editReply.mock.calls[0]?.[0]);
+    expect(welcome).toContain('"custom_id":"setup:setup-session:language"');
+    expect(welcome).toContain('"name":"🇹🇷"');
+    expect(welcome).toContain('Welcome to Dealio');
+
+    collector.emit('collect', {
+      customId: 'setup:setup-session:language', user: { id: 'discord-user' },
+      isStringSelectMenu: () => true, values: ['de'],
+      deferUpdate: vi.fn().mockResolvedValue(undefined),
+    });
+    await vi.waitFor(() => expect(JSON.stringify(interaction.editReply.mock.calls.at(-1))).toContain('Willkommen bei Dealio'));
+    expect(JSON.stringify(interaction.editReply.mock.calls.at(-1))).toMatch(/"label":"Deutsch","value":"de"[^}]*"default":true/);
+
+    const start = setupStartComponent();
+    collector.emit('collect', start);
+    await vi.waitFor(() => expect(start.showModal).toHaveBeenCalledOnce());
+    expect(JSON.stringify(start.showModal.mock.calls[0]?.[0].toJSON())).toContain('Dealio einrichten');
+  } finally {
+    collector.stop('time');
+    await handling;
+  }
+});

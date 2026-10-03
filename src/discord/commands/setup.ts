@@ -100,6 +100,7 @@ export async function handleSetup(
   }
 
   let language = initialLanguage;
+  let showingHow = false;
   const response = await editPanel({
     components: [buildSetupWelcomePanel(language, interaction.id, viewOptions)],
     flags: dealioV2Flags,
@@ -488,14 +489,22 @@ export async function handleSetup(
       }
       if (outcome.status === 'rejected') throw outcome.error;
       if (action === 'how') {
+        showingHow = true;
         await editPanel({
           components: [buildSetupWelcomePanel(language, interaction.id, viewOptions, true)],
         });
         return;
       }
-      if (action === 'language' && prepared) {
+      if (action === 'language') {
         const chosen = component.isStringSelectMenu() ? component.values[0] ?? '' : '';
-        language = isLanguage(chosen) ? chosen : prepared.language;
+        language = isLanguage(chosen) ? chosen : language;
+        if (!prepared) {
+          // Chosen on the welcome screen: everything from here on, the setup form included, is in this language.
+          await editPanel({
+            components: [buildSetupWelcomePanel(language, interaction.id, viewOptions, showingHow)],
+          });
+          return;
+        }
         prepared = { ...prepared, language };
         await editPanel({
           components: [buildSetupConfirmationPanel(
