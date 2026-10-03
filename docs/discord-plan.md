@@ -217,6 +217,18 @@ başlangıçta `View Channel` ve `Send Messages` izinleri verilmesi yeterlidir.
 Bildirimler DM ile gönderileceğinden DM için ayrıca guild permission gerekmez;
 ancak kullanıcı botun DM göndermesine izin vermeli ve botu engellememiş olmalıdır.
 
+### Kişisel kurulum (User Install)
+
+Tüm komutlar hem sunucu kurulumu (`GuildInstall`) hem kişisel kurulum
+(`UserInstall`) için kaydedilir; sunucuda, botla DM'de ve kullanıcının kendi
+özel/grup sohbetlerinde açılabilir. Yanıtlar her zaman ephemeral olduğu için
+yalnızca komutu çalıştıran kişi görür.
+
+Developer Portal > **Installation** bölümünde **User Install** açık olmalı ve
+varsayılan kurulum ayarlarında `applications.commands` scope'u seçilmelidir.
+Bu ayar açılmadan yeni sürüm dağıtılmamalıdır; komut kaydı başlangıçta
+doğrulandığı için reddedilen bir kayıt botun açılmasını engeller.
+
 İlk sürümde yalnızca `Guilds` gateway intent'i yeterlidir. `Message Content`,
 `Guild Members` veya `Presence` gibi privileged intent'ler açılmamalıdır.
 

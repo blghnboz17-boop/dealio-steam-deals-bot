@@ -1,4 +1,10 @@
-import { REST, Routes, type RESTPostAPIChatInputApplicationCommandsJSONBody } from 'discord.js';
+import {
+  ApplicationIntegrationType,
+  InteractionContextType,
+  REST,
+  Routes,
+  type RESTPostAPIChatInputApplicationCommandsJSONBody,
+} from 'discord.js';
 import type { EnvironmentConfig } from '../config/environment.js';
 import { checkCommand } from './commands/check.js';
 import { setupCommand } from './commands/setup.js';
@@ -24,8 +30,28 @@ type CommandRegistrationRest = Pick<REST, 'get' | 'put'>;
 type CommandCleanupRest = Pick<REST, 'put'>;
 type RegistrationLogger = (message: string) => void;
 
+/**
+ * Every command is personal and replies ephemerally, so it works the same when
+ * Dealio is added to a server or to the user's own account ("Add to My Apps").
+ * A user install lets someone use Dealio without sharing a server with the bot.
+ */
+export const commandIntegrationTypes = [
+  ApplicationIntegrationType.GuildInstall,
+  ApplicationIntegrationType.UserInstall,
+] as const;
+
+export const commandContexts = [
+  InteractionContextType.Guild,
+  InteractionContextType.BotDM,
+  InteractionContextType.PrivateChannel,
+] as const;
+
 function commandBody(): RESTPostAPIChatInputApplicationCommandsJSONBody[] {
-  return commands.map((command) => command.toJSON());
+  return commands.map((command) => ({
+    ...command.toJSON(),
+    integration_types: [...commandIntegrationTypes],
+    contexts: [...commandContexts],
+  }));
 }
 
 function responseCommandNames(response: unknown, operation: 'PUT' | 'GET'): string[] {
