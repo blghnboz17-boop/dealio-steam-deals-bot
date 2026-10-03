@@ -7,17 +7,18 @@ const exampleNotification: Omit<SaleNotification, 'discordUserId' | 'createdAt'>
   appId: 620,
   saleEpisodeId: 'test-notification',
   gameName: 'Portal 2',
-  // TRY is sample fixture data; production displays the currency received from Steam unchanged.
-  currency: 'TRY',
-  normalPriceMinor: 105_000,
-  finalPriceMinor: 10_500,
-  discountPercent: 90,
+  // Sample fixture data in USD, as Steam now prices many regions including Turkey;
+  // production displays the currency received from Steam unchanged.
+  currency: 'USD',
+  normalPriceMinor: 999,
+  finalPriceMinor: 199,
+  discountPercent: 80,
   storeCountryCode: 'TR',
   // Sample history so the test shows how a real alert presents price context.
   historicalLow: {
-    currency: 'TRY',
-    amountMinor: 8_925,
-    discountPercent: 91,
+    currency: 'USD',
+    amountMinor: 99,
+    discountPercent: 90,
     recordedAt: '2025-06-26T17:00:00.000Z',
   },
 };

@@ -7,14 +7,17 @@ import { AssistantRepository } from '../src/persistence/assistant-repository.js'
 import type { AssistantService } from '../src/application/assistant-service.js';
 import type { WishlistViewService, WishlistViewResult } from '../src/application/wishlist-view-service.js';
 import { handleAssistant } from '../src/discord/commands/assistant.js';
+import type { GameHistory } from '../src/domain/price-history.js';
+import type { GameHistorySource } from '../src/price-history/itad-client.js';
 
-function fixture(count=50) {
+function fixture(count=50, priceHistory?: GameHistorySource) {
   const db = createDatabase(':memory:');
   const users = new UserConfigRepository(db);
   const config = users.upsert('u', '76561198000000000', 'en', 'US', new Date().toISOString());
   const repository = new AssistantRepository(db);
   const items = Array.from({ length: count }, (_, i) => ({ appId: i + 1, name: `Game ${i}`, priority: 1,
-    dateAdded: null, onSale: false, price: null }));
+    dateAdded: null, onSale: false,
+    price: priceHistory ? { currency: 'USD', initialMinor: 999, finalMinor: 999, discountPercent: 0, isFree: false } : null }));
   const result = { status: 'success', items, capturedAt: new Date().toISOString() } as WishlistViewResult;
   const load = vi.fn().mockResolvedValue(result);
   const collector = Object.assign(new EventEmitter(), { ended: false, stop() {
@@ -24,10 +27,10 @@ function fixture(count=50) {
   const interaction = { id: 'latency-panel', user: { id: 'u' }, locale: 'en-US',
     deferReply: vi.fn().mockResolvedValue(undefined), editReply: vi.fn().mockResolvedValue(message),
     followUp: vi.fn().mockResolvedValue(undefined) };
-  const service = { config: () => users.findByDiscordUserId('u'), repository } as unknown as AssistantService;
-  const click = (action: string) => {
-    const component = { customId: `assistant:latency-panel:${action}`, user: { id: 'u' },
-      deferUpdate: vi.fn().mockResolvedValue(undefined), isStringSelectMenu: () => false };
+  const service = { config: () => users.findByDiscordUserId('u'), repository, priceHistory } as unknown as AssistantService;
+  const click = (action: string, values?: string[]) => {
+    const component = { customId: `assistant:latency-panel:${action}`, user: { id: 'u' }, values,
+      deferUpdate: vi.fn().mockResolvedValue(undefined), isStringSelectMenu: () => values !== undefined };
     collector.emit('collect', component); return component;
   };
   return { db, users, config, repository, load, result, collector, interaction, click,
@@ -145,6 +148,23 @@ describe('assistant latency isolation', () => {
       expect([...f.repository.rules(f.config)]).toEqual([[1,{...rule,revision:1}]]);
       expect(f.repository.rules({...f.config,configVersion:f.config.configVersion+1}).size).toBe(0);
     } finally {f.db.close();}
+  });
+
+  it('opens a game at once and fills in its price history when it arrives', async () => {
+    let finish!: (value: GameHistory | null) => void;
+    const gameHistory = vi.fn(() => new Promise<GameHistory | null>(resolve => { finish = resolve; }));
+    const f = fixture(2, { gameHistory }); const task = f.start();
+    try {
+      await vi.waitFor(() => expect(f.collector.listenerCount('collect')).toBe(1));
+      f.click('game', ['1']);
+      await vi.waitFor(() => expect(JSON.stringify(f.interaction.editReply.mock.calls.at(-1))).toContain('Loading price history'));
+      expect(gameHistory).toHaveBeenCalledWith({ appId: 1, currency: 'USD' }, 'US');
+      finish({ low: { currency: 'USD', amountMinor: 99, discountPercent: 90, recordedAt: '2017-06-22T00:00:00.000Z' }, recent: [] });
+      await vi.waitFor(() => expect(JSON.stringify(f.interaction.editReply.mock.calls.at(-1))).toContain('All-time low'));
+      f.click('wishlist'); f.click('game', ['1']);
+      await vi.waitFor(() => expect(f.interaction.editReply.mock.calls.length).toBeGreaterThan(4));
+      expect(gameHistory).toHaveBeenCalledOnce();
+    } finally { finish?.(null); f.collector.stop(); await task; f.db.close(); }
   });
 
   it('does not query one rule per game or fetch history on the wishlist screen', async () => {

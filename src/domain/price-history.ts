@@ -11,6 +11,15 @@ export interface HistoricalLow {
   readonly since?: string;
 }
 
+/** One Steam price, as recorded when it changed. */
+export type PriceChange = Omit<HistoricalLow, 'since'>;
+
+export interface GameHistory {
+  readonly low: HistoricalLow | null;
+  /** Newest first, current currency only. */
+  readonly recent: readonly PriceChange[];
+}
+
 export type HistoricalLowStanding = 'new-low' | 'matches-low' | 'above-low';
 
 /**

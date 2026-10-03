@@ -3,7 +3,7 @@ import { ChatInputCommandInteraction, LabelBuilder, MessageFlags, ModalBuilder, 
   type MessageComponentInteraction } from 'discord.js';
 import type { AssistantService } from '../../application/assistant-service.js';
 import type { WishlistViewService } from '../../application/wishlist-view-service.js';
-import { buildAssistantView, type AssistantView, type AssistantViewData, filteredAssistantItems } from '../assistant-view.js';
+import { buildAssistantView, type AssistantView, type AssistantViewData, type GameHistoryState, filteredAssistantItems } from '../assistant-view.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { buildNoticePanel, dealioV2Flags, dealioEphemeralV2Flags, dealioUiSessionTimeoutMs } from '../ui/components-v2.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
@@ -52,10 +52,27 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
     if(!current || current.configurationId!==config.configurationId || current.configVersion!==config.configVersion)
       throw new Error('Configuration changed');
     const selected=items.find(i=>i.appId===view.selectedAppId);
+    const historyKey=selected?.price?.currency?`${current.storeCountryCode}:${selected.appId}:${selected.price.currency}`:null;
     return {config:current,items,capturedAt,
       rules:view.screen==='wishlist'||view.screen==='detail'?service.repository.rules(current):new Map(),
       preference:service.repository.preference(user),history:view.screen==='history'?service.repository.history(user):[],
-      prices:view.screen==='detail'&&selected?.price?.currency?service.repository.prices(selected.appId,current.storeCountryCode,selected.price.currency):[]};
+      ...(view.screen==='detail'&&service.priceHistory&&historyKey?{priceHistory:histories.get(historyKey)??{status:'loading'}}:{})};
+  };
+  // Price history is optional context: it loads beside the panel and never holds navigation.
+  const histories=new Map<string,GameHistoryState>();
+  const loadHistory=()=>{
+    const current=service.config(user), selected=items.find(i=>i.appId===view.selectedAppId);
+    if(!service.priceHistory||!current||!selected?.price?.currency)return;
+    const app={appId:selected.appId,currency:selected.price.currency}, key=`${current.storeCountryCode}:${app.appId}:${app.currency}`;
+    if(histories.has(key))return;
+    histories.set(key,{status:'loading'});
+    void service.priceHistory.gameHistory(app,current.storeCountryCode).catch(()=>null).then(history=>{
+      histories.set(key,{status:'ready',history});
+      return operations.enqueue(Promise.resolve(),async()=>{
+        if(collector.ended||signal?.aborted||view.screen!=='detail'||view.selectedAppId!==app.appId)return;
+        await render();
+      });
+    });
   };
   const render=async(disabled=false)=>{
     await editPanel({flags:dealioV2Flags,components:[buildAssistantView(data(),view,interaction.id,disabled)]});
@@ -166,7 +183,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
         await service.retryDm(user,config.configurationId,config.configVersion);
         view.notice=tr?'Deneme DM’i Discord’a iletildi. Takip kapalıysa /dealio ayarlarından bildirimleri açabilirsin.':'Test DM delivered to Discord. If tracking is paused, enable alerts in /dealio settings.';
       }
-      else if(action==='game'&&component.isStringSelectMenu()){view.selectedAppId=Number(component.values[0]);view.screen='detail';}
+      else if(action==='game'&&component.isStringSelectMenu()){view.selectedAppId=Number(component.values[0]);view.screen='detail';loadHistory();}
       else if(action==='refresh'){
         await startLoad(true);return;
       }else if(action==='filter'){view.eligibleOnly=!view.eligibleOnly;view.page=0;}

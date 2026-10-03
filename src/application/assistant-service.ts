@@ -4,10 +4,12 @@ import type { UserConfigRepository } from '../persistence/user-config-repository
 import type { AssistantRepository, GameRule } from '../persistence/assistant-repository.js';
 import type { NotificationPreference } from '../domain/notification-preference.js';
 import type { UserOperationCoordinator } from './user-operation-coordinator.js';
+import type { GameHistorySource } from '../price-history/itad-client.js';
 export class AssistantService {
   constructor(public readonly repository: AssistantRepository, private readonly users: UserConfigRepository,
     private readonly coordinator: UserOperationCoordinator,
-    private readonly sendTest?: (config:UserConfig)=>Promise<void>) {}
+    private readonly sendTest?: (config:UserConfig)=>Promise<void>,
+    public readonly priceHistory?: GameHistorySource) {}
   config(user:string) { return this.users.findByDiscordUserId(user); }
   async rule(user:string,identity:string,appId:number,rule:Omit<GameRule,'revision'>,version:number):Promise<void> {
     await this.coordinator.runExclusive(user,()=>{

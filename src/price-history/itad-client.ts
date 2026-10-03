@@ -1,5 +1,5 @@
 import { safeLogger } from '../application/safe-logger.js';
-import type { HistoricalLow } from '../domain/price-history.js';
+import type { GameHistory, HistoricalLow, PriceChange } from '../domain/price-history.js';
 import type { StoreCountryCode } from '../domain/store-country.js';
 
 export interface PricedApp {
@@ -14,6 +14,11 @@ export interface HistoricalLowSource {
     apps: readonly PricedApp[],
     country: StoreCountryCode,
   ): Promise<ReadonlyMap<number, HistoricalLow>>;
+}
+
+/** Optional price history for a game's detail panel; null means "not shown". */
+export interface GameHistorySource {
+  gameHistory(app: PricedApp, country: StoreCountryCode): Promise<GameHistory | null>;
 }
 
 export type PriceHistoryFetch = (
@@ -46,6 +51,7 @@ const unknownGameCacheTtlMs = 24 * 60 * 60 * 1000;
 const defaultFailurePauseMs = 5 * 60 * 1000;
 /** Full Steam history, so a region's whole current-currency period is covered. */
 const historyStart = '2000-01-01T00:00:00Z';
+const recentChangeCount = 5;
 const maxCacheEntries = 20_000;
 
 interface CacheEntry<V> {
@@ -66,7 +72,7 @@ class PriceHistoryError extends Error {
  * and the Store country are sent. Failures pause lookups briefly so an unavailable
  * service cannot slow every notification.
  */
-export class IsThereAnyDealClient implements HistoricalLowSource {
+export class IsThereAnyDealClient implements HistoricalLowSource, GameHistorySource {
   private readonly apiKey: string;
   private readonly fetchImpl: PriceHistoryFetch;
   private readonly timeoutMs: number;
@@ -76,6 +82,7 @@ export class IsThereAnyDealClient implements HistoricalLowSource {
   private readonly now: () => number;
   private readonly gameIds = new Map<number, CacheEntry<string | null>>();
   private readonly lows = new Map<string, CacheEntry<HistoricalLow | null>>();
+  private readonly histories = new Map<string, CacheEntry<GameHistory | null>>();
   private pausedUntil = 0;
 
   public constructor(options: IsThereAnyDealClientOptions) {
@@ -121,16 +128,10 @@ export class IsThereAnyDealClient implements HistoricalLowSource {
         result.set(appId, cached);
       }
     }
-    if (uncached.length === 0 || this.now() < this.pausedUntil || this.lifecycleSignal?.aborted) {
+    if (uncached.length === 0) {
       return result;
     }
-
-    const signals = [AbortSignal.timeout(this.timeoutMs)];
-    if (this.lifecycleSignal) {
-      signals.push(this.lifecycleSignal);
-    }
-    const signal = AbortSignal.any(signals);
-    try {
+    await this.guarded(async (signal) => {
       const gameIds = await this.resolveGameIds(uncached, signal);
       const known = uncached.flatMap((appId) => {
         const gameId = gameIds.get(appId);
@@ -150,27 +151,77 @@ export class IsThereAnyDealClient implements HistoricalLowSource {
           // current currency's own period instead of comparing across currencies.
           const low = !storeLow || storeLow.currency === currency
             ? storeLow ?? null
-            : parseCurrentCurrencyLow(await this.request(
-              `/games/history/v2?id=${encodeURIComponent(gameId)}&country=${country}&shops=${steamShopId}&since=${historyStart}`,
-              signal,
-            ), currency);
+            : (this.cached(this.histories, lowKey(country, appId, currency))
+              ?? await this.fetchHistory(gameId, { appId, currency }, country, signal)).low;
           this.remember(this.lows, lowKey(country, appId, currency), low, this.now() + this.lowCacheTtlMs);
           if (low) {
             result.set(appId, low);
           }
         }
       }
+    });
+    return result;
+  }
+
+  /** One game's Steam price history in its current currency; null when unknown or unavailable. */
+  public async gameHistory(app: PricedApp, country: StoreCountryCode): Promise<GameHistory | null> {
+    if (!Number.isSafeInteger(app.appId) || app.appId <= 0 || !/^[A-Z]{3}$/.test(app.currency)) {
+      return null;
+    }
+    const cached = this.cached(this.histories, lowKey(country, app.appId, app.currency));
+    if (cached !== undefined) {
+      return cached;
+    }
+    const history = await this.guarded(async (signal) => {
+      const gameId = (await this.resolveGameIds([app.appId], signal)).get(app.appId);
+      if (!gameId) {
+        this.remember(this.histories, lowKey(country, app.appId, app.currency), null, this.now() + this.lowCacheTtlMs);
+        return null;
+      }
+      return this.fetchHistory(gameId, app, country, signal);
+    });
+    return history ?? null;
+  }
+
+  private async fetchHistory(
+    gameId: string,
+    app: PricedApp,
+    country: StoreCountryCode,
+    signal: AbortSignal,
+  ): Promise<GameHistory> {
+    const history = parseCurrentCurrencyHistory(await this.request(
+      `/games/history/v2?id=${encodeURIComponent(gameId)}&country=${country}&shops=${steamShopId}&since=${historyStart}`,
+      signal,
+    ), app.currency);
+    this.remember(this.histories, lowKey(country, app.appId, app.currency), history, this.now() + this.lowCacheTtlMs);
+    return history;
+  }
+
+  /**
+   * Runs one bounded lookup. Any failure pauses further lookups and yields
+   * undefined, so callers simply show no price history.
+   */
+  private async guarded<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
+    if (this.now() < this.pausedUntil || this.lifecycleSignal?.aborted) {
+      return undefined;
+    }
+    const signals = [AbortSignal.timeout(this.timeoutMs)];
+    if (this.lifecycleSignal) {
+      signals.push(this.lifecycleSignal);
+    }
+    try {
+      return await operation(AbortSignal.any(signals));
     } catch (error: unknown) {
       if (this.lifecycleSignal?.aborted) {
-        return result;
+        return undefined;
       }
       const retryAfterMs = error instanceof PriceHistoryError && error.retryAfterSeconds !== undefined
         ? error.retryAfterSeconds * 1000
         : 0;
       this.pausedUntil = this.now() + Math.max(this.failurePauseMs, retryAfterMs);
       safeLogger.warn(`[price-history] IsThereAnyDeal unavailable; historical lows paused: ${failureCategory(error)}`);
+      return undefined;
     }
-    return result;
   }
 
   private async resolveGameIds(
@@ -304,15 +355,16 @@ export function parseStoreLows(value: unknown): ReadonlyMap<string, HistoricalLo
 }
 
 /**
- * The lowest Steam price in the latest unbroken run of `currency` entries
- * (history is newest first). Free giveaways are not sales and are ignored.
+ * Steam's price changes in the latest unbroken run of `currency` (history is
+ * newest first). Free giveaways are not sales and are ignored. The low carries
+ * `since` only when an older currency ended the run, so it is never "all-time".
  */
-export function parseCurrentCurrencyLow(value: unknown, currency: string): HistoricalLow | null {
+export function parseCurrentCurrencyHistory(value: unknown, currency: string): GameHistory {
   if (!Array.isArray(value)) {
     throw new PriceHistoryError('invalid response');
   }
-  let lowest: HistoricalLow | null = null;
-  let since: string | null = null;
+  const changes: PriceChange[] = [];
+  let currencyChanged = false;
   for (const entry of value) {
     if (!isRecord(entry) || !isRecord(entry.shop) || entry.shop.id !== steamShopId || !isRecord(entry.deal)) {
       continue;
@@ -322,14 +374,24 @@ export function parseCurrentCurrencyLow(value: unknown, currency: string): Histo
       continue;
     }
     if (parsed.currency !== currency) {
+      currencyChanged = true;
       break;
     }
-    since = parsed.recordedAt;
-    if (parsed.amountMinor > 0 && (!lowest || parsed.amountMinor < lowest.amountMinor)) {
-      lowest = parsed;
+    if (parsed.amountMinor > 0) {
+      changes.push(parsed);
     }
   }
-  return lowest && since ? { ...lowest, since } : null;
+  let lowest: PriceChange | null = null;
+  for (const change of changes) {
+    if (!lowest || change.amountMinor < lowest.amountMinor) {
+      lowest = change;
+    }
+  }
+  const since = currencyChanged ? changes.at(-1)?.recordedAt : undefined;
+  return {
+    low: lowest ? { ...lowest, ...(since ? { since } : {}) } : null,
+    recent: changes.slice(0, recentChangeCount),
+  };
 }
 
 function parseLow(low: Record<string, unknown>): HistoricalLow | null {

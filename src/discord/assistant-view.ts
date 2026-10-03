@@ -4,9 +4,11 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder,
   SectionBuilder, StringSelectMenuBuilder, TextDisplayBuilder, escapeMarkdown } from 'discord.js';
 import type { WishlistItem } from '../domain/steam.js';
 import type { UserConfig } from '../domain/user-config.js';
-import type { GameRule, HistoryEntry, PricePoint } from '../persistence/assistant-repository.js';
+import type { GameRule, HistoryEntry } from '../persistence/assistant-repository.js';
 import type { NotificationPreference } from '../domain/notification-preference.js';
+import type { GameHistory } from '../domain/price-history.js';
 import { formatMinorPrice } from './notification-messages.js';
+import { historicalLowLine, priceChangeLine, priceHistoryCredit } from './price-history-text.js';
 import { assertComponentsV2Limit } from './ui/components-v2.js';
 import { dealioBrand } from './ui/brand.js';
 
@@ -16,8 +18,11 @@ export interface AssistantView {
 }
 export interface AssistantViewData {
   config:UserConfig; items:readonly WishlistItem[]; capturedAt:string;
-  rules:ReadonlyMap<number,GameRule>; preference:NotificationPreference; history:HistoryEntry[]; prices:PricePoint[];
+  rules:ReadonlyMap<number,GameRule>; preference:NotificationPreference; history:HistoryEntry[];
+  /** Absent when price history is not configured; the detail panel then omits the section. */
+  priceHistory?:GameHistoryState;
 }
+export type GameHistoryState={status:'loading'}|{status:'ready';history:GameHistory|null};
 const text=(value:string)=>new TextDisplayBuilder().setContent(value);
 const button=(id:string,label:string,primary=false)=>new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(primary?ButtonStyle.Primary:ButtonStyle.Secondary);
 export function matchesRule(item:WishlistItem,rule:GameRule|undefined,global:number):boolean {
@@ -77,20 +82,24 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       addArtwork(root, item);
       add('## '+escapeMarkdown(item.name).slice(0,120));
       add(p?.currency? '**'+price(p.finalMinor,p.currency)+'**'+(item.onSale?' · −'+p.discountPercent+'%':''):(tr?'Fiyat doğrulanamadı':'Price unavailable'));
-      add((tr?'-# Fiyat gözlemi: ':'-# Price observed: ')+`<t:${Math.floor(Date.parse(item.priceObservedAt??data.capturedAt)/1000)}:R>`);
+      add((tr?'-# Steam fiyatı alındı: ':'-# Steam price fetched: ')+`<t:${Math.floor(Date.parse(item.priceObservedAt??data.capturedAt)/1000)}:R>`);
       const eligible=matchesRule(item,rule,data.config.minimumDiscountPercent);
       add(eligible?(tr?'🟢 Mevcut fiyat kuralına uygun. Kural kaydında ayrıca başlangıç DM’i gönderilmez.':'🟢 The current price matches your rule. Saving a rule does not send an initial DM.'):
         (tr?'Hedefe ulaşınca haber vereceğiz.':'We will notify you when your rule is met.'));
       if(rule?.mode==='target') add((tr?'Hedef fiyat: ':'Target price: ')+price(rule.targetMinor!,rule.currency!)+
         (p?.currency!==rule.currency?(tr?' · Para birimi değişmiş; hedefi yeniden kaydet.':' · Currency changed; save a new target.'):''));
-      const points=data.prices;
-      add('### '+(tr?'Son 90 gün · Dealio gözlemleri':'Last 90 days · Dealio observations'));
-      if(points.length<2) add(tr?'Henüz karşılaştırma için yeterli gözlem yok. Takip öncesindeki fiyatları bilmiyoruz.':'Not enough observations to compare yet. Prices before tracking are unknown.');
-      else {
-        const low=Math.min(...points.map(x=>x.final_minor));
-        add((tr?'Gözlemlediğimiz en düşük: ':'Lowest observed: ')+price(low,p!.currency!)+
-          `\n-# ${points.length} ${tr?'fiyat kaydı; tüm zamanların en düşüğü değildir.':'price records; not an all-time low.'}`);
-        add(points.slice(-5).map(x=>`<t:${Math.floor(Date.parse(x.observed_at)/1000)}:d> · **${price(x.final_minor,p!.currency!)}**`).join('\n'));
+      const history=data.priceHistory;
+      if(history&&p?.currency){
+        add('### '+(tr?'Steam fiyat geçmişi':'Steam price history'));
+        if(history.status==='loading') add(tr?'Fiyat geçmişi yükleniyor…':'Loading price history…');
+        else if(!history.history) add(tr?'Fiyat geçmişi şu anda alınamadı.':'Price history is unavailable right now.');
+        else {
+          const low=history.history.low&&historicalLowLine(p.finalMinor,p.currency,history.history.low,lang);
+          add(low??(tr?'Bu bölge için Steam fiyat geçmişi bulunamadı.':'No Steam price history for this region yet.'));
+          if(history.history.recent.length) add((tr?'**Son fiyat değişiklikleri**\n':'**Recent price changes**\n')+
+            history.history.recent.map(change=>priceChangeLine(change,lang)).join('\n'));
+          add(priceHistoryCredit(lang));
+        }
       }
       root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
         button(prefix+'inherit',tr?'Genel ayarı kullan':'Use global rule'),button(prefix+'percent',tr?'İndirim yüzdesi':'Discount %'),

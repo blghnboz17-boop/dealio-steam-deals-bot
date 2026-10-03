@@ -177,6 +177,61 @@ describe('IsThereAnyDeal client', () => {
     await expect(f.client.historicalLows(usd(220), 'TR')).resolves.toEqual(new Map());
   });
 
+  it('loads one game history for the detail panel and shares it with alerts', async () => {
+    const f = fixture(
+      (ids) => ids.map((id) => steamLow(id, 1.8, 'TRY')),
+      () => [
+        historyEntry('2026-10-01T20:26:44+02:00', 1.15, 'USD', 80),
+        historyEntry('2026-09-01T00:00:00+00:00', 5.79, 'USD', 0),
+        historyEntry('2026-08-01T00:00:00+00:00', 1.15, 'USD', 80),
+        historyEntry('2026-07-01T00:00:00+00:00', 5.79, 'USD', 0),
+        historyEntry('2026-06-01T00:00:00+00:00', 0, 'USD', 0),
+        historyEntry('2026-05-01T00:00:00+00:00', 2.89, 'USD', 50),
+        historyEntry('2024-02-11T01:59:31+01:00', 5.79, 'USD', 0),
+        historyEntry('2024-01-04T19:19:01+01:00', 1.8, 'TRY', 90),
+      ],
+    );
+    const history = await f.client.gameHistory({ appId: 220, currency: 'USD' }, 'TR');
+
+    expect(history?.low).toMatchObject({ amountMinor: 115, since: '2024-02-11T00:59:31.000Z' });
+    expect(history?.recent.map((change) => change.amountMinor)).toEqual([115, 579, 115, 579, 289]);
+    expect(f.fetchImpl.mock.calls.map(([url]) => url.split('?')[0])).toEqual([
+      'https://api.isthereanydeal.com/lookup/id/shop/61/v1',
+      'https://api.isthereanydeal.com/games/history/v2',
+    ]);
+
+    await f.client.gameHistory({ appId: 220, currency: 'USD' }, 'TR');
+    await f.client.historicalLows(usd(220), 'TR');
+    // The alert path still asks for the store low, then reuses the cached history.
+    expect(f.fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it('calls a history without a currency change all-time', async () => {
+    const f = fixture(undefined, () => [
+      historyEntry('2026-10-01T00:00:00+00:00', 1.99, 'USD', 80),
+      historyEntry('2017-06-22T00:00:00+00:00', 0.99, 'USD', 90),
+    ]);
+    const history = await f.client.gameHistory({ appId: 220, currency: 'USD' }, 'US');
+
+    expect(history?.low).toEqual({
+      currency: 'USD', amountMinor: 99, discountPercent: 90, recordedAt: '2017-06-22T00:00:00.000Z',
+    });
+  });
+
+  it('returns null for an unknown game or an unavailable service', async () => {
+    const f = fixture();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await expect(f.client.gameHistory({ appId: 404, currency: 'USD' }, 'TR')).resolves.toBeNull();
+      await expect(f.client.gameHistory({ appId: 220, currency: 'usd' }, 'TR')).resolves.toBeNull();
+      f.fail(jsonResponse({}, 503));
+      await expect(f.client.gameHistory({ appId: 220, currency: 'USD' }, 'TR')).resolves.toBeNull();
+      expect(String(warn.mock.calls[0]?.[0])).toContain('HTTP 503');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('returns nothing and pauses lookups while the service fails', async () => {
     const f = fixture();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
