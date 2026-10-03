@@ -12,7 +12,6 @@ From a repository checkout on Linux or WSL:
 
 ```bash
 npm ci
-npm ci --prefix .opencode
 [ -e .env.test ] || install -m 600 .env.test.example .env.test
 ```
 
@@ -30,12 +29,12 @@ Install the test application in a test server, then run `/setup` and `/dealio`. 
 
 ```bash
 npm run typecheck
-npm run typecheck:handoff
+npm run typecheck:scenarios
 npm test
 npm run build
 ```
 
-The `.opencode` dependencies are needed for the handoff tests included in the full suite. A successful build alone is not a substitute for those checks.
+`npm test` builds first (`pretest`) and runs the full suite. A successful build alone is not a substitute for these checks.
 
 For a built local test process:
 
@@ -55,9 +54,11 @@ The existing Azure VM is the sole production host. The current limited-beta roll
 
 This is **not** a distributed lock. Cloned machine identities or separate OS users are outside that guarantee.
 
-The planned cloud mode uses `AZURE_LEASE_CONTAINER_URL` and a pre-provisioned application lock blob. Uncertain lease renewal disconnects the bot. Azure credentials, credit coverage, remote backup, monitoring, and public legal links must be verified before the general release gates can pass.
+An optional cloud mode uses `AZURE_LEASE_CONTAINER_URL` and a pre-provisioned application lock blob; uncertain lease renewal disconnects the bot. It is implemented but **not provisioned**, because the project uses no paid cloud resources.
 
-See [Azure operations](../deploy/azure/README.tr.md) and [deployment evidence](../deploy/IMPLEMENTATION-STATUS.tr.md). Restore matching code **and database** when rolling back across a schema migration. Do not include `.env` in backup archives.
+Backups, restore rehearsal, independent alerts, and the public legal pages are already running; see [free operations](../deploy/FREE-OPERATIONS.tr.md), [the deployment guide](../deploy/README.tr.md) (build locally, never on the 1 GiB VM), and [deployment evidence](../deploy/IMPLEMENTATION-STATUS.tr.md). Restore matching code **and database** when rolling back across a schema migration. Do not include `.env` in backup archives.
+
+Useful scripts: `npm run release:check <evidence.json>` (release gate), `npm run metrics:report` (anonymous latency summary), `npm run monitor:preview` (read-only monitor preview), `npm run backup` / `npm run restore:test` (local backup and restore test), and `npm run test:capacity` (capacity check).
 
 ## Secrets and repository hygiene
 
