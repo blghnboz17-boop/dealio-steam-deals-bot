@@ -28,11 +28,10 @@ import {
 } from '../ui/components-v2.js';
 import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
+import { handOffPanel, parseTabAction, type Navigate, type PanelNavigation } from '../ui/tab-bar.js';
 import { handleCheck } from './check.js';
 import { handleSetup } from './setup.js';
 import { handleStatus } from './status.js';
-import { handleTestNotification } from './test-notification.js';
-import { handleWishlist } from './wishlist.js';
 
 export const dealioCommand = new SlashCommandBuilder()
   .setName('dealio')
@@ -52,15 +51,45 @@ export interface DealioCommandServices {
   readonly lifecycleSignal?: AbortSignal;
 }
 
+/**
+ * Opens every Dealio screen in the message of an acknowledged component, so the
+ * panel changes in place instead of stacking new messages.
+ */
+export function createDealioNavigator(services: DealioCommandServices): Navigate {
+  const navigate: Navigate = async (target, component) => {
+    const interaction = component as unknown as ChatInputCommandInteraction;
+    const ui = { inPlace: true, navigate };
+    if (target === 'home') return handleDealio(interaction, services, ui);
+    if (target === 'settings') {
+      return handleStatus(interaction, services.statusService, services.userConfigurationService,
+        services.lifecycleSignal, services.discountThresholdService, services.testNotificationService, ui);
+    }
+    if (target === 'check') {
+      return handleCheck(interaction, services.checkService, services.statusService, services.notificationService,
+        { ...ui, lifecycleSignal: services.lifecycleSignal });
+    }
+    const assistant = services.wishlistViewService.assistantService;
+    if (!assistant) throw new Error('The Dealio assistant is not configured');
+    return handleAssistant(interaction, assistant, services.wishlistViewService, services.lifecycleSignal,
+      target === 'games' ? 'wishlist' : 'rhythm', ui);
+  };
+  return navigate;
+}
+
 export async function handleDealio(
   interaction: ChatInputCommandInteraction,
   services: DealioCommandServices,
+  ui: PanelNavigation = {},
 ): Promise<void> {
+  const navigate = ui.navigate ?? createDealioNavigator(services);
   const editPanel = (options: InteractionEditReplyOptions) => measureDiscordOperation(
     interaction, 'dealio.render', () => interaction.editReply(options),
   );
-  await measureDiscordOperation(interaction, 'dealio.ack',
-    () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
+  if (!ui.inPlace) {
+    await measureDiscordOperation(interaction, 'dealio.ack',
+      () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
+  }
+  let handedOff = false;
   const fallbackLanguage = languageFromDiscordLocale(interaction.locale);
   let current = services.statusService.getDashboard(interaction.user.id, fallbackLanguage);
   let avatarUrl: string | undefined;
@@ -134,10 +163,10 @@ export async function handleDealio(
       component, 'dealio.button-ack', () => component.deferUpdate(),
     );
     const action = component.customId.slice(`dealio:${interaction.id}:`.length);
-    if ((action === 'history' || action === 'rhythm') && services.wishlistViewService?.assistantService) {
-      void handleAssistant(component as unknown as ChatInputCommandInteraction,services.wishlistViewService?.assistantService,
-        services.wishlistViewService,services.lifecycleSignal,action)
-        .catch(error=>safeLogger.error('Assistant navigation failed',error));
+    const target = action === 'check' ? 'check' : parseTabAction(action);
+    if (target && target !== 'home') {
+      handedOff = true;
+      handOffPanel({ component, target, navigate, stop: () => collector.stop('handoff'), settle: () => operations.drain() });
       return;
     }
     if (action === 'setup') {
@@ -147,50 +176,6 @@ export async function handleDealio(
         services.lifecycleSignal,
         services.setupPresentation,
       ).catch((error: unknown) => safeLogger.error('Dealio home setup navigation failed', error));
-      return;
-    }
-    if (action === 'wishlist') {
-      void handleWishlist(
-        component as unknown as ChatInputCommandInteraction,
-        services.wishlistViewService,
-        services.lifecycleSignal,
-        services.discountThresholdService,
-      ).catch((error: unknown) => safeLogger.error('Dealio home wishlist navigation failed', error));
-      return;
-    }
-    if (action === 'check') {
-      void handleCheck(
-        component as unknown as ChatInputCommandInteraction,
-        services.checkService,
-        services.statusService,
-        services.notificationService,
-        {
-          wishlistViewService: services.wishlistViewService,
-          userConfigurationService: services.userConfigurationService,
-          discountThresholdService: services.discountThresholdService,
-          testNotificationService: services.testNotificationService,
-          lifecycleSignal: services.lifecycleSignal,
-        },
-      ).catch((error: unknown) => safeLogger.error('Dealio home check navigation failed', error));
-      return;
-    }
-    if (action === 'settings' || action === 'region') {
-      void handleStatus(
-        component as unknown as ChatInputCommandInteraction,
-        services.statusService,
-        services.userConfigurationService,
-        services.lifecycleSignal,
-        services.discountThresholdService,
-        services.testNotificationService,
-      ).catch((error: unknown) => safeLogger.error('Dealio home settings navigation failed', error));
-      return;
-    }
-    if (action === 'test') {
-      void handleTestNotification(
-        component as unknown as ChatInputCommandInteraction,
-        services.userConfigurationService,
-        services.testNotificationService,
-      ).catch((error: unknown) => safeLogger.error('Dealio home test navigation failed', error));
       return;
     }
     if (action === 'refresh') {
@@ -223,6 +208,9 @@ export async function handleDealio(
   try {
     await ended;
     await operations.drain();
+    if (handedOff) {
+      return;
+    }
     if (current.status === 'ready') {
       await editPanel({
         components: [buildStatusV2Panel(current, interaction.id, {

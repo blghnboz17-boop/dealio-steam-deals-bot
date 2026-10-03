@@ -10,6 +10,7 @@ import { storeCountryLabel } from '../domain/store-country.js';
 import { formatMinorPrice, sanitizeGameName } from './notification-messages.js';
 import { assertComponentsV2Limit } from './ui/components-v2.js';
 import { dealioBrand } from './ui/brand.js';
+import { buildTabBar } from './ui/tab-bar.js';
 
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
 const display = (value: string) => new TextDisplayBuilder().setContent(value);
@@ -31,15 +32,11 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
   const failed = checkState?.lastStatus === 'failed' || checkState?.lastStatus === 'unavailable';
   const root = new ContainerBuilder().setAccentColor(blocked ? dealioBrand.colors.danger
     : failed || partial ? dealioBrand.colors.warning : dealioBrand.colors.primary);
-  const button = (action: string, label: string, primary = false) => new ButtonBuilder()
-    .setCustomId('dealio:' + sessionId + ':' + action).setLabel(label)
-    .setStyle(primary ? ButtonStyle.Primary : ButtonStyle.Secondary).setDisabled(disabled);
+  const button = (action: string, label: string, emoji: string) => new ButtonBuilder()
+    .setCustomId('dealio:' + sessionId + ':' + action).setLabel(label).setEmoji(emoji)
+    .setStyle(ButtonStyle.Secondary).setDisabled(disabled);
   const divider = () => root.addSeparatorComponents(new SeparatorBuilder()
     .setDivider(true).setSpacing(SeparatorSpacingSize.Small));
-  const destination = (title: string, description: string, action: string, label: string, primary = false) =>
-    root.addSectionComponents(new SectionBuilder()
-      .addTextDisplayComponents(display('### ' + title + '\n' + description))
-      .setButtonAccessory(button(action, label, primary)));
 
   root.addTextDisplayComponents(display(
     '-# DEALIO / ' + t('KİŞİSEL STEAM ASİSTANIN', 'YOUR PERSONAL STEAM ASSISTANT') +
@@ -91,31 +88,23 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
     t('Discord DM erişimini açıp ayarlardan Test DM’i gönder.', 'Allow Discord DMs, then send a Test DM from settings.')));
   divider();
 
-  destination(t('Oyunların & hedeflerin', 'Games & price targets'),
-    t('Oyun ara, hedef fiyat belirle veya bir oyunu sustur.', 'Search games, set a target price or mute a game.'),
-    'wishlist', t('Wishlist’i aç', 'Open wishlist'), true);
   const pref = options.notificationPreference;
   const rhythm = pref?.mode === 'quiet'
-    ? t('Sessiz saatler: ', 'Quiet hours: ') + clock(pref.quietStart) + '–' + clock(pref.quietEnd) + ' · ' + pref.timezone
+    ? t('Rahatsız etme ', 'Do not disturb ') + clock(pref.quietStart) + '–' + clock(pref.quietEnd)
     : pref?.mode === 'digest'
-      ? t('Günlük özet: ', 'Daily digest: ') + clock(pref.digestMinute) + ' · ' + pref.timezone
-      : t('Fırsat tespit edilince haber ver.', 'Notify when a matching deal is detected.');
-  destination(t('Bildirim zamanın', 'Your notification schedule'), rhythm,
-    'rhythm', t('Saatleri ayarla', 'Set schedule'));
-  destination(t('Bildirim geçmişin', 'Your alert history'),
-    t('Ne gönderildi, ne bekliyor ve neden geldi?', 'What was delivered, what is waiting, and why?'),
-    'history', t('Geçmişi aç', 'View history'));
-  divider();
-  root.addTextDisplayComponents(display('-# ' + t('Son kontrol: ', 'Last check: ') +
-    relative(checkState?.lastSuccessCompletedAt, t('Henüz yok', 'Not yet')) + '\n-# ' +
-    t('Sonraki kontrol: ', 'Next check: ') + (config.enabled
+      ? t('Günlük özet ', 'Daily digest at ') + clock(pref.digestMinute)
+      : t('İndirim bulununca hemen', 'As soon as a deal is found');
+  root.addTextDisplayComponents(display('🔔 ' + t('Bildirim zamanı: ', 'Alert timing: ') + '**' + rhythm + '**' +
+    '\n-# ' + t('Son kontrol: ', 'Last check: ') + relative(checkState?.lastSuccessCompletedAt, t('Henüz yok', 'Not yet')) +
+    ' · ' + t('Sonraki: ', 'Next: ') + (config.enabled
       ? relative(checkState?.nextScheduledAt, t('Planlanıyor', 'Scheduling'))
       : t('Takip duraklatıldı', 'Tracking paused'))));
   root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-    button('check', t('Şimdi kontrol et', 'Check now')),
-    button('settings', t('Hesap & ayarlar', 'Account & settings')),
-    button('refresh', t('Paneli yenile', 'Refresh panel')),
+    button('check', t('Şimdi kontrol et', 'Check now'), '🔄'),
+    button('refresh', t('Paneli yenile', 'Refresh panel'), '♻️'),
   ));
+  divider();
+  root.addActionRowComponents(buildTabBar('dealio', sessionId, language, { active: 'home', disabled }));
   root.addTextDisplayComponents(display('-# ' + t('Dealio · Fiyatlar Steam mağaza para birimindedir.', 'Dealio · Prices use your Steam store currency.')));
   assertComponentsV2Limit([root]);
   return root;

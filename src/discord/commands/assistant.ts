@@ -9,6 +9,7 @@ import { buildNoticePanel, dealioV2Flags, dealioEphemeralV2Flags, dealioUiSessio
 import { dealioUiSessions } from '../ui/session-manager.js';
 import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { safeLogger } from '../../application/safe-logger.js';
+import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-bar.js';
 import { measureDiscordOperation } from '../interaction-timing.js';
 import type { GameRule } from '../../persistence/assistant-repository.js';
 import type { NotificationPreference } from '../../domain/notification-preference.js';
@@ -25,11 +26,11 @@ function parseClock(value:string):number {
 }
 
 export async function handleAssistant(interaction:ChatInputCommandInteraction, service:AssistantService,
-  wishlist:WishlistViewService, signal?:AbortSignal, screen:AssistantView['screen']='wishlist'):Promise<void> {
+  wishlist:WishlistViewService, signal?:AbortSignal, screen:AssistantView['screen']='wishlist', ui:PanelNavigation={}):Promise<void> {
   const editPanel=(options:Parameters<typeof interaction.editReply>[0])=>
     measureDiscordOperation(interaction,'assistant.render',()=>interaction.editReply(options));
   const loadWishlist=(refresh=false)=>measureDiscordOperation(interaction,'assistant.load',()=>wishlist.load(interaction.user.id,language,refresh));
-  await measureDiscordOperation(interaction,'assistant.ack',()=>interaction.deferReply({flags:MessageFlags.Ephemeral}));
+  if(!ui.inPlace) await measureDiscordOperation(interaction,'assistant.ack',()=>interaction.deferReply({flags:MessageFlags.Ephemeral}));
   const user=interaction.user.id, config=service.config(user), language=config?.language??languageFromDiscordLocale(interaction.locale);
   const tr=language==='tr';
   const cooldownNotice=(seconds:number)=>tr?`Yeniden yenilemek için ${seconds} saniye bekle. Bu sınır tüm panellerinde ortaktır.`
@@ -117,10 +118,18 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       }),
     ).finally(()=>{loadTask=undefined;});
   };
-  let sequence=0;
+  let sequence=0, handedOff=false;
   collector.on('collect',component=>{
     const acknowledge=()=>measureDiscordOperation(component,'assistant.button-ack',()=>component.deferUpdate());
-    const action=component.customId.split(':')[2];
+    const tab=parseTabAction(component.customId.split(':')[2]??'');
+    if(tab&&tab!=='games'&&tab!=='alerts'){
+      if(ui.navigate){handedOff=true;handOffPanel({component,target:tab,navigate:ui.navigate,
+        stop:()=>collector.stop('handoff'),settle:()=>operations.drain()});}
+      else void acknowledge().catch(()=>undefined);
+      return;
+    }
+    // Games and Alerts are screens of this panel; switching between them stays in this session.
+    const action=tab==='games'?'wishlist':tab==='alerts'?'rhythm':component.customId.split(':')[2];
     if(['search','target','percent','quiet','digest'].includes(action)){
       const selected=items.find(i=>i.appId===view.selectedAppId);
       if((action==='target'||action==='percent')&&!selected){void acknowledge().catch(()=>undefined);return;}
@@ -209,7 +218,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
   if(signal?.aborted)abort();
   try{await new Promise<void>(resolve=>collector.once('end',()=>resolve()));await operations.drain();
     await loadTask;await operations.drain();
-    await render(true).catch(()=>undefined);}
+    if(!handedOff)await render(true).catch(()=>undefined);}
   finally{close();signal?.removeEventListener('abort',abort);}
   // Modal submissions are owner-bound and reject after collector end; they do not hold shutdown open.
 }

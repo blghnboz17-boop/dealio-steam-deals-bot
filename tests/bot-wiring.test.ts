@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   testNotification: vi.fn(async () => undefined),
   deleteData: vi.fn(async () => undefined),
   dealio: vi.fn(async () => undefined),
+  navigate: vi.fn(async () => undefined),
   autocomplete: vi.fn(async () => undefined),
   createClient: vi.fn(),
 }));
@@ -36,7 +37,7 @@ vi.mock('../src/discord/register-commands.js', () => ({ registerCommands: mocks.
 vi.mock('../src/discord/commands/setup.js', () => ({ handleSetup: mocks.setup }));
 vi.mock('../src/discord/commands/region.js', () => ({ handleRegion: mocks.region }));
 vi.mock('../src/discord/commands/status.js', () => ({ handleStatus: mocks.status }));
-vi.mock('../src/discord/commands/dealio.js', () => ({ handleDealio: mocks.dealio }));
+vi.mock('../src/discord/commands/dealio.js', () => ({ handleDealio: mocks.dealio, createDealioNavigator: () => mocks.navigate }));
 vi.mock('../src/discord/commands/check.js', () => ({ handleCheck: mocks.check }));
 vi.mock('../src/discord/commands/wishlist.js', () => ({ handleWishlist: mocks.wishlist }));
 vi.mock('../src/discord/commands/test-notification.js', () => ({
@@ -274,9 +275,9 @@ describe('bot wiring', () => {
       pollIntervalHours: 6,
     }]],
     ['region', mocks.region, [expect.any(UserConfigurationService)]],
-    ['status', mocks.status, [expect.any(StatusService), expect.any(UserConfigurationService), expect.any(AbortSignal), expect.any(DiscountThresholdService), expect.any(TestNotificationService)]],
-    ['check', mocks.check, [expect.any(CheckService), expect.any(StatusService), expect.any(NotificationService), expect.objectContaining({ wishlistViewService: expect.any(WishlistViewService) })]],
-    ['wishlist', mocks.wishlist, [expect.any(WishlistViewService), expect.any(AbortSignal), expect.any(DiscountThresholdService)]],
+    ['status', mocks.status, [expect.any(StatusService), expect.any(UserConfigurationService), expect.any(AbortSignal), expect.any(DiscountThresholdService), expect.any(TestNotificationService), { navigate: mocks.navigate }]],
+    ['check', mocks.check, [expect.any(CheckService), expect.any(StatusService), expect.any(NotificationService), { navigate: mocks.navigate, lifecycleSignal: expect.any(AbortSignal) }]],
+    ['wishlist', mocks.wishlist, [expect.any(WishlistViewService), expect.any(AbortSignal), expect.any(DiscountThresholdService), { navigate: mocks.navigate }]],
     ['test-notification', mocks.testNotification, [expect.any(UserConfigurationService), expect.any(TestNotificationService)]],
     ['delete-data', mocks.deleteData, [expect.any(UserConfigurationService), expect.any(SetupService), expect.any(AbortSignal), {
       bannerUrl: undefined,
@@ -304,7 +305,7 @@ describe('bot wiring', () => {
       statusService: expect.any(StatusService),
       wishlistViewService: expect.any(WishlistViewService),
       lifecycleSignal: expect.any(AbortSignal),
-    }));
+    }), { navigate: mocks.navigate });
   });
 
   it('replies ephemerally to an unknown chat command', async () => {

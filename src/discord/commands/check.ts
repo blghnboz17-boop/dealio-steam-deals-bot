@@ -6,30 +6,21 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import type { CheckService } from '../../application/check-service.js';
-import type { DiscountThresholdService } from '../../application/discount-threshold-service.js';
 import type { NotificationService } from '../../application/notification-service.js';
 import type { StatusService } from '../../application/status-service.js';
-import type { TestNotificationService } from '../../application/test-notification-service.js';
-import type { UserConfigurationService } from '../../application/user-configuration-service.js';
-import type { WishlistViewService } from '../../application/wishlist-view-service.js';
 import { buildCheckPanel, type CheckResultPresentation } from '../check-view-v2.js';
 import { messagesFor } from '../messages.js';
 import { dealioUiSessionTimeoutMs, dealioV2Flags } from '../ui/components-v2.js';
 import { uiCopy } from '../ui/copy.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
-import { handleStatus } from './status.js';
-import { handleWishlist } from './wishlist.js';
+import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-bar.js';
 
 export const checkCommand = new SlashCommandBuilder()
   .setName('check')
   .setDescription('Check your Steam wishlist for sales')
   .setDescriptionLocalizations({ tr: 'Steam wishlistini şimdi indirimler için kontrol et' });
 
-export interface CheckNavigationServices {
-  readonly wishlistViewService: WishlistViewService;
-  readonly userConfigurationService: UserConfigurationService;
-  readonly discountThresholdService?: DiscountThresholdService;
-  readonly testNotificationService?: TestNotificationService;
+export interface CheckPanelOptions extends PanelNavigation {
   readonly lifecycleSignal?: AbortSignal;
 }
 
@@ -38,9 +29,12 @@ export async function handleCheck(
   checkService: CheckService,
   statusService: StatusService,
   notificationService: NotificationService,
-  navigation?: CheckNavigationServices,
+  ui: CheckPanelOptions = {},
 ): Promise<void> {
-  await measureDiscordOperation(interaction, 'check.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
+  if (!ui.inPlace) {
+    await measureDiscordOperation(interaction, 'check.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
+  }
+  const navigate = ui.navigate;
   const config = statusService.get(interaction.user.id).config;
   const language = config?.language ?? 'tr';
   const messages = messagesFor(language);
@@ -84,10 +78,10 @@ export async function handleCheck(
   const finalPanel = buildCheckPanel(
     currentLanguage,
     presentation,
-    navigation ? interaction.id : undefined,
+    navigate ? interaction.id : undefined,
   );
   const message = await measureDiscordOperation(interaction, 'check.render', () => interaction.editReply({ components: [finalPanel] }));
-  if (!navigation) {
+  if (!navigate) {
     return;
   }
   const collector = message.createMessageComponentCollector({
@@ -101,41 +95,28 @@ export async function handleCheck(
     ['check-v2'],
     dealioUiSessionTimeoutMs,
   );
+  let handedOff = false;
   collector.on('collect', (component) => {
-    const action = component.customId.slice(`check-v2:${interaction.id}:`.length);
-    if (action === 'wishlist') {
-      void handleWishlist(
-        component as unknown as ChatInputCommandInteraction,
-        navigation.wishlistViewService,
-        navigation.lifecycleSignal,
-        navigation.discountThresholdService,
-      ).catch((error: unknown) => safeLogger.error('Dealio check wishlist navigation failed', error));
-      return;
-    }
-    if (action === 'status') {
-      void handleStatus(
-        component as unknown as ChatInputCommandInteraction,
-        statusService,
-        navigation.userConfigurationService,
-        navigation.lifecycleSignal,
-        navigation.discountThresholdService,
-        navigation.testNotificationService,
-      ).catch((error: unknown) => safeLogger.error('Dealio check status navigation failed', error));
+    const tab = parseTabAction(component.customId.slice(`check-v2:${interaction.id}:`.length));
+    if (tab) {
+      handedOff = true;
+      handOffPanel({ component, target: tab, navigate, stop: () => collector.stop('handoff'), settle: async () => undefined });
       return;
     }
     void measureDiscordOperation(component, 'check.button-ack', () => component.deferUpdate())
       .catch((error: unknown) => safeLogger.error('Discord check acknowledgement failed', error));
   });
   const stopForShutdown = (): void => collector.stop('shutdown');
-  navigation.lifecycleSignal?.addEventListener('abort', stopForShutdown, { once: true });
+  ui.lifecycleSignal?.addEventListener('abort', stopForShutdown, { once: true });
   try {
     await new Promise<void>((resolve) => collector.once('end', () => resolve()));
+    if (handedOff) return;
     await measureDiscordOperation(interaction, 'check.render', () => interaction.editReply({
       components: [buildCheckPanel(currentLanguage, presentation, interaction.id, true)],
     })).catch((error: unknown) => safeLogger.error('Dealio check panel cleanup failed', error));
   } finally {
     closeUiSession();
-    navigation.lifecycleSignal?.removeEventListener('abort', stopForShutdown);
+    ui.lifecycleSignal?.removeEventListener('abort', stopForShutdown);
   }
 }
 
