@@ -10,7 +10,7 @@ import type { GameHistory } from '../domain/price-history.js';
 import { formatMinorPrice } from './notification-messages.js';
 import { historicalLowLine, priceChangeLine, priceHistoryCredit } from './price-history-text.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
-import { flagEmoji, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
+import { countryDisplay, panelHeader, priceLine, savingsLine, tabAccent } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 import { defaultTimezone, timezoneChoices, timezoneLabel } from '../domain/timezone.js';
 
@@ -68,7 +68,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
     const page=Math.min(Math.max(0,view.page),pages-1), visible=items.slice(page*3,page*3+3);
     const count=data.items.filter(i=>matchesRule(i,data.rules.get(i.appId),data.config.minimumDiscountPercent)).length;
     add(panelHeader('games',lang,tr?'Oyunların ve hedeflerin':'Your games & targets',
-      `✅ **${count}** ${tr?'uygun fırsat':'matching deals'}　🎮 **${data.items.length}** ${tr?'oyun':'games'}　${flagEmoji(data.config.storeCountryCode)} ${data.config.storeCountryCode}`)+
+      `✅ **${count}** ${tr?'uygun fırsat':'matching deals'}　🎮 **${data.items.length}** ${tr?'oyun':'games'}　${countryDisplay(data.config.storeCountryCode,lang)}`)+
       '\n-# 🕒 '+(tr?'Fiyatlar ':'Prices ')+relative(data.items.map(i=>i.priceObservedAt??data.capturedAt).sort()[0]??data.capturedAt)+
       (view.refreshing?(tr?' · Steam’den yenileniyor…':' · Refreshing from Steam…'):''));
     notice();

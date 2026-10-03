@@ -19,7 +19,7 @@ import type {
 } from '../application/initial-wishlist-summary-service.js';
 import type { NotificationSendOptions, SaleNotification } from '../application/notification-service.js';
 import { historicalLowLine, priceHistoryCredit } from './price-history-text.js';
-import { storeCountryLabel } from '../domain/store-country.js';
+import { countryDisplay, priceLine, savingsLine } from './ui/design.js';
 import type { Language } from '../domain/user-config.js';
 import { formatMinorPrice, sanitizeGameName } from './notification-messages.js';
 import { sortInitialWishlistSales, type InitialSummaryPresentationOptions } from './initial-wishlist-summary-messages.js';
@@ -47,7 +47,9 @@ export function buildSaleNotificationPanel(
     .setAccentColor(options.test ? dealioBrand.colors.accent : dealioBrand.colors.success)
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        `# ${options.test ? '🧪 ' : ''}${options.test ? messages.testNotificationTitle : options.digest ? (language==='tr'?'Günlük wishlist özetin':'Your daily wishlist digest')
+        `-# ${options.test ? '🧪' : options.digest ? '📬' : '🔥'} DEALIO · ${options.test ? 'TEST'
+          : options.digest ? (language === 'tr' ? 'GÜNLÜK ÖZET' : 'DAILY DIGEST') : (language === 'tr' ? 'İNDİRİM' : 'SALE')}\n` +
+        `# ${options.test ? '🧪 ' : options.digest ? '📬 ' : '🔥 '}${options.test ? messages.testNotificationTitle : options.digest ? (language==='tr'?'Günlük wishlist özetin':'Your daily wishlist digest')
           : notifications.some(n=>n.reason?.startsWith('target:')) ? (language==='tr'?'Beklediğin fiyat geldi':'Your price target was reached')
           : saleTitle(language, notifications.length)}`,
       ),
@@ -60,21 +62,20 @@ export function buildSaleNotificationPanel(
   const gameTexts: Array<{ display: TextDisplayBuilder; name: string; storeUrl: string; details: string }> = [];
   for (const notification of notifications) {
     const storeUrl = `https://store.steampowered.com/app/${notification.appId}/`;
-    const normalPrice = formatMinorPrice(notification.normalPriceMinor, notification.currency, language);
-    const finalPrice = formatMinorPrice(notification.finalPriceMinor, notification.currency, language);
-    const discount = language === 'tr'
-      ? `%${notification.discountPercent} indirim`
-      : `${notification.discountPercent}% off`;
     const name = sanitizeGameName(notification.gameName);
-    const savings = formatMinorPrice(
-      notification.normalPriceMinor - notification.finalPriceMinor, notification.currency, language,
-    );
+    const price = {
+      finalMinor: notification.finalPriceMinor,
+      initialMinor: notification.normalPriceMinor,
+      discountPercent: notification.discountPercent,
+      currency: notification.currency,
+    };
+    const savings = savingsLine(price, language);
     const details = [
-      notification.discountPercent>0 ? `**${finalPrice}** · ${discount} · ~~${normalPrice}~~` : `**${finalPrice}**`,
-      ...(notification.reason?.startsWith('target:') ? [language==='tr'?'Hedef fiyatına ulaştı.':'Your target price was reached.']:[]),
+      priceLine(price, language),
+      ...(notification.reason?.startsWith('target:') ? [language==='tr'?'🎯 Hedef fiyatına ulaştı.':'🎯 Your target price was reached.']:[]),
       ...historicalLowLines(notification, language),
-      `${language === 'tr' ? 'Kazancın' : 'You save'} **${savings}**`,
-      `-# ${storeCountryLabel(notification.storeCountryCode, language)}`,
+      ...(savings ? [savings] : []),
+      `-# ${countryDisplay(notification.storeCountryCode, language)}`,
     ].join('\n');
     const display = new TextDisplayBuilder().setContent(`## [${name}](${storeUrl})\n${details}`);
     gameTexts.push({ display, name, storeUrl, details });
@@ -146,16 +147,15 @@ export function buildInitialWishlistV2Page(
         ),
     );
   }
+  const tr = summary.language === 'tr';
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`# ✅ ${messages.initialSummaryTitle}`),
-    new TextDisplayBuilder().setContent(messages.initialSummaryDescription(summary.sales.length, summary.failedItemCount)),
+    new TextDisplayBuilder().setContent(`-# ✨ DEALIO · ${tr ? 'KURULUM TAMAM' : 'SETUP COMPLETE'}\n# ✅ ${messages.initialSummaryTitle}\n` +
+      messages.initialSummaryDescription(summary.sales.length, summary.failedItemCount)),
     new TextDisplayBuilder().setContent([
-      `**${messages.initialSummaryAccount}:** [${maskSteamId(summary.steamId64)}](${profileUrl})`,
-      `**${messages.initialSummaryRegion}:** ${storeCountryLabel(summary.storeCountryCode, summary.language)}`,
-      `**${messages.initialSummaryLanguage}:** ${summary.language === 'tr' ? 'Türkçe' : 'English'}`,
-      `**${messages.initialSummarySchedule}:** ${messages.setupWizardFrequency(options.pollIntervalHours ?? defaultPollIntervalHours)}`,
-      `**${messages.initialSummaryThreshold}:** ${summary.language === 'tr' ? `%${summary.minimumDiscountPercent}` : `${summary.minimumDiscountPercent}%`}`,
-      `**${messages.initialSummaryWishlist}:** ${summary.totalGameCount}${summary.failedItemCount > 0 ? ` · ${messages.wishlistFailedItems(summary.failedItemCount)}` : ''}`,
+      `👤 [${maskSteamId(summary.steamId64)}](${profileUrl})　${countryDisplay(summary.storeCountryCode, summary.language)}　🌐 ${tr ? 'Türkçe' : 'English'}`,
+      `🎮 **${summary.totalGameCount}** ${tr ? 'oyun' : 'games'}${summary.failedItemCount > 0 ? ` · ${messages.wishlistFailedItems(summary.failedItemCount)}` : ''}` +
+        `　🏷️ ${tr ? `En az %${summary.minimumDiscountPercent} indirim` : `At least ${summary.minimumDiscountPercent}% off`}`,
+      `-# 🔄 ${messages.setupWizardFrequency(options.pollIntervalHours ?? defaultPollIntervalHours)} · ${tr ? 'Her şeyi /dealio panelinden yönetebilirsin.' : 'Manage everything from the /dealio panel.'}`,
     ].join('\n')),
   );
 
@@ -191,11 +191,18 @@ export function buildInitialWishlistV2Page(
 function initialSaleText(sale: InitialWishlistSale, summary: InitialWishlistSummary): string {
   const messages = messagesFor(summary.language);
   const storeUrl = `https://store.steampowered.com/app/${sale.appId}/`;
+  const price = {
+    finalMinor: sale.finalPriceMinor,
+    initialMinor: sale.normalPriceMinor,
+    discountPercent: sale.discountPercent,
+    currency: sale.currency,
+  };
+  const savings = savingsLine(price, summary.language);
   return [
-    `## [${sanitizeGameName(sale.gameName)}](${storeUrl})`,
-    `🔥 ${messages.wishlistDiscountValue(sale.discountPercent)}`,
-    `~~${formatMinorPrice(sale.normalPriceMinor, sale.currency, summary.language)}~~ → **${formatMinorPrice(sale.finalPriceMinor, sale.currency, summary.language)}**`,
-    `-# ${storeCountryLabel(summary.storeCountryCode, summary.language)} · [${messages.openSteamStore}](${storeUrl})`,
+    `## 🔥 [${sanitizeGameName(sale.gameName)}](${storeUrl})`,
+    priceLine(price, summary.language),
+    ...(savings ? [savings] : []),
+    `-# ${countryDisplay(summary.storeCountryCode, summary.language)} · [${messages.openSteamStore}](${storeUrl})`,
   ].join('\n');
 }
 

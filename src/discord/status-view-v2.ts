@@ -15,11 +15,10 @@ import {
 import type { StatusDashboardResult } from '../application/status-service.js';
 import type { CheckStatus } from '../domain/check-state.js';
 import type { Language } from '../domain/user-config.js';
-import { storeCountryLabel } from '../domain/store-country.js';
 import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { uiCopy } from './ui/copy.js';
-import { flagEmoji, panelHeader, tabAccent } from './ui/design.js';
+import { countryDisplay, panelHeader, tabAccent } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
@@ -37,6 +36,8 @@ export interface StatusV2Options {
   readonly disabled?: boolean;
   /** Show the shared tab row (the panel was opened with navigation). */
   readonly tabs?: boolean;
+  /** A one-line result of the last action, such as a Test DM. */
+  readonly notice?: string;
 }
 
 function buildSettingsPanel(
@@ -68,12 +69,15 @@ function buildSettingsPanel(
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(panelHeader('settings', language,
     t('Hesabın ve tercihlerin', 'Your account & preferences'),
     `**${tracking}** · Discord DM`)));
+  if (options.notice) {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`> ${options.notice}`.slice(0, 400)));
+  }
   divider();
 
   const account = [
     `### 👤 ${text.account}`,
     `[${maskSteamId(config.steamId64)}](${profileUrl})`,
-    `${flagEmoji(config.storeCountryCode)} **${storeCountryLabel(config.storeCountryCode, language)}** · 🌐 ${tr ? 'Türkçe' : 'English'}`,
+    `**${countryDisplay(config.storeCountryCode, language)}** · 🌐 ${tr ? 'Türkçe' : 'English'}`,
     `🏷️ ${t('Minimum indirim', 'Minimum discount')} **${tr ? `%${config.minimumDiscountPercent}` : `${config.minimumDiscountPercent}%`}** · 🎯 **${result.gameDiscountOverrideCount}** ${t('oyuna özel kural', 'game rules')}`,
   ].join('\n');
   container.addSectionComponents(options.avatarUrl

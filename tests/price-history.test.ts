@@ -306,8 +306,8 @@ describe('sale alert price history', () => {
     JSON.stringify(buildSaleNotificationPanel(notifications, language).toJSON()).replace(/ /g, ' ');
 
   it.each([
-    ['tr', 150, 'Tarihî en düşük: **USD 1,50** (%70 · Aralık 2022)'],
-    ['en', 150, 'All-time low: **USD 1.50** (70% off · December 2022)'],
+    ['tr', 150, 'Tarihî en düşük: **$1,50** (%70 · Aralık 2022)'],
+    ['en', 150, 'All-time low: **$1.50** (70% off · December 2022)'],
     ['tr', 199, 'Tarihî en düşük fiyata eşit'],
     ['en', 199, 'Matches the all-time low'],
     ['tr', 250, 'Tüm zamanların en düşük fiyatı!'],
@@ -319,8 +319,8 @@ describe('sale alert price history', () => {
   });
 
   it.each([
-    ['tr', 150, 'Şubat 2024 sonrası en düşük: **USD 1,50** (%70 · Aralık 2022)'],
-    ['en', 150, 'Lowest since February 2024: **USD 1.50** (70% off · December 2022)'],
+    ['tr', 150, 'Şubat 2024 sonrası en düşük: **$1,50** (%70 · Aralık 2022)'],
+    ['en', 150, 'Lowest since February 2024: **$1.50** (70% off · December 2022)'],
     ['tr', 199, 'Şubat 2024 sonrasının en düşük fiyatına eşit'],
     ['en', 199, 'Matches the lowest price since February 2024'],
     ['tr', 250, 'Şubat 2024 sonrasının en düşük fiyatı!'],

@@ -17,8 +17,8 @@ import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-ba
 
 export const checkCommand = new SlashCommandBuilder()
   .setName('check')
-  .setDescription('Check your Steam wishlist for sales')
-  .setDescriptionLocalizations({ tr: 'Steam wishlistini şimdi indirimler için kontrol et' });
+  .setDescription('Check your Steam wishlist for sales right now')
+  .setDescriptionLocalizations({ tr: 'Steam wishlistini indirimler için hemen kontrol et' });
 
 export interface CheckPanelOptions extends PanelNavigation {
   readonly lifecycleSignal?: AbortSignal;

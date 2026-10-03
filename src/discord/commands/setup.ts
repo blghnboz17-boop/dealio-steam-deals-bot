@@ -51,7 +51,8 @@ import {
   dealioEphemeralV2Flags,
   dealioV2Flags,
 } from '../ui/components-v2.js';
-import { buildCountryListPanel, buildCountryRangePanel } from '../ui/country-picker.js';
+import { buildCountryListPanel, buildCountryRangePanel, buildCountrySearchModal, buildCountrySearchPanel } from '../ui/country-picker.js';
+import { handOffPanel, type PanelNavigation } from '../ui/tab-bar.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
 
 const setupSessionTimeoutMs = 5 * 60 * 1_000;
@@ -69,6 +70,7 @@ export async function handleSetup(
     & Partial<Pick<SetupService, 'hasExistingConfiguration'>>,
   lifecycleSignal?: AbortSignal,
   presentation: SetupPresentationOptions = {},
+  ui: PanelNavigation = {},
 ): Promise<void> {
   const editPanel = (options: InteractionEditReplyOptions) => measureDiscordOperation(
     interaction, 'setup.render', () => interaction.editReply(options),
@@ -110,6 +112,7 @@ export async function handleSetup(
       && (canUseSetupComponent(component.customId, component.user.id, interaction.user.id, interaction.id)
         || component.customId.startsWith(`country:${interaction.id}:`)),
   });
+  const localeCountry = suggestedStoreCountryFromDiscordLocale(interaction.locale ?? '') ?? 'US';
   let prepared: PreparedUserConfiguration | null = null;
   let completed = false;
   let sessionActive = true;
@@ -139,10 +142,78 @@ export async function handleSetup(
       safeLogger.error('Discord setup wizard error response failed.');
     }
   };
+  let completedPanel: { readonly prepared: PreparedUserConfiguration; readonly status: Parameters<typeof buildSetupCompletePanel>[1] } | null = null;
+  let handedOff = false;
   collector.on('collect', (component) => {
     const acknowledge = () => measureDiscordOperation(
       component, 'setup.button-ack', () => component.deferUpdate(),
     );
+    if (component.customId === `setup:${interaction.id}:open`) {
+      // Setup is done: hand this message to the Dealio panel instead of a dead end.
+      if (completedPanel && ui.navigate) {
+        handedOff = true;
+        handOffPanel({ component, target: 'home', navigate: ui.navigate,
+          stop: () => collector.stop('handoff'), settle: () => operations });
+      } else {
+        void acknowledge().catch(() => undefined);
+      }
+      return;
+    }
+    if (component.customId === `country:${interaction.id}:cancel` && component.isButton()) {
+      const previousOperations = operations;
+      const acknowledgement = acknowledge().then(
+        () => ({ status: 'fulfilled' } as const),
+        (error: unknown) => ({ status: 'rejected', error } as const),
+      );
+      operations = (async () => {
+        const acknowledgementResult = await acknowledgement;
+        await previousOperations;
+        if (acknowledgementResult.status === 'rejected') {
+          await reportWizardFailure(acknowledgementResult.error);
+          return;
+        }
+        if (!sessionActive) {
+          return;
+        }
+        // Cancelling the picker returns to where it was opened: the summary, or the start.
+        countrySelectionPurpose = null;
+        pendingProfileInput = null;
+        await editPanel({
+          components: [prepared
+            ? buildSetupConfirmationPanel(prepared, interaction.id, confirmationViewOptions())
+            : buildSetupWelcomePanel(language, interaction.id, viewOptions)],
+        });
+      })().catch(reportWizardFailure);
+      return;
+    }
+    if (component.customId === `country:${interaction.id}:search` && component.isButton()) {
+      const searchId = `setup-country-search:${interaction.id}:${++modalSequence}`;
+      void (async () => {
+        await measureDiscordOperation(component, 'setup.modal', () => component.showModal(buildCountrySearchModal(searchId, language)));
+        const modal = await Promise.race([
+          component.awaitModalSubmit({
+            time: setupSessionTimeoutMs,
+            filter: (submission) => submission.customId === searchId && submission.user.id === interaction.user.id,
+          }).catch(() => null),
+          sessionClosed.then(() => null),
+        ]);
+        if (!modal || !sessionActive) {
+          return;
+        }
+        const query = modal.fields.getTextInputValue('country-query').trim();
+        await measureDiscordOperation(modal, 'setup.modal-submit-ack', () => modal.deferUpdate());
+        const previousOperations = operations;
+        operations = (async () => {
+          await previousOperations;
+          if (sessionActive) {
+            await editPanel({
+              components: [buildCountrySearchPanel(language, interaction.id, query, prepared?.storeCountryCode)],
+            });
+          }
+        })().catch(reportWizardFailure);
+      })().catch(reportWizardFailure);
+      return;
+    }
     if (component.customId === `country:${interaction.id}:range` && component.isStringSelectMenu()) {
       const rangeIndex = Number(component.values[0]);
       const previousOperations = operations;
@@ -188,7 +259,7 @@ export async function handleSetup(
           return;
         }
         await editPanel({
-          components: [buildCountryRangePanel(language, interaction.id)],
+          components: [buildCountryRangePanel(language, interaction.id, { selected: prepared?.storeCountryCode ?? localeCountry })],
         });
       })().catch(reportWizardFailure);
       return;
@@ -306,7 +377,7 @@ export async function handleSetup(
           countrySelectionPurpose = 'initial';
           regionSelectionSource = 'user';
           await editPanel({
-            components: [buildCountryRangePanel(language, interaction.id)],
+            components: [buildCountryRangePanel(language, interaction.id, { selected: prepared?.storeCountryCode ?? localeCountry })],
           });
           return;
         }
@@ -381,7 +452,7 @@ export async function handleSetup(
         }
         countrySelectionPurpose = 'change';
         await editPanel({
-          components: [buildCountryRangePanel(language, interaction.id)],
+          components: [buildCountryRangePanel(language, interaction.id, { selected: prepared?.storeCountryCode ?? localeCountry })],
         });
       })().catch(async (error: unknown) => {
         safeLogger.error('Discord setup region picker failed', error);
@@ -454,10 +525,11 @@ export async function handleSetup(
           )],
         });
         const result = await service.confirm(prepared);
+        completedPanel = { prepared, status: result.summary.status };
         await editPanel({
-          components: [buildSetupCompletePanel(prepared, result.summary.status, viewOptions)],
+          components: [buildSetupCompletePanel(prepared, result.summary.status, viewOptions, ui.navigate ? interaction.id : undefined)],
         });
-        collector.stop('completed');
+        if (!ui.navigate) collector.stop('completed');
         return;
       }
     }).catch(reportWizardFailure);
@@ -473,6 +545,11 @@ export async function handleSetup(
   await operations;
   await Promise.all(concurrentOperations);
   lifecycleSignal?.removeEventListener('abort', stopForShutdown);
+  const finished = completedPanel as { readonly prepared: PreparedUserConfiguration; readonly status: Parameters<typeof buildSetupCompletePanel>[1] } | null;
+  if (finished && ui.navigate && !handedOff) {
+    // The session ended without opening the panel: remove the button rather than leave it dead.
+    await editPanel({ components: [buildSetupCompletePanel(finished.prepared, finished.status, viewOptions)] }).catch(() => undefined);
+  }
   if (!completed) {
     const expiredPrepared = prepared as PreparedUserConfiguration | null;
     try {

@@ -25,18 +25,29 @@ export function sanitizeGameName(value: string): string {
   return `${escaped.slice(0, maxGameNameLength - 3).replace(/\\$/, '')}...`;
 }
 
+/** Narrow symbols that several currencies share; those use the distinct "CA$"/"CN¥" form. */
+const sharedNarrowSymbols = new Map([['$', 'USD'], ['¥', 'JPY'], ['£', 'GBP'], ['kr', ''], ['Fr', '']]);
+
+/**
+ * "$3,99", "€3,99", "₺3,99", "₽3,99": the familiar symbol, unless it is shared
+ * with another currency (CA$, AU$, CN¥…). Never converts between currencies.
+ */
 export function formatMinorPrice(
   minorValue: number,
   currency: string,
   language: Language,
 ): string {
-  return new Intl.NumberFormat(language === 'tr' ? 'tr-TR' : 'en-US', {
+  const format = (currencyDisplay: 'narrowSymbol' | 'symbol') => new Intl.NumberFormat(language === 'tr' ? 'tr-TR' : 'en-US', {
     style: 'currency',
     currency,
-    currencyDisplay: 'code',
+    currencyDisplay,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(minorValue / 100);
+  });
+  const narrow = format('narrowSymbol');
+  const symbol = narrow.formatToParts(0).find((part) => part.type === 'currency')?.value ?? '';
+  const owner = sharedNarrowSymbols.get(symbol);
+  return (owner === undefined || owner === currency ? narrow : format('symbol')).format(minorValue / 100);
 }
 
 export function buildSaleNotificationEmbed(

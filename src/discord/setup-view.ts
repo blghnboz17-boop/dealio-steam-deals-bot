@@ -27,6 +27,8 @@ import { messagesFor } from './messages.js';
 import { dealioBrand, withDealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { uiCopy } from './ui/copy.js';
+import { commonStoreCountries } from './ui/country-picker.js';
+import { countryDisplay, flagEmoji } from './ui/design.js';
 
 export interface SetupPresentationOptions {
   readonly bannerUrl?: string;
@@ -35,7 +37,7 @@ export interface SetupPresentationOptions {
   readonly regionSelectionSource?: 'discord-locale' | 'user';
 }
 
-export type SetupAction = 'start' | 'how' | 'confirm' | 'language' | 'region' | 'cancel';
+export type SetupAction = 'start' | 'how' | 'confirm' | 'language' | 'region' | 'cancel' | 'open';
 
 export function buildSetupWelcomePanel(
   language: Language,
@@ -93,21 +95,18 @@ export function buildSetupConfirmationPanel(
   const container = new ContainerBuilder()
     .setAccentColor(dealioBrand.colors.accent)
     .addTextDisplayComponents(
-      new TextDisplayBuilder().setContent(prepared.language==='tr'?'-# ADIM 2–3 / TERCİHLERİN VE ONAYIN':'-# STEPS 2–3 / YOUR PREFERENCES & CONSENT'),
-      new TextDisplayBuilder().setContent(`# 🧭 ${messages.setupWizardConfirmTitle}`),
-      new TextDisplayBuilder().setContent(messages.setupWizardConfirmDescription),
+      new TextDisplayBuilder().setContent(`-# ✨ DEALIO · ${prepared.language === 'tr' ? 'KURULUM · ADIM 2/3' : 'SETUP · STEP 2/3'}\n# 🧭 ${messages.setupWizardConfirmTitle}\n${messages.setupWizardConfirmDescription}`),
+    )
+    .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+    .addTextDisplayComponents(
       new TextDisplayBuilder().setContent([
-        `## 👤 ${messages.setupWizardProfileField}`,
-        `[${maskSteamId(prepared.steamId64)}](${profileUrl})`,
-        `## 🌍 ${messages.setupWizardRegionField}`,
-        `**${storeCountryLabel(prepared.storeCountryCode, prepared.language)}**\n-# ${regionSource}`,
-        `## 🌐 ${messages.setupWizardLanguageField}`,
-        `**${prepared.language === 'tr' ? 'Türkçe' : 'English'}**`,
-        `## 🔄 ${messages.setupWizardFrequencyField}`,
-        `**${messages.setupWizardFrequency(options.pollIntervalHours ?? defaultPollIntervalHours)}**`,
-        `## 🔔 ${messages.setupWizardConsentField}`,
-        `> ${messages.setupWizardConsentValue}`,
+        `👤 **${messages.setupWizardProfileField}:** [${maskSteamId(prepared.steamId64)}](${profileUrl})`,
+        `🌍 **${messages.setupWizardRegionField}:** ${countryDisplay(prepared.storeCountryCode, prepared.language)}`,
+        `-# ${regionSource}`,
+        `🌐 **${messages.setupWizardLanguageField}:** ${prepared.language === 'tr' ? 'Türkçe' : 'English'}`,
+        `🔄 **${messages.setupWizardFrequencyField}:** ${messages.setupWizardFrequency(options.pollIntervalHours ?? defaultPollIntervalHours)}`,
       ].join('\n')),
+      new TextDisplayBuilder().setContent(`### 🔔 ${messages.setupWizardConsentField}\n> ${messages.setupWizardConsentValue}`),
     )
     .addActionRowComponents(
       new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -116,7 +115,7 @@ export function buildSetupConfirmationPanel(
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder().setCustomId(`setup:${sessionId}:region`).setLabel(messages.setupWizardChangeRegion).setEmoji('🌍').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
         new ButtonBuilder().setCustomId(`setup:${sessionId}:language`).setLabel(prepared.language === 'tr' ? 'English' : 'Türkçe').setEmoji('🌐').setStyle(ButtonStyle.Secondary).setDisabled(disabled),
-        new ButtonBuilder().setCustomId(`setup:${sessionId}:cancel`).setLabel(messages.setupWizardCancel).setStyle(ButtonStyle.Danger).setDisabled(disabled),
+        new ButtonBuilder().setCustomId(`setup:${sessionId}:cancel`).setLabel(messages.setupWizardCancel).setEmoji('✖️').setStyle(ButtonStyle.Danger).setDisabled(disabled),
       ),
     );
   finishSetupPanel(container, prepared.language);
@@ -127,6 +126,8 @@ export function buildSetupCompletePanel(
   prepared: PreparedUserConfiguration,
   status: 'sent' | 'dm-blocked' | 'dm-transient-failed' | 'steam-unavailable' | 'persistence-error',
   options: SetupPresentationOptions = {},
+  /** Offers "Open the Dealio panel" in this message while the session lasts. */
+  openPanelSessionId?: string,
 ): ContainerBuilder {
   const messages = messagesFor(prepared.language);
   const detail = status === 'sent'
@@ -142,12 +143,19 @@ export function buildSetupCompletePanel(
   );
   addSetupVisual(container, options);
   container.addTextDisplayComponents(
-    new TextDisplayBuilder().setContent(`# ${status === 'sent' ? '✅' : '⚠️'} ${messages.initialSummaryTitle}`),
+    new TextDisplayBuilder().setContent(`-# ✨ DEALIO · ${prepared.language === 'tr' ? 'KURULUM · ADIM 3/3' : 'SETUP · STEP 3/3'}\n# ${status === 'sent' ? '✅' : '⚠️'} ${messages.initialSummaryTitle}`),
     new TextDisplayBuilder().setContent(`${messages.setupSuccess}\n\n${detail}`),
     new TextDisplayBuilder().setContent(
-      `**${messages.setupWizardRegionField}:** ${storeCountryLabel(prepared.storeCountryCode, prepared.language)}\n**${messages.setupWizardLanguageField}:** ${prepared.language === 'tr' ? 'Türkçe' : 'English'}`,
+      `${countryDisplay(prepared.storeCountryCode, prepared.language)}　🌐 ${prepared.language === 'tr' ? 'Türkçe' : 'English'}`,
     ),
   );
+  if (openPanelSessionId) {
+    container.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`setup:${openPanelSessionId}:open`)
+        .setLabel(prepared.language === 'tr' ? 'Dealio panelini aç' : 'Open the Dealio panel')
+        .setEmoji('🏠').setStyle(ButtonStyle.Primary),
+    ));
+  }
   finishSetupPanel(container, prepared.language);
   return container;
 }
@@ -182,7 +190,7 @@ export function parseSetupAction(customId: string, sessionId: string): SetupActi
     return null;
   }
   const action = customId.slice(prefix.length);
-  return ['start', 'how', 'confirm', 'language', 'region', 'cancel'].includes(action)
+  return ['start', 'how', 'confirm', 'language', 'region', 'cancel', 'open'].includes(action)
     ? action as SetupAction
     : null;
 }
@@ -333,11 +341,8 @@ export function buildSetupConfirmationComponents(
 export function buildSetupCountrySelectOptions(
   language: Language,
   selectedCountry: StoreCountryCode,
-): Array<{ readonly label: string; readonly value: string; readonly default: boolean }> {
-  const commonCountries: readonly StoreCountryCode[] = [
-    'TR', 'US', 'GB', 'DE', 'FR', 'NL', 'BE', 'ES', 'IT', 'PL', 'RO', 'BG',
-    'GR', 'UA', 'RU', 'BR', 'MX', 'CA', 'AU', 'NZ', 'JP', 'KR', 'CN', 'IN',
-  ];
+): Array<{ readonly label: string; readonly value: string; readonly default: boolean; readonly emoji: { readonly name: string } }> {
+  const commonCountries = commonStoreCountries;
   const collator = new Intl.Collator(language === 'tr' ? 'tr-TR' : 'en-US', {
     sensitivity: 'base',
   });
@@ -349,11 +354,13 @@ export function buildSetupCountrySelectOptions(
       label: `${name} (${code})`.slice(0, 100),
       value: code,
       default: code === selectedCountry,
+      emoji: { name: flagEmoji(code) },
     }));
   return [...countries, {
     label: uiCopy(language).regionOther,
     value: 'OTHER',
     default: false,
+    emoji: { name: '🔎' },
   }];
 }
 

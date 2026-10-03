@@ -107,7 +107,9 @@ describe('guided setup presentation', () => {
       label: 'Türkiye (TR)',
       value: 'TR',
       default: true,
+      emoji: { name: '🇹🇷' },
     });
+    expect(options.at(-1)).toMatchObject({ value: 'OTHER', label: 'Listede yok · tüm ülkeler ve arama' });
     expect(options).toContainEqual(expect.objectContaining({
       label: 'Almanya (DE)',
       value: 'DE',

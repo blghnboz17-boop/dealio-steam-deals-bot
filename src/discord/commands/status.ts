@@ -31,7 +31,7 @@ import {
   dealioUiSessionTimeoutMs,
   dealioV2Flags,
 } from '../ui/components-v2.js';
-import { buildCountryListPanel, buildCountryRangePanel } from '../ui/country-picker.js';
+import { buildCountryListPanel, buildCountryRangePanel, buildCountrySearchModal, buildCountrySearchPanel } from '../ui/country-picker.js';
 import { uiCopy } from '../ui/copy.js';
 import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
@@ -40,8 +40,8 @@ type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
 
 export const statusCommand = new SlashCommandBuilder()
   .setName('status')
-  .setDescription('Show your Steam wishlist dashboard')
-  .setDescriptionLocalizations({ tr: 'Steam wishlist dashboardunu göster' });
+  .setDescription('Open your Dealio settings: alerts, region, language')
+  .setDescriptionLocalizations({ tr: 'Dealio ayarlarını aç: bildirimler, bölge, dil' });
 
 export function parseDiscountPercent(value: string): number | null {
   if (!/^\d+$/.test(value)) {
@@ -124,7 +124,7 @@ export async function handleStatus(
     });
   });
 
-  const refresh = async (): Promise<boolean> => {
+  const refresh = async (notice?: string): Promise<boolean> => {
     const refreshed = statusService.getDashboard(interaction.user.id, fallbackLanguage);
     if (refreshed.status !== 'ready') {
       controlsRemoved = true;
@@ -143,7 +143,7 @@ export async function handleStatus(
     }
     current = refreshed;
     await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
-      components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, tabs })],
+      components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, tabs, ...(notice ? { notice } : {}) })],
     }));
     return true;
   };
@@ -175,8 +175,41 @@ export async function handleStatus(
     if (component.customId === `country:${interaction.id}:back` && component.isButton()) {
       const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       void operations.enqueue(acknowledgement, async () => {
-        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id)] }));
+        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id, { selected: current.config.storeCountryCode })] }));
       });
+      return;
+    }
+    if (component.customId === `country:${interaction.id}:cancel` && component.isButton()) {
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
+      void operations.enqueue(acknowledgement, async () => {
+        await refresh();
+      });
+      return;
+    }
+    if (component.customId === `country:${interaction.id}:search` && component.isButton()) {
+      const modalId = `status-country-search:${interaction.id}:${++modalSequence}`;
+      void (async () => {
+        await measureDiscordOperation(component, 'status-v2.modal', () => component.showModal(buildCountrySearchModal(modalId, current.language)));
+        const modal = await component.awaitModalSubmit({
+          time: Math.max(1, sessionExpiresAt - Date.now()),
+          filter: (submission) => submission.customId === modalId && submission.user.id === interaction.user.id,
+        }).catch(() => null);
+        if (!modal) return;
+        if (!sessionActive) {
+          await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.reply({
+            flags: dealioEphemeralV2Flags,
+            components: [buildExpiredPanel(current.language)],
+          }));
+          return;
+        }
+        const query = modal.fields.getTextInputValue('country-query').trim();
+        const acknowledgement = measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate());
+        await operations.enqueue(acknowledgement, async () => {
+          await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+            components: [buildCountrySearchPanel(current.language, interaction.id, query, current.config.storeCountryCode)],
+          }));
+        });
+      })().catch((error: unknown) => safeLogger.error('Discord status country search failed', error));
       return;
     }
     if (component.customId === `country:${interaction.id}:select` && component.isStringSelectMenu()) {
@@ -198,7 +231,7 @@ export async function handleStatus(
     if (action === 'region') {
       const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       void operations.enqueue(acknowledgement, async () => {
-        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id)] }));
+        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id, { selected: current.config.storeCountryCode })] }));
       });
       return;
     }
@@ -263,34 +296,24 @@ export async function handleStatus(
       return;
     }
     if (action === 'test' && testNotificationService) {
-      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferReply({ flags: MessageFlags.Ephemeral }));
+      // The result shows inside this panel; a separate message would break the one-panel flow.
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       void operations.enqueue(acknowledgement, async () => {
         const text = uiCopy(current.language);
+        let notice: string;
         try {
           await testNotificationService.send(
             interaction.user.id,
             current.language,
             current.config.storeCountryCode,
           );
-          await measureDiscordOperation(component, 'status-v2.render', () => component.editReply({
-            flags: dealioV2Flags,
-            components: [buildNoticePanel(current.language, 'success', text.testSentTitle, text.testSentDescription)],
-          }));
+          notice = `✅ **${text.testSentTitle}** ${text.testSentDescription}`;
         } catch (error: unknown) {
-          const cooldown = error instanceof TestNotificationCooldownError;
-          await measureDiscordOperation(component, 'status-v2.render', () => component.editReply({
-            flags: dealioV2Flags,
-            components: [buildNoticePanel(
-              current.language,
-              cooldown ? 'warning' : 'danger',
-              cooldown ? text.testCooldownTitle : text.testFailedTitle,
-              cooldown
-                ? messagesFor(current.language).testNotificationCooldown(error.retryAfterSeconds)
-                : messagesFor(current.language).testNotificationFailed,
-            )],
-          }));
+          notice = error instanceof TestNotificationCooldownError
+            ? `⏳ **${text.testCooldownTitle}** ${messagesFor(current.language).testNotificationCooldown(error.retryAfterSeconds)}`
+            : `🛑 **${text.testFailedTitle}** ${messagesFor(current.language).testNotificationFailed}`;
         }
-        await refresh();
+        await refresh(notice);
       });
       return;
     }

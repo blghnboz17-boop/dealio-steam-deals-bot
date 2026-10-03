@@ -89,8 +89,8 @@ export function buildExpiredPanel(language: Language): ContainerBuilder {
     'warning',
     language === 'tr' ? 'Bu panelin süresi doldu' : 'This panel has expired',
     language === 'tr'
-      ? 'Güncel ve güvenli bir panel açmak için komutu yeniden çalıştır.'
-      : 'Run the command again to open a fresh, secure panel.',
+      ? 'Güvenliğin için paneller bir süre sonra kapanır. Yenisini açmak için **/dealio** yaz.'
+      : 'Panels close after a while for your security. Type **/dealio** to open a fresh one.',
   );
 }
 
