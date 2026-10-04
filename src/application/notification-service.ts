@@ -156,15 +156,19 @@ export class NotificationService {
     const assistant = this.wishlistStateRepository.assistant;
     const preference = assistant.preference(discordUserId);
     if (!deliveryAllowed(preference, this.now())) return {candidateCount:0,sentCount:0,failedCount:0};
-    const pending = this.wishlistStateRepository.hasPendingNotifications(discordUserId, config.configVersion);
-    if (pending && this.revalidate && !await this.revalidate(discordUserId))
+    // Interrupted sends become due retries before deciding whether anything is due.
+    const staleBefore = new Date(this.now().getTime() - this.sendingTimeoutMs).toISOString();
+    this.wishlistStateRepository.recoverStaleSending(config, staleBefore);
+    // Only a deliverable notification is worth a fresh Steam check; a retry
+    // scheduled for later must not rescan the wishlist on every retry tick.
+    const due = this.wishlistStateRepository.hasPendingNotifications(
+      discordUserId, config.configVersion, this.now().toISOString());
+    if (due && this.revalidate && !await this.revalidate(discordUserId))
       return {candidateCount:0,sentCount:0,failedCount:0};
     // A removed/replaced account must never receive an old queued message.
     const fresh = this.userConfigRepository.findByDiscordUserId(discordUserId);
     if (!fresh?.enabled || fresh.configurationId !== config.configurationId || this.lifecycleSignal?.aborted)
       return {candidateCount:0,sentCount:0,failedCount:0};
-    const staleBefore = new Date(this.now().getTime() - this.sendingTimeoutMs).toISOString();
-    this.wishlistStateRepository.recoverStaleSending(config, staleBefore);
     this.wishlistStateRepository.expireInactiveNotifications(config);
     const now = this.now().toISOString();
     const retryableBatches = this.wishlistStateRepository.findRetryableNotificationBatches(
@@ -265,12 +269,18 @@ export class NotificationService {
       const outcome = await this.deliverClaimedBatch(batch);
       sentCount += outcome.sentCount;
       failedCount += outcome.failedCount;
-      if (outcome.cancelled) {
+      cancelled = outcome.cancelled;
+      if (cancelled) {
         break;
       }
     }
 
-    if (sentCount > 0 && failedCount === 0) assistant.markDigest(discordUserId, this.now());
+    // The day's digest is done once it was delivered, or when its time came with
+    // nothing queued; a sale found later that day waits for tomorrow's digest.
+    if (failedCount === 0 && !cancelled && !this.lifecycleSignal?.aborted && (sentCount > 0
+      || !this.wishlistStateRepository.hasPendingNotifications(discordUserId, config.configVersion))) {
+      assistant.markDigest(discordUserId, this.now());
+    }
     return {
       candidateCount,
       sentCount,

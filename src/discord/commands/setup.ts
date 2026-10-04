@@ -527,7 +527,14 @@ export async function handleSetup(
             true,
           )],
         });
-        const result = await service.confirm(prepared);
+        let result;
+        try {
+          result = await service.confirm(prepared);
+        } catch (error: unknown) {
+          // The error panel offers to start again; that button must still work.
+          completed = false;
+          throw error;
+        }
         completedPanel = { prepared, status: result.summary.status };
         await editPanel({
           components: [buildSetupCompletePanel(prepared, result.summary.status, viewOptions, ui.navigate ? interaction.id : undefined)],

@@ -154,6 +154,18 @@ describe('delivery and rule acceptance',()=>{
    expect((await f.notification.deliverPending('u')).sentCount).toBe(1);
   }finally{f.db.close();}
  });
+ it('holds a sale found after an empty digest time until the next day',async()=>{
+  const f=fixture();try{
+   f.observe(1000);f.target();f.states.assistant.savePreference('u',{mode:'digest',timezone:'UTC',quietStart:null,quietEnd:null,digestMinute:0});
+   expect((await f.notification.deliverPending('u')).sentCount).toBe(0);
+   expect(f.states.assistant.preference('u').lastDigestDate).toBe('2026-09-12');
+   f.observe(600);expect((await f.notification.deliverPending('u')).sentCount).toBe(0);
+   expect(f.send).not.toHaveBeenCalled();
+   const sender:NotificationSender={send:f.send,plan:items=>items.map(i=>({notifications:[i]}))};
+   const nextDay=new NotificationService(f.users,f.states,sender,{now:()=>new Date('2026-09-13T00:05:00Z')});
+   expect((await nextDay.deliverPending('u')).sentCount).toBe(1);
+  }finally{f.db.close();}
+ });
  it('keeps a second same-day crossing queued across restarts until the next digest',async()=>{
   const f=fixture();try{
    f.observe(1000);f.target();f.states.assistant.savePreference('u',{mode:'digest',timezone:'UTC',quietStart:null,quietEnd:null,digestMinute:0});

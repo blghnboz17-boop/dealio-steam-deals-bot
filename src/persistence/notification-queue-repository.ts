@@ -13,13 +13,35 @@ import {
 export class NotificationQueueRepository {
   public constructor(private readonly database: DatabaseSync) {}
 
-  public hasPendingNotifications(discordUserId: string, configVersion: number): boolean {
-    return this.database.prepare(`
-      SELECT 1 FROM notification_log
-      WHERE discord_user_id = ? AND config_version = ?
-        AND status IN ('candidate', 'failed', 'sending')
-      LIMIT 1
-    `).get(discordUserId, configVersion) !== undefined;
+  /**
+   * Any unresolved notification, or with `dueAt` only those deliverable now: a
+   * retry scheduled for later, or an offer whose sale episode is no longer the
+   * active one, is pending but not due.
+   */
+  public hasPendingNotifications(discordUserId: string, configVersion: number, dueAt?: string): boolean {
+    return dueAt === undefined
+      ? this.database.prepare(`
+          SELECT 1 FROM notification_log
+          WHERE discord_user_id = ? AND config_version = ?
+            AND status IN ('candidate', 'failed', 'sending')
+          LIMIT 1
+        `).get(discordUserId, configVersion) !== undefined
+      : this.database.prepare(`
+          SELECT 1 FROM notification_log
+          WHERE discord_user_id = ? AND config_version = ?
+            AND (status = 'candidate' OR (status = 'failed' AND next_attempt_at <= ?))
+            AND EXISTS (
+              SELECT 1 FROM wishlist_item_state AS state
+              WHERE state.discord_user_id = notification_log.discord_user_id
+                AND state.steam_id64 = notification_log.steam_id64
+                AND state.config_version = notification_log.config_version
+                AND state.app_id = notification_log.app_id
+                AND (state.on_sale = 1 OR state.rule_event_id IS NOT NULL)
+                AND (state.rule_event_id = notification_log.sale_episode_id
+                  OR (notification_log.reason = 'discount' AND state.sale_episode_id = notification_log.sale_episode_id))
+            )
+          LIMIT 1
+        `).get(discordUserId, configVersion, dueAt) !== undefined;
   }
 
   public recoverStaleSending(scope: WishlistScope, staleBefore: string): number {

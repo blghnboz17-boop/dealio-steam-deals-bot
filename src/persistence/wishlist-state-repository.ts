@@ -54,8 +54,8 @@ export class WishlistStateRepository {
     return this.observationRepository.countNotificationCandidates(discordUserId, configVersion);
   }
 
-  public hasPendingNotifications(discordUserId: string, configVersion: number): boolean {
-    return this.queueRepository.hasPendingNotifications(discordUserId, configVersion);
+  public hasPendingNotifications(discordUserId: string, configVersion: number, dueAt?: string): boolean {
+    return this.queueRepository.hasPendingNotifications(discordUserId, configVersion, dueAt);
   }
 
   public markMissingItemsInactive(
