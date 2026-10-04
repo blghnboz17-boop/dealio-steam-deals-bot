@@ -32,7 +32,8 @@ describe('personal assistant durable rules',()=>{
   const f=fixture();try{
    f.observe(1000);f.target();f.observe(800);f.observe(600);
    expect(await f.notification.deliverPending('u')).toMatchObject({sentCount:1});
-   f.observe(500);expect((await f.notification.deliverPending('u')).sentCount).toBe(0);
+   // A small further drop under the target is not a new alert.
+   f.observe(560);expect((await f.notification.deliverPending('u')).sentCount).toBe(0);
    f.observe(900);f.observe(600);
    expect((await f.notification.deliverPending('u')).sentCount).toBe(1);
    expect(f.send).toHaveBeenCalledTimes(2);
@@ -40,8 +41,32 @@ describe('personal assistant durable rules',()=>{
   }finally{f.db.close();}
  });
  it('does not send an initial DM for an already matching price or an unknown baseline',async()=>{
-  const f=fixture();try{f.observe(600);f.target();f.observe(500);expect((await f.notification.deliverPending('u')).sentCount).toBe(0);
+  const f=fixture();try{f.observe(600);f.target();f.observe(560);expect((await f.notification.deliverPending('u')).sentCount).toBe(0);
    f.states.assistant.saveRule(f.config,20,{mode:'target',targetMinor:700,currency:'USD',percent:null,muted:false});
+  }finally{f.db.close();}
+ });
+ it('alerts again when a met target falls clearly lower, measured from the baseline or the last alert',async()=>{
+  const f=fixture();try{
+   // Saved while already under the target: 600 is the baseline, 540 or less is clearly lower.
+   f.observe(600);f.target();f.observe(550);
+   expect((await f.notification.deliverPending('u')).sentCount).toBe(0);
+   f.observe(540);
+   expect((await f.notification.deliverPending('u')).sentCount).toBe(1);
+   // The next step is measured from the alerted 540 (486 or less).
+   f.observe(490);expect((await f.notification.deliverPending('u')).sentCount).toBe(0);
+   f.observe(480);expect((await f.notification.deliverPending('u')).sentCount).toBe(1);
+   expect(f.send).toHaveBeenCalledTimes(2);
+  }finally{f.db.close();}
+ });
+ it('lets the default discount rule cover a target left in an old currency, without an alert for the switch',async()=>{
+  const f=fixture();try{f.observe(1000);f.target();f.observe(600);
+   // Steam now prices the game in EUR: the USD target can no longer apply.
+   f.observe(500,'EUR');
+   expect((await f.notification.deliverPending('u')).sentCount).toBe(0);
+   // The default rule now governs the game: a clearly deeper discount alerts.
+   f.observe(300,'EUR');
+   expect((await f.notification.deliverPending('u')).sentCount).toBe(1);
+   expect(f.send.mock.calls[0][0].notifications[0]).toMatchObject({currency:'EUR',discountPercent:70});
   }finally{f.db.close();}
  });
  it('invalidates pending targets on a currency change',async()=>{

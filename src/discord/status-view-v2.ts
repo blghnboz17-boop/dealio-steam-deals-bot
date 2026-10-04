@@ -35,6 +35,8 @@ export interface StatusV2Options {
   readonly capturedAt?: string;
   readonly notificationPreference?: NotificationPreference;
   readonly eligibleDealCount?: number;
+  /** Targets left in an old currency after a region change (Home shows a warning). */
+  readonly staleTargetCount?: number;
   readonly mode?: 'home' | 'status';
   readonly bannerUrl?: string;
   readonly avatarUrl?: string;

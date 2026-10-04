@@ -1,5 +1,6 @@
 import { preparedStatement } from './prepared-statement.js';
 import { AssistantRepository } from './assistant-repository.js';
+import { discountAlertDue, retireWaitingDiscountAlert } from './alert-levels.js';
 // allow: SIZE_OK — Observation transitions, notification eligibility, and candidate creation form one atomic SQLite state machine.
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
@@ -190,17 +191,14 @@ export class WishlistObservationRepository {
       );
       const isFirstObservation = existing === null;
       const continuingSale = existing?.onSale === true && item.onSale === true;
-      const existingEligibility = existing === null
-        ? false
-        : this.findNotificationEligibility(scope, item.appId);
-      const notificationEligible = options.baseline
-        ? false
-        : isFirstObservation
-          ? false
-          : continuingSale
-            ? existingEligibility
-            : item.onSale === true;
-      const saleEpisodeId = item.onSale
+      // Setup, a newly seen game and an explicit baseline check never alert for
+      // what is already true; they only record where the sale stands.
+      // A target that stops applying (its currency is gone) hands the game to the
+      // discount rule; like any rule change, that starts from a baseline.
+      const targetWasActive = rule?.mode === 'target' && rule.currency !== null && existing?.currency === rule.currency;
+      const targetActiveNow = rule?.mode === 'target' && rule.currency !== null && rule.currency === price?.currency;
+      const baseline = options.baseline === true || isFirstObservation || (targetWasActive && !targetActiveNow);
+      let saleEpisodeId = item.onSale
         ? continuingSale
           ? existing.saleEpisodeId ?? randomUUID()
           : randomUUID()
@@ -210,14 +208,46 @@ export class WishlistObservationRepository {
           ? existing.saleStartedAt ?? observedAt
           : observedAt
         : null;
+      // A target in the current currency replaces discount alerts; a target left in an
+      // old currency (after a region change) falls back to the discount rule.
+      const targetActive = targetActiveNow;
+      const sale = item.onSale === true && saleKey !== null && price !== null && price.currency !== null
+        && price.discountPercent > 0 && price.finalMinor < price.initialMinor ? price : null;
+      const meetsRule = sale !== null && !rule?.muted && !targetActive
+        && sale.discountPercent >= this.findEffectiveMinimumDiscount(scope, item.appId);
+      let alertedDiscount = continuingSale ? existing.alertedDiscountPercent : null;
+      const episodeAlert = saleEpisodeId === null ? undefined : preparedStatement(this.database,
+          `SELECT status FROM notification_log
+           WHERE discord_user_id = ? AND config_version = ? AND app_id = ? AND sale_episode_id = ?`,
+        )
+        .get(scope.discordUserId, scope.configVersion, item.appId, saleEpisodeId) as { status: string } | undefined;
+      const waitingAlert = episodeAlert?.status === 'candidate' || episodeAlert?.status === 'failed';
+      let createAlert = false;
+      if (sale && meetsRule) {
+        if (baseline) {
+          alertedDiscount = Math.max(alertedDiscount ?? sale.discountPercent, sale.discountPercent);
+        } else if (waitingAlert) {
+          // Not sent yet: the waiting alert simply carries the newer price.
+          alertedDiscount = sale.discountPercent;
+        } else if (discountAlertDue(sale.discountPercent, alertedDiscount)) {
+          if (episodeAlert) {
+            // This sale was already alerted and went clearly deeper: a new alert of its own.
+            saleEpisodeId = randomUUID();
+          }
+          alertedDiscount = sale.discountPercent;
+          createAlert = true;
+        }
+      } else if (waitingAlert && saleEpisodeId !== null) {
+        retireWaitingDiscountAlert(this.database, scope, item.appId, saleEpisodeId, 'Rule no longer met');
+      }
 
       preparedStatement(this.database,
            `INSERT INTO wishlist_item_state
              (discord_user_id, steam_id64, config_version, store_country_code, app_id, on_sale,
                sale_episode_id, sale_started_at, sale_key, currency,
                normal_price_minor, final_price_minor, discount_percent, last_seen_at,
-                notification_eligible, observation_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'known')
+                notification_eligible, observation_status, alerted_discount_percent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'known', ?)
            ON CONFLICT(discord_user_id, config_version, app_id) DO UPDATE SET
               steam_id64 = excluded.steam_id64,
               store_country_code = excluded.store_country_code,
@@ -231,7 +261,8 @@ export class WishlistObservationRepository {
              discount_percent = excluded.discount_percent,
               last_seen_at = excluded.last_seen_at,
                notification_eligible = excluded.notification_eligible,
-               observation_status = 'known'`,
+               observation_status = 'known',
+               alerted_discount_percent = excluded.alerted_discount_percent`,
         )
         .run(
           scope.discordUserId,
@@ -248,91 +279,63 @@ export class WishlistObservationRepository {
           price?.finalMinor ?? null,
           price?.discountPercent ?? null,
           observedAt,
-          notificationEligible ? 1 : 0,
+          alertedDiscount === null ? 1 : 0,
+          alertedDiscount,
         );
 
-      if (
-        !options.baseline &&
-        !rule?.muted && rule?.mode !== 'target' &&
-        notificationEligible &&
-        item.onSale === true &&
-        saleEpisodeId !== null &&
-        saleKey !== null &&
-        price !== null &&
-        price.currency !== null &&
-        price.discountPercent > 0 &&
-        price.finalMinor < price.initialMinor
-      ) {
-        const notificationExists = preparedStatement(this.database,
-            `SELECT 1
-             FROM notification_log
-             WHERE discord_user_id = ? AND config_version = ?
-               AND app_id = ? AND sale_episode_id = ?`,
+      if (sale && saleEpisodeId !== null && saleKey !== null && sale.currency !== null && (createAlert || (waitingAlert && meetsRule && !baseline))) {
+        preparedStatement(this.database,
+           `INSERT INTO notification_log
+                (discord_user_id, steam_id64, config_version, store_country_code,
+                 app_id, sale_episode_id,
+                  sale_key, game_name, currency, normal_price_minor,
+                  final_price_minor, discount_percent, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(discord_user_id, config_version, app_id, sale_episode_id)
+               DO UPDATE SET
+                 steam_id64 = excluded.steam_id64,
+                 store_country_code = excluded.store_country_code,
+                 sale_key = excluded.sale_key,
+                 game_name = excluded.game_name,
+                 currency = excluded.currency,
+                 normal_price_minor = excluded.normal_price_minor,
+                 final_price_minor = excluded.final_price_minor,
+                 discount_percent = excluded.discount_percent
+               WHERE notification_log.status IN ('candidate', 'failed')`,
           )
-          .get(
+          .run(
             scope.discordUserId,
+            scope.steamId64,
             scope.configVersion,
+            scope.storeCountryCode,
             item.appId,
             saleEpisodeId,
-          ) !== undefined;
-        const meetsThreshold = price.discountPercent >= this.findEffectiveMinimumDiscount(
-          scope,
-          item.appId,
-        );
-        if (notificationExists || meetsThreshold) {
-          const result = preparedStatement(this.database,
-             `INSERT INTO notification_log
-                  (discord_user_id, steam_id64, config_version, store_country_code,
-                   app_id, sale_episode_id,
-                    sale_key, game_name, currency, normal_price_minor,
-                    final_price_minor, discount_percent, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                 ON CONFLICT(discord_user_id, config_version, app_id, sale_episode_id)
-                 DO UPDATE SET
-                   steam_id64 = excluded.steam_id64,
-                   store_country_code = excluded.store_country_code,
-                   sale_key = excluded.sale_key,
-                   game_name = excluded.game_name,
-                   currency = excluded.currency,
-                   normal_price_minor = excluded.normal_price_minor,
-                   final_price_minor = excluded.final_price_minor,
-                   discount_percent = excluded.discount_percent
-                 WHERE notification_log.status IN ('candidate', 'failed')`,
-            )
-            .run(
-              scope.discordUserId,
-              scope.steamId64,
-              scope.configVersion,
-              scope.storeCountryCode,
-              item.appId,
-              saleEpisodeId,
-              saleKey,
-              item.name,
-              price.currency,
-              price.initialMinor,
-              price.finalMinor,
-              price.discountPercent,
-              observedAt,
-            );
+            saleKey,
+            item.name,
+            sale.currency,
+            sale.initialMinor,
+            sale.finalMinor,
+            sale.discountPercent,
+            observedAt,
+          );
 
-          if (!notificationExists && Number(result.changes) > 0) {
-            notificationCandidate = {
-              discordUserId: scope.discordUserId,
-              steamId64: scope.steamId64,
-              configVersion: scope.configVersion,
-              storeCountryCode: scope.storeCountryCode,
-              appId: item.appId,
-              saleEpisodeId,
-              gameName: item.name,
-              saleKey,
-              currency: price.currency,
-              normalPriceMinor: price.initialMinor,
-              finalPriceMinor: price.finalMinor,
-              discountPercent: price.discountPercent,
-              attemptCount: 0,
-              createdAt: observedAt,
-            };
-          }
+        if (createAlert) {
+          notificationCandidate = {
+            discordUserId: scope.discordUserId,
+            steamId64: scope.steamId64,
+            configVersion: scope.configVersion,
+            storeCountryCode: scope.storeCountryCode,
+            appId: item.appId,
+            saleEpisodeId,
+            gameName: item.name,
+            saleKey,
+            currency: sale.currency,
+            normalPriceMinor: sale.initialMinor,
+            finalPriceMinor: sale.finalMinor,
+            discountPercent: sale.discountPercent,
+            attemptCount: 0,
+            createdAt: observedAt,
+          };
         }
       }
 
@@ -347,20 +350,6 @@ export class WishlistObservationRepository {
       }
       throw error;
     }
-  }
-
-  private findNotificationEligibility(scope: WishlistScope, appId: number): boolean {
-    const row = preparedStatement(this.database,
-      `SELECT notification_eligible
-       FROM wishlist_item_state
-       WHERE discord_user_id = ? AND config_version = ? AND app_id = ?`,
-    ).get(scope.discordUserId, scope.configVersion, appId) as
-      | { notification_eligible: SQLOutputValue }
-      | undefined;
-    if (!row || (row.notification_eligible !== 0 && row.notification_eligible !== 1)) {
-      throw new Error('Invalid notification_eligible value in wishlist state');
-    }
-    return row.notification_eligible === 1;
   }
 
   private findEffectiveMinimumDiscount(scope: WishlistScope, appId: number): number {

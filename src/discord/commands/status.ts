@@ -37,6 +37,7 @@ import {
 } from '../ui/components-v2.js';
 import { buildCountryListPanel, buildCountryRangePanel, buildCountrySearchModal, buildCountrySearchPanel } from '../ui/country-picker.js';
 import { uiCopy } from '../ui/copy.js';
+import { countryDisplay } from '../ui/design.js';
 import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
 
@@ -266,10 +267,15 @@ export async function handleStatus(
           else await refresh();
           return;
         }
+        let notice: string | undefined;
         if (country) {
-          await userConfigurationService.setStoreCountry(interaction.user.id, country);
+          const before = current.config.configVersion;
+          const updated = await userConfigurationService.setStoreCountry(interaction.user.id, country);
+          if (updated && updated.configVersion !== before) {
+            notice = '✅ ' + messagesFor(updated.language).regionSaved(countryDisplay(updated.storeCountryCode, updated.language));
+          }
         }
-        await refresh();
+        await refresh(notice);
       });
       return;
     }

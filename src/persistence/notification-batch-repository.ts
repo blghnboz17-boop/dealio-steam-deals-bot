@@ -258,6 +258,15 @@ export class NotificationBatchRepository {
     );
   }
 
+  /** A send Discord asked to delay (rate limit): retried later without using up an attempt. */
+  public deferNotificationBatch(
+    batch: DurableNotificationBatch,
+    errorMessage: string,
+    nextAttemptAt: string,
+  ): void {
+    this.updateBatchOutcome(batch, 'failed', nextAttemptAt, errorMessage, false);
+  }
+
   public markNotificationBatchTerminal(
     batch: DurableNotificationBatch,
     errorMessage: string,

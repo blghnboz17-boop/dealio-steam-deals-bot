@@ -44,10 +44,26 @@ export function effectiveTimezone(data:Pick<AssistantViewData,'preference'|'conf
 }
 const clock=(minute:number|null)=>minute===null?'—':String(Math.floor(minute/60)).padStart(2,'0')+':'+String(minute%60).padStart(2,'0');
 const relative=(value:string)=>`<t:${Math.floor(Date.parse(value)/1000)}:R>`;
+/** A target saved in another currency than Steam's current price (the Store region changed). */
+export function staleTarget(item:WishlistItem,rule:GameRule|undefined):boolean {
+  return rule?.mode==='target' && Boolean(item.price?.currency) && item.price!.currency!==rule.currency;
+}
+/** Mirrors the alert rule: a target in the price's currency, else the game's or the default discount. */
 export function matchesRule(item:WishlistItem,rule:GameRule|undefined,global:number):boolean {
   if(rule?.muted || !item.price || !item.price.currency) return false;
-  if(rule?.mode==='target') return item.price.currency===rule.currency && item.price.finalMinor<=rule.targetMinor!;
-  return item.onSale===true && item.price.discountPercent>=(rule?.mode==='percent'?rule.percent!:global);
+  if(rule?.mode==='target' && !staleTarget(item,rule)) return item.price.finalMinor<=rule.targetMinor!;
+  return item.onSale===true && item.price.discountPercent>0
+    && item.price.discountPercent>=(rule?.mode==='percent'?rule.percent!:global);
+}
+/** "N hedef fiyatın eski para biriminde…": shown on Home and Wishlist after a region change. */
+export function staleTargetsNotice(count:number,lang:UserConfig['language']):string {
+  const one=count===1;
+  return '⚠️ '+localizer(lang)({
+    tr:`**${count}** oyunun hedef fiyatı eski para biriminde. Yenisini kaydedene kadar bu oyunlarda genel indirim kuralın geçerli.`,
+    en:`**${count}** ${one?'game has a target':'games have targets'} in an old currency. Until you save new ones, your default discount rule applies to ${one?'it':'them'}.`,
+    de:`**${count}** ${one?'Spiel hat einen Wunschpreis':'Spiele haben Wunschpreise'} in einer alten Währung. Bis du neue speicherst, gilt dort deine Standardregel.`,
+    fr:`**${count}** ${one?'jeu a un prix cible':'jeux ont des prix cibles'} dans une ancienne devise. Jusqu’à ce que tu en enregistres de nouveaux, ta règle par défaut s’applique.`,
+  });
 }
 export function filteredAssistantItems(data:AssistantViewData,view:AssistantView):WishlistItem[] {
   return data.items.filter(item=>item.name.toLocaleLowerCase(data.config.language).includes(view.query.toLocaleLowerCase(data.config.language))
@@ -65,8 +81,21 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
   const gap=()=>root.addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small));
   const divider=()=>root.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
   const price=(minor:number,currency:string)=>formatMinorPrice(minor,currency,lang);
-  const ruleText=(rule:GameRule|undefined)=>{
+  const defaultRuleText=()=>{
+    const percent=percentText(data.config.minimumDiscountPercent,lang);
+    return t({tr:`En az ${percent} indirim`,en:`At least ${percent} off`,de:`Mindestens ${percent} Rabatt`,fr:`Au moins ${percent} de réduction`});
+  };
+  const ruleText=(rule:GameRule|undefined,item?:WishlistItem)=>{
     if(rule?.muted) return '🔕 '+t({tr:'Sessizde',en:'Muted',de:'Stummgeschaltet',fr:'En sourdine'});
+    if(item && staleTarget(item,rule)){
+      const target=price(rule!.targetMinor!,rule!.currency!);
+      return '⚠️ '+t({
+        tr:`Hedefin (${target}) eski para biriminde; yenisini kaydedene kadar genel kuralın geçerli: ${defaultRuleText()}`,
+        en:`Your target (${target}) is in an old currency; until you save a new one, your default applies: ${defaultRuleText()}`,
+        de:`Dein Wunschpreis (${target}) ist in einer alten Währung; bis du einen neuen speicherst, gilt deine Standardregel: ${defaultRuleText()}`,
+        fr:`Ton prix cible (${target}) est dans une ancienne devise ; jusqu’à ce que tu en enregistres un nouveau, ta règle par défaut s’applique : ${defaultRuleText()}`,
+      });
+    }
     if(rule?.mode==='target'){
       const target=price(rule.targetMinor!,rule.currency!);
       return '🎯 '+t({tr:`Hedef fiyat: ${target}`,en:`Target: ${target}`,de:`Wunschpreis: ${target}`,fr:`Prix cible : ${target}`});
@@ -83,6 +112,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
     const page=Math.min(Math.max(0,view.page),pages-1), visible=items.slice(page*3,page*3+3);
     const count=data.items.filter(i=>matchesRule(i,data.rules.get(i.appId),data.config.minimumDiscountPercent)).length;
     const upcoming=data.items.filter(i=>i.upcoming&&!i.price).length;
+    const staleTargets=data.items.filter(i=>staleTarget(i,data.rules.get(i.appId))).length;
     add(panelHeader('games',lang,t({tr:'İstek listen ve hedeflerin',en:'Your wishlist & targets',de:'Deine Wunschliste & Wunschpreise',fr:'Ta liste et tes prix cibles'}),
       `✅ **${count}** ${t({tr:'fırsat kuralına uyuyor',en:'matching deals',de:'passende Angebote',fr:'bons plans pour toi'})}`+
       `　🎮 **${data.items.length}** ${t({tr:'oyun',en:'games',de:'Spiele',fr:'jeux'})}`+
@@ -91,6 +121,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       '\n-# 🕒 '+priceFetched(relative(data.items.map(i=>i.priceObservedAt??data.capturedAt).sort()[0]??data.capturedAt),lang,true)+
       (view.refreshing?' · '+t({tr:'Steam’den yeniliyorum…',en:'Refreshing from Steam…',de:'Aktualisiere von Steam …',fr:'Actualisation depuis Steam…'}):''));
     notice();
+    if(staleTargets&&!view.query) add('> '+staleTargetsNotice(staleTargets,lang));
     if(view.query) add('🔍 '+t({tr:'Arama: ',en:'Search: ',de:'Suche: ',fr:'Recherche : '})+'**'+escapeMarkdown(view.query)+'**');
     divider();
     visible.forEach((item,index)=>{
@@ -99,7 +130,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       const matches=matchesRule(item,rule,data.config.minimumDiscountPercent);
       root.addSectionComponents(artworkAccessory(new SectionBuilder().addTextDisplayComponents(text(
         `### ${hotPrefix(p?.discountPercent)}${escapeMarkdown(item.name).slice(0,100)}\n${p?priceLine(p,lang):noPriceText(item,lang)}\n`+
-        `-# ${ruleText(rule)}${matches?' · ✅ '+t({tr:'Kuralına uyuyor',en:'Matches your rule',de:'Passt zu deiner Regel',fr:'Correspond à ta règle'}):''}`)), item));
+        `-# ${ruleText(rule,item)}${matches?' · ✅ '+t({tr:'Kuralına uyuyor',en:'Matches your rule',de:'Passt zu deiner Regel',fr:'Correspond à ta règle'}):''}`)), item));
     });
     const unavailable=unavailableGamesLine(data.errors,data.config.storeCountryCode,lang);
     if(unavailable&&!view.query&&!view.eligibleOnly&&page===pages-1) { gap(); add('-# '+unavailable); }
@@ -159,19 +190,19 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       notice();
       divider();
       const eligible=matchesRule(item,rule,data.config.minimumDiscountPercent);
-      add('### 🎯 '+t({tr:'Kuralın',en:'Your rule',de:'Deine Regel',fr:'Ta règle'})+'\n'+ruleText(rule)+
-        (rule?.mode==='target'&&p?.currency!==rule.currency?' · ⚠️ '+t({
-          tr:'Para birimi değişmiş; hedefini yeniden kaydet.',
-          en:'The currency changed; save a new target.',
-          de:'Die Währung hat sich geändert; leg einen neuen Wunschpreis fest.',
-          fr:'La devise a changé ; enregistre un nouveau prix cible.',
-        }):'')+'\n'+
-        (eligible?'✅ '+t({
-          tr:'Şu anki fiyat kuralına uyuyor. Kuralı kaydetmek tek başına DM göndermez.',
-          en:'Today’s price already matches your rule. Saving a rule doesn’t send a DM by itself.',
-          de:'Der aktuelle Preis passt schon zu deiner Regel. Eine Regel zu speichern verschickt selbst keine DM.',
-          fr:'Le prix actuel correspond déjà à ta règle. Enregistrer une règle n’envoie pas de MP à lui seul.',
-        }):'⏳ '+t({
+      const targetRule=rule?.mode==='target'&&!staleTarget(item,rule);
+      add('### 🎯 '+t({tr:'Kuralın',en:'Your rule',de:'Deine Regel',fr:'Ta règle'})+'\n'+ruleText(rule,item)+'\n'+
+        (eligible?'✅ '+(targetRule?t({
+          tr:'Şu anki fiyat hedefine uyuyor. Bunun için ayrıca DM atmam; fiyat bundan %10 daha düşerse ya da hedefinin üstüne çıkıp yeniden inerse haber veririm.',
+          en:'Today’s price already meets your target. I won’t DM you about it, but I will if the price drops another 10% or rises above your target and comes back.',
+          de:'Der aktuelle Preis erfüllt deinen Wunschpreis schon. Dafür schicke ich keine DM, aber wenn er um weitere 10 % fällt oder über deinen Wunschpreis steigt und zurückkommt.',
+          fr:'Le prix actuel atteint déjà ton prix cible. Je ne t’envoie pas de MP pour ça, mais oui s’il baisse encore de 10 % ou s’il repasse au-dessus de ta cible puis redescend.',
+        }):t({
+          tr:'Şu anki indirim kuralına uyuyor. Bunun için ayrıca DM atmam; indirim en az 10 puan daha artarsa haber veririm.',
+          en:'Today’s discount already meets your rule. I won’t DM you about it, but I will if the discount grows by at least 10 more points.',
+          de:'Der aktuelle Rabatt erfüllt deine Regel schon. Dafür schicke ich keine DM, aber wenn er um mindestens 10 weitere Punkte steigt.',
+          fr:'La réduction actuelle respecte déjà ta règle. Je ne t’envoie pas de MP pour ça, mais oui si elle augmente d’au moins 10 points.',
+        })):'⏳ '+t({
           tr:'Fiyat kuralına uyduğu an sana DM atacağım.',
           en:'I’ll DM you as soon as the price meets your rule.',
           de:'Sobald der Preis zu deiner Regel passt, schicke ich dir eine DM.',

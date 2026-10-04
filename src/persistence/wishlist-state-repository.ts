@@ -133,6 +133,14 @@ export class WishlistStateRepository {
     );
   }
 
+  public deferNotificationBatch(
+    batch: DurableNotificationBatch,
+    errorMessage: string,
+    nextAttemptAt: string,
+  ): void {
+    this.batchRepository.deferNotificationBatch(batch, errorMessage, nextAttemptAt);
+  }
+
   public markNotificationTerminal(
     candidate: NotificationCandidate,
     errorMessage: string,

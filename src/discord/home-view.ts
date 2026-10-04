@@ -11,6 +11,7 @@ import { dealioBrand } from './ui/brand.js';
 import { countryDisplay, hotPrefix, supportButton, noPriceText, panelHeader, priceFetched, priceLine, savingsLine, tabAccent } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 import { localizer } from './i18n.js';
+import { staleTargetsNotice } from './assistant-view.js';
 
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
 const display = (value: string) => new TextDisplayBuilder().setContent(value);
@@ -110,6 +111,7 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
         de: 'Mir fehlt der Preis von ' + partial + (partial === 1 ? ' Spiel.' : ' Spielen.'),
         fr: 'Il me manque le prix de ' + partial + (partial === 1 ? ' jeu.' : ' jeux.'),
       }))));
+  if (options.staleTargetCount) root.addTextDisplayComponents(display('> ' + staleTargetsNotice(options.staleTargetCount, language)));
   if (blocked) root.addTextDisplayComponents(display('> 🔴 ' + t({
     tr: 'Discord’da DM’lerini aç, sonra ⚙️ Ayarlar’dan bir Test DM gönder.',
     en: 'Allow DMs in Discord, then send a Test DM from ⚙️ Settings.',

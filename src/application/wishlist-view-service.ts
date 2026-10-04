@@ -78,7 +78,8 @@ export class WishlistViewService {
       // These SQLite reads are synchronous: read one committed configuration and
       // its matching snapshot without waiting for unrelated network work.
       const cached = this.assistant.snapshot(config);
-      if (cached) {
+      // After a language change the wishlist screen reads Steam again in the new language.
+      if (cached && cached.language === config.language) {
         return this.toViewResult(config, cached, cached.capturedAt);
       }
     }
@@ -121,7 +122,8 @@ export class WishlistViewService {
     }
 
     try {
-      const cached = refresh ? null : this.assistant?.snapshot(config);
+      const stored = refresh ? null : this.assistant?.snapshot(config);
+      const cached = stored && stored.language === config.language ? stored : null;
       const result = cached ?? await (this.refreshForUser ? this.refreshForUser(discordUserId) : this.wishlistReader.getWishlistWithErrors(
         config.steamId64,
         config.storeCountryCode,

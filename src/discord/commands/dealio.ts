@@ -1,6 +1,6 @@
 import { measureDiscordOperation } from '../interaction-timing.js';
 import type { InteractionEditReplyOptions } from 'discord.js';
-import { matchesRule } from '../assistant-view.js';
+import { matchesRule, staleTarget } from '../assistant-view.js';
 import { handleAssistant } from './assistant.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import {
@@ -122,6 +122,7 @@ export async function handleDealio(
       .sort((a,b)=>(b.price?.discountPercent??0)-(a.price?.discountPercent??0));
     return {featuredDeal:matching[0],heroGame:matching[0]??items.find(item=>item.price?.currency),
       eligibleDealCount:snapshot?matching.length:undefined,trackedGameCount:snapshot?items.length:undefined,
+      staleTargetCount:items.filter(item=>staleTarget(item,rules.get(item.appId))).length,
       capturedAt:snapshot?.capturedAt,notificationPreference:assistant.repository.preference(config.discordUserId)};
   };
   const firstPanel = current.status === 'ready'

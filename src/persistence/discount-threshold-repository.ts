@@ -1,5 +1,6 @@
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
 import type { UserConfig } from '../domain/user-config.js';
+import { rebaselineDiscountAlerts } from './alert-levels.js';
 
 type ThresholdScope = Pick<UserConfig, 'discordUserId' | 'configVersion' | 'minimumDiscountPercent'>;
 
@@ -83,6 +84,7 @@ export class DiscountThresholdRepository {
       scope.discordUserId,
       scope.configVersion,
     );
+    if (Number(result.changes) === 1) rebaselineDiscountAlerts(this.database, scope, { appId });
     return Number(result.changes) === 1;
   }
 
@@ -91,6 +93,7 @@ export class DiscountThresholdRepository {
       `DELETE FROM game_discount_threshold
        WHERE discord_user_id = ? AND config_version = ? AND app_id = ?`,
     ).run(scope.discordUserId, scope.configVersion, appId);
+    if (Number(result.changes) === 1) rebaselineDiscountAlerts(this.database, scope, { appId });
     return Number(result.changes) === 1;
   }
 }
