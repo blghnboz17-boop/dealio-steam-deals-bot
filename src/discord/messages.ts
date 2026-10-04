@@ -120,7 +120,7 @@ const catalog: Record<Language, MessageCatalog> = {
     setupWizardDmBlocked: 'Kurulumu kaydettim ama Discord sana DM atmama izin vermiyor. Bildirimleri şimdilik durdurdum; gizlilik ayarını düzelttikten sonra /dealio → ⚙️ Ayarlar\'dan yeniden açabilirsin.',
     setupWizardDmTransient: 'Kurulumu kaydettim ama Discord\'daki geçici bir sorun yüzünden karşılama mesajını gönderemedim. Takip normal şekilde devam ediyor.',
     setupWizardAlreadyCompletedTitle: 'Dealio zaten kurulu',
-    setupWizardAlreadyCompletedDescription: 'Bu Discord hesabıyla kurulumu zaten yapmışsın. İstek listeni, bildirimlerini ve ayarlarını Dealio panelinden yönetebilirsin. Sıfırdan başlamak istersen önce `/delete-data` ile verilerini sil.',
+    setupWizardAlreadyCompletedDescription: 'Bu Discord hesabıyla kurulumu zaten yapmışsın. İstek listeni, bildirimlerini ve ayarlarını Dealio panelinden yönetebilirsin. Başka bir Steam hesabına geçmek için ⚙️ Ayarlar’daki “Steam hesabını değiştir”i kullan; her şeyi silip baştan başlamak istersen `/delete-data` var.',
     setupWizardFrequency: (hours) => hours < 1
       ? `${Math.round(hours * 60)} dakikada bir`
       : hours === 1 ? 'Saatte bir' : `${hours} saatte bir`,
@@ -212,7 +212,7 @@ const catalog: Record<Language, MessageCatalog> = {
     setupWizardDmBlocked: 'Your setup is saved, but Discord won’t let me DM you. I’ve paused alerts for now; once you fix your privacy settings, turn them back on in /dealio → ⚙️ Settings.',
     setupWizardDmTransient: 'Your setup is saved, but a temporary Discord problem stopped the welcome message. Tracking carries on as normal.',
     setupWizardAlreadyCompletedTitle: 'Dealio is already set up',
-    setupWizardAlreadyCompletedDescription: 'You’ve already set up Dealio on this Discord account. Manage your wishlist, alerts and settings from the Dealio panel. To start from scratch, delete your data with `/delete-data` first.',
+    setupWizardAlreadyCompletedDescription: 'You’ve already set up Dealio on this Discord account. Manage your wishlist, alerts and settings from the Dealio panel. To switch to another Steam account, use “Change Steam account” in ⚙️ Settings; to erase everything and start over, use `/delete-data`.',
     setupWizardFrequency: (hours) => hours < 1
       ? `Every ${Math.round(hours * 60)} minutes`
       : hours === 1 ? 'Every hour' : `Every ${hours} hours`,
@@ -304,7 +304,7 @@ const catalog: Record<Language, MessageCatalog> = {
     setupWizardDmBlocked: 'Deine Einrichtung ist gespeichert, aber Discord lässt mich dir keine DMs schicken. Ich habe die Benachrichtigungen vorerst pausiert. Sobald du deine Privatsphäre-Einstellungen angepasst hast, schalte sie unter /dealio → ⚙️ Einstellungen wieder ein.',
     setupWizardDmTransient: 'Deine Einrichtung ist gespeichert, aber wegen eines kurzen Discord-Problems kam die Willkommensnachricht nicht an. Alles läuft ganz normal weiter.',
     setupWizardAlreadyCompletedTitle: 'Dealio ist schon eingerichtet',
-    setupWizardAlreadyCompletedDescription: 'Du hast Dealio mit diesem Discord-Konto bereits eingerichtet. Wunschliste, Benachrichtigungen und Einstellungen findest du im Dealio-Panel. Wenn du ganz neu anfangen willst, lösche zuerst deine Daten mit `/delete-data`.',
+    setupWizardAlreadyCompletedDescription: 'Du hast Dealio mit diesem Discord-Konto bereits eingerichtet. Wunschliste, Benachrichtigungen und Einstellungen findest du im Dealio-Panel. Für ein anderes Steam-Konto nutzt du „Steam-Konto wechseln“ unter ⚙️ Einstellungen; um alles zu löschen und neu anzufangen, gibt es `/delete-data`.',
     setupWizardFrequency: (hours) => hours < 1
       ? `Alle ${Math.round(hours * 60)} Minuten`
       : hours === 1 ? 'Jede Stunde' : `Alle ${hours} Stunden`,
@@ -396,7 +396,7 @@ const catalog: Record<Language, MessageCatalog> = {
     setupWizardDmBlocked: 'C’est enregistré, mais Discord ne me laisse pas t’envoyer de MP. J’ai mis les alertes en pause ; une fois tes paramètres de confidentialité corrigés, réactive-les dans /dealio → ⚙️ Réglages.',
     setupWizardDmTransient: 'C’est enregistré, mais un souci passager côté Discord a bloqué le message de bienvenue. Le suivi continue normalement.',
     setupWizardAlreadyCompletedTitle: 'Dealio est déjà configuré',
-    setupWizardAlreadyCompletedDescription: 'Tu as déjà configuré Dealio sur ce compte Discord. Gère ta liste de souhaits, tes alertes et tes réglages depuis le panneau Dealio. Pour repartir de zéro, supprime d’abord tes données avec `/delete-data`.',
+    setupWizardAlreadyCompletedDescription: 'Tu as déjà configuré Dealio sur ce compte Discord. Gère ta liste de souhaits, tes alertes et tes réglages depuis le panneau Dealio. Pour passer à un autre compte Steam, utilise « Changer de compte Steam » dans ⚙️ Réglages ; pour tout effacer et repartir de zéro, utilise `/delete-data`.',
     setupWizardFrequency: (hours) => hours < 1
       ? `Toutes les ${Math.round(hours * 60)} minutes`
       : hours === 1 ? 'Toutes les heures' : `Toutes les ${hours} heures`,

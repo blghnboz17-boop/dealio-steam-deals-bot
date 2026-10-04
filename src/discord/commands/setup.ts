@@ -15,7 +15,7 @@ import {
   InvalidUserConfigurationError,
   type PreparedUserConfiguration,
 } from '../../application/user-configuration-service.js';
-import { SetupAlreadyCompletedError } from '../../application/setup-service.js';
+import { SetupAlreadyCompletedError, SetupCapacityReachedError } from '../../application/setup-service.js';
 import type { SetupService } from '../../application/setup-service.js';
 import { SteamWishlistError } from '../../domain/steam.js';
 import { SteamIdentityError } from '../../domain/steam-identity.js';
@@ -57,6 +57,13 @@ const lookingUp = {
   fr: 'Je cherche ton compte Steam',
 } as const;
 
+const capacityTitle = {
+  tr: 'Beta şu an dolu',
+  en: 'The beta is full right now',
+  de: 'Die Beta ist gerade voll',
+  fr: 'La bêta est complète pour le moment',
+} as const;
+
 export const setupCommand = new SlashCommandBuilder()
   .setName('setup')
   .setDescription('Connect your Steam wishlist in about a minute')
@@ -69,7 +76,7 @@ export const setupCommand = new SlashCommandBuilder()
 export async function handleSetup(
   interaction: ChatInputCommandInteraction,
   service: Pick<SetupService, 'configure' | 'prepare' | 'confirm'>
-    & Partial<Pick<SetupService, 'hasExistingConfiguration'>>,
+    & Partial<Pick<SetupService, 'hasExistingConfiguration' | 'acceptsNewUsers'>>,
   lifecycleSignal?: AbortSignal,
   presentation: SetupPresentationOptions = {},
   ui: PanelNavigation = {},
@@ -87,6 +94,15 @@ export async function handleSetup(
   if (service.hasExistingConfiguration?.(interaction.user.id)) {
     await editPanel({
       components: [buildSetupAlreadyCompletedPanel(initialLanguage, viewOptions)],
+      flags: dealioV2Flags,
+    });
+    return;
+  }
+
+  if (service.acceptsNewUsers?.() === false) {
+    await editPanel({
+      components: [buildNoticePanel(initialLanguage, 'warning',
+        localizer(initialLanguage)(capacityTitle), setupErrorMessage(new SetupCapacityReachedError(), initialLanguage))],
       flags: dealioV2Flags,
     });
     return;
@@ -579,15 +595,21 @@ export async function handleSetup(
   }
 }
 
-function buildSetupModal(
+/**
+ * The Steam profile form: the profile link and the Store country. Setup and
+ * "Change Steam account" in Settings open this same form; Settings only renames
+ * it and explains that the current region is preselected.
+ */
+export function buildSetupModal(
   customId: string,
   language: Language,
   suggestedCountry: Parameters<typeof buildSetupCountrySelectOptions>[1],
+  wording: { readonly title?: string; readonly regionDescription?: string } = {},
 ): ModalBuilder {
   const messages = messagesFor(language);
   return new ModalBuilder()
     .setCustomId(customId)
-    .setTitle(messages.setupWizardModalTitle)
+    .setTitle(wording.title ?? messages.setupWizardModalTitle)
     .addLabelComponents(
       new LabelBuilder()
         .setLabel(messages.setupWizardProfileLabel)
@@ -601,7 +623,7 @@ function buildSetupModal(
       ),
       new LabelBuilder()
         .setLabel(messages.setupWizardCountryLabel)
-        .setDescription(messages.setupWizardRegionSuggested)
+        .setDescription(wording.regionDescription ?? messages.setupWizardRegionSuggested)
         .setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
             .setCustomId('store-country')
@@ -674,10 +696,18 @@ function buildSetupErrorPanel(
   );
 }
 
-function setupErrorMessage(error: unknown, language: Language): string {
+export function setupErrorMessage(error: unknown, language: Language): string {
   const messages = messagesFor(language);
   if (error instanceof SetupAlreadyCompletedError) {
     return messages.setupWizardAlreadyCompletedDescription;
+  }
+  if (error instanceof SetupCapacityReachedError) {
+    return localizer(language)({
+      tr: 'Dealio şimdilik sınırlı sayıda kullanıcıyla çalışıyor ve bu sınır doldu. Yer açıldığında yeniden deneyebilirsin; hiçbir bilgini kaydetmedim.',
+      en: 'Dealio is running with a limited number of users for now, and that limit is reached. You can try again when a spot opens up; I haven’t saved anything about you.',
+      de: 'Dealio läuft vorerst mit einer begrenzten Zahl von Nutzern, und die Grenze ist erreicht. Versuch es wieder, sobald ein Platz frei wird; ich habe nichts von dir gespeichert.',
+      fr: 'Dealio fonctionne pour l’instant avec un nombre limité d’utilisateurs, et la limite est atteinte. Tu pourras réessayer quand une place se libère ; je n’ai rien enregistré sur toi.',
+    });
   }
   if (error instanceof InvalidUserConfigurationError) {
     return error.code === 'INVALID_STORE_COUNTRY'

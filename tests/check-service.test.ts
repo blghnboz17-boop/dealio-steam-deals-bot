@@ -678,12 +678,17 @@ describe('CheckService sale state', () => {
         .mockResolvedValueOnce({ items: [createItem(10, false)], errors: [] })
         .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] })
         .mockResolvedValueOnce({ items: [], errors: [] })
+        .mockResolvedValueOnce({ items: [], errors: [] })
         .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] }),
     };
-    const services = createServices(steamClient);
+    let clock = Date.parse('2026-08-21T01:00:00.000Z');
+    const services = createServices(steamClient, { cooldownMs: 0, now: () => new Date(clock) });
 
     await services.checkService.check('discord-user');
     const firstSale = await services.checkService.check('discord-user');
+    await services.checkService.check('discord-user');
+    // Still absent after the grace period: now it has really left the wishlist.
+    clock += 30 * 60 * 1000;
     await services.checkService.check('discord-user');
     const removedState = services.wishlistStateRepository.findByDiscordUserAndAppId(
       'discord-user',
@@ -768,14 +773,67 @@ describe('CheckService sale state', () => {
       .toMatchObject({ onSale: true, observationStatus: 'known' });
     expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 20))
       .toMatchObject({ onSale: true, observationStatus: 'known' });
+    // One absence is only suspected: the sale state survives the grace period.
     expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 30))
-      .toMatchObject({ onSale: false, observationStatus: 'missing', saleEpisodeId: null });
+      .toMatchObject({ onSale: true, observationStatus: 'missing' });
     expect(services.wishlistStateRepository.countNotificationCandidates('discord-user')).toBe(2);
     expect(services.checkStateRepository.findByDiscordUserId('discord-user')).toMatchObject({
       lastStatus: 'success',
       lastSuccessCheckedCount: 2,
       lastSuccessOnSaleCount: 2,
     });
+    services.database.close();
+  });
+
+  it('does not re-alert an ongoing sale when Steam briefly leaves the game out', async () => {
+    let clock = Date.parse('2026-08-21T01:00:00.000Z');
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({ items: [createItem(10, false)], errors: [] })
+        .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] })
+        .mockResolvedValueOnce({ items: [], errors: [] })
+        .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] }),
+    };
+    const services = createServices(steamClient, { cooldownMs: 0, now: () => new Date(clock) });
+    await services.checkService.check('discord-user');
+    const sale = await services.checkService.check('discord-user');
+    expect(sale).toMatchObject({ notificationCandidates: [{ appId: 10 }] });
+    const episode = services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10)?.saleEpisodeId;
+
+    clock += 30 * 60 * 1000;
+    await services.checkService.check('discord-user');
+    clock += 30 * 60 * 1000;
+    const back = await services.checkService.check('discord-user');
+
+    expect(back).toMatchObject({ status: 'success', notificationCandidates: [] });
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({ onSale: true, observationStatus: 'known', saleEpisodeId: episode });
+    services.database.close();
+  });
+
+  it('drops the sale state once a game stays absent through the grace period', async () => {
+    let clock = Date.parse('2026-08-21T01:00:00.000Z');
+    const steamClient = {
+      getWishlistWithErrors: vi.fn()
+        .mockResolvedValueOnce({ items: [createItem(10, true)], errors: [] })
+        .mockResolvedValue({ items: [createItem(20, false)], errors: [] }),
+    };
+    const services = createServices(steamClient, { cooldownMs: 0, now: () => new Date(clock) });
+    await services.checkService.check('discord-user');
+    clock += 5 * 60 * 1000;
+    await services.checkService.check('discord-user');
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({ onSale: true, observationStatus: 'missing' });
+
+    clock += 5 * 60 * 1000;
+    await services.checkService.check('discord-user');
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({ onSale: true, observationStatus: 'missing' });
+
+    clock += 20 * 60 * 1000;
+    await services.checkService.check('discord-user');
+    expect(services.wishlistStateRepository.findByDiscordUserAndAppId('discord-user', 10))
+      .toMatchObject({ onSale: false, observationStatus: 'missing', saleEpisodeId: null });
     services.database.close();
   });
 

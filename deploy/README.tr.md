@@ -115,3 +115,17 @@ uykuda veya WSL kapatılmış durumdayken bildirim gönderilemez.
 Gerçek hazır durumu `.runtime/bot.health.json` dosyasında `phase: ready` ve
 `discordReady: true` ile doğrulanabilir; yalnızca systemd'nin `active` yazması
 Discord bağlantısının tamamlandığını kanıtlamaz.
+
+### Silme kaydı ve kullanıcı sınırı
+
+- `/delete-data` talepleri veritabanının yanındaki `data/deletions.jsonl`
+  dosyasına (Discord kimliğinin tek yönlü özeti ve silme zamanı) yazılır ve
+  35 gün tutulur. Bot her açılışta bu kayda bakarak, yedekten geri gelmiş ama
+  silinmiş kullanıcıların yapılandırmalarını yeniden siler. Veritabanını
+  yedekten geri yüklerken bu dosyayı **silmeyin ve üzerine yazmayın**; yalnızca
+  `wishlist.db` değiştirilmelidir. Başlangıç günlüğündeki
+  `Re-applied N data deletion(s)` satırı yeniden uygulanan silmeleri gösterir.
+- Yeni kayıtlar `DEALIO_MAX_USERS` ile sınırlanır (varsayılan 200). Mevcut
+  kullanıcılar etkilenmez; sınır dolduğunda `/setup` "beta dolu" der ve bir şey
+  kaydetmez. Sınırı yalnızca üretim sunucusunda kapasite ölçümü yapıldıktan
+  sonra artırın.

@@ -67,6 +67,16 @@ export class InitialWishlistSummaryService {
     ));
   }
 
+  /** Records the current wishlist as a baseline without sending anything; true when Steam answered. */
+  public async baselineWithinUserOperation(discordUserId: string): Promise<boolean> {
+    const result = await this.checkService.checkWithinUserOperation(
+      discordUserId,
+      'manual',
+      { baseline: true, bypassCooldown: true },
+    );
+    return result.status === 'success';
+  }
+
   private async sendFromCheck(
     discordUserId: string,
     check: ReturnType<CheckService['check']>,

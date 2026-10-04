@@ -68,7 +68,8 @@ export function createDealioNavigator(services: DealioCommandServices): Navigate
     if (target === 'home') return handleDealio(interaction, services, ui);
     if (target === 'settings') {
       return handleStatus(interaction, services.statusService, services.userConfigurationService,
-        services.lifecycleSignal, services.discountThresholdService, services.testNotificationService, ui);
+        services.lifecycleSignal, services.discountThresholdService, services.testNotificationService, ui,
+        services.setupService);
     }
     if (target === 'check') {
       return handleCheck(interaction, services.checkService, services.statusService, services.notificationService,

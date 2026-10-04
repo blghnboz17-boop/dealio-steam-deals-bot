@@ -63,11 +63,18 @@ export function resolveStoreCountry(value: string): StoreCountryCode | null {
   return matches.length === 1 ? matches[0] : null;
 }
 
+// Country names never change while the process runs; building Intl.DisplayNames
+// for every lookup made each country list take tens of milliseconds.
+const countryNames = new Map<string, string>();
+
 export function storeCountryName(code: StoreCountryCode, language: Language): string {
-  const displayNames = new Intl.DisplayNames([languageLocale[language]], {
-    type: 'region',
-  });
-  return displayNames.of(code) ?? code;
+  const key = `${language}:${code}`;
+  let name = countryNames.get(key);
+  if (name === undefined) {
+    name = new Intl.DisplayNames([languageLocale[language]], { type: 'region' }).of(code) ?? code;
+    countryNames.set(key, name);
+  }
+  return name;
 }
 
 export function storeCountryLabel(code: StoreCountryCode, language: Language): string {

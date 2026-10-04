@@ -40,6 +40,7 @@ function processHarness(options: ProcessHarnessOptions = {}) {
     databasePath: ':memory:',
     pollIntervalHours: 6,
     notificationRetryIntervalSeconds: 60,
+    maxUsers: 200,
   };
   let startupSignal: AbortSignal | undefined;
   let resolveStart = (): void => undefined;

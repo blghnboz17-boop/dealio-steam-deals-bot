@@ -32,11 +32,14 @@ it.each(['tr', 'en'] as const)('fits the complete home panel and disables nested
     expect(serialized).toContain('dealio:session:' + action);
   }
   const controls: {disabled?:boolean}[] = [];
+  const links: {url?:string}[] = [];
   JSON.stringify(panel.toJSON(), (_key, value) => {
-    if (value && value.type === 2) controls.push(value);
+    if (value && value.type === 2) (value.style === 5 ? links : controls).push(value);
     return value;
   });
   expect(controls).toHaveLength(6);
+  // The support link lives here, on the panel, and never in alert DMs.
+  expect(links).toEqual([expect.objectContaining({url: 'https://buymeacoffee.com/dealio'})]);
   expect(controls.every(control => control.disabled)).toBe(true);
   expect(serialized).toContain('22:00–08:00');
   expect(serialized).toContain('**6**');

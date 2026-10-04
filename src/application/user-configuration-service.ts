@@ -6,6 +6,8 @@ import {
 } from '../domain/store-country.js';
 import { UserConfigRepository } from '../persistence/user-config-repository.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
+import type { DeletionJournal } from '../persistence/deletion-journal.js';
+import { safeLogger } from './safe-logger.js';
 
 export class InvalidUserConfigurationError extends Error {
   public constructor(
@@ -46,6 +48,7 @@ export class UserConfigurationService {
     private readonly wishlistAccessValidator: WishlistAccessValidator,
     private readonly coordinator = new UserOperationCoordinator(),
     private readonly now: () => Date = () => new Date(),
+    private readonly deletionJournal?: Pick<DeletionJournal, 'record'>,
   ) {}
 
   public configure(
@@ -163,6 +166,10 @@ export class UserConfigurationService {
     );
   }
 
+  public countUsers(): number {
+    return this.repository.countUsers();
+  }
+
   public get(discordUserId: string): UserConfig | null {
     return this.repository.findByDiscordUserId(discordUserId);
   }
@@ -215,8 +222,17 @@ export class UserConfigurationService {
   }
 
   public deleteData(discordUserId: string): Promise<boolean> {
-    return this.coordinator.runExclusive(discordUserId, () =>
-      this.repository.deleteByDiscordUserId(discordUserId),
-    );
+    return this.coordinator.runExclusive(discordUserId, () => {
+      const deleted = this.repository.deleteByDiscordUserId(discordUserId);
+      if (deleted && this.deletionJournal) {
+        try {
+          this.deletionJournal.record(discordUserId, this.now().toISOString());
+        } catch (error: unknown) {
+          // The deletion itself succeeded; only its protection against an old restore is missing.
+          safeLogger.error('Could not record the data deletion in the deletion journal', error);
+        }
+      }
+      return deleted;
+    });
   }
 }

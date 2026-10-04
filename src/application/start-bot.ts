@@ -19,6 +19,7 @@ import {
 } from '../persistence/database.js';
 import { PollScheduleRepository } from '../persistence/poll-schedule-repository.js';
 import { StatusDashboardRepository } from '../persistence/status-dashboard-repository.js';
+import { DeletionJournal } from '../persistence/deletion-journal.js';
 import { UserConfigRepository } from '../persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../persistence/wishlist-state-repository.js';
 import { SteamClient } from '../steam/steam-client.js';
@@ -102,11 +103,21 @@ export async function startBot(
       apiKey: environment.steamWebApiKey,
       lifecycleSignal: applicationAbortController.signal,
     });
+    // Kept outside the database file, so restoring an older backup cannot undo /delete-data.
+    const deletionJournal = environment.databasePath === ':memory:'
+      ? undefined
+      : new DeletionJournal(join(dirname(environment.databasePath), 'deletions.jsonl'));
+    const restoredDeletions = deletionJournal?.reconcile(database) ?? 0;
+    if (restoredDeletions > 0) {
+      console.log(`${new Date().toISOString()} Re-applied ${restoredDeletions} data deletion(s) after a restore.`);
+    }
     const userConfigurationService = new UserConfigurationService(
       userConfigRepository,
       steamIdentityResolver,
       steamClient,
       userOperationCoordinator,
+      undefined,
+      deletionJournal,
     );
     const statusService = new StatusService(
       userConfigRepository,
@@ -142,6 +153,7 @@ export async function startBot(
       userConfigurationService,
       initialWishlistSummaryService,
       userOperationCoordinator,
+      { maxUsers: environment.maxUsers },
     );
     const priceHistory = environment.isThereAnyDealApiKey
       ? new IsThereAnyDealClient({

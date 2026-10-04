@@ -3,6 +3,7 @@ import { CheckService } from '../src/application/check-service.js';
 import { InitialWishlistSummaryService } from '../src/application/initial-wishlist-summary-service.js';
 import {
   SetupAlreadyCompletedError,
+  SetupCapacityReachedError,
   SetupService,
 } from '../src/application/setup-service.js';
 import { UserConfigurationService } from '../src/application/user-configuration-service.js';
@@ -29,7 +30,10 @@ const saleItem: WishlistItem = {
   onSale: true,
 };
 
-function services(identityResolver = { resolve: vi.fn(async (value: string) => value) }) {
+function services(
+  identityResolver = { resolve: vi.fn(async (value: string) => value) },
+  setupOptions: ConstructorParameters<typeof SetupService>[3] = {},
+) {
   const database = createDatabase(':memory:');
   const userConfigRepository = new UserConfigRepository(database);
   const checkStateRepository = new CheckStateRepository(database);
@@ -58,6 +62,7 @@ function services(identityResolver = { resolve: vi.fn(async (value: string) => v
     configurationService,
     new InitialWishlistSummaryService(checkService, sender),
     coordinator,
+    setupOptions,
   );
   return {
     database,
@@ -219,5 +224,52 @@ describe('setup profile summary', () => {
   it('never lets a failing profile read block setup', async () => {
     const prepared = await prepare({ resolve: async () => steamId, summary: async () => { throw new Error('Steam down'); } });
     expect(prepared).toEqual({ discordUserId: 'discord-user', steamId64: steamId, language: 'tr', storeCountryCode: 'TR' });
+  });
+});
+
+describe('SetupService capacity and account change', () => {
+  it('turns away new users at the limit but never existing ones', async () => {
+    const fixture = services(undefined, { maxUsers: 1 });
+    await fixture.setupService.configure('first-user', '76561198000000000', 'en', 'US');
+
+    expect(fixture.setupService.acceptsNewUsers()).toBe(false);
+    await expect(fixture.setupService.prepare('second-user', '76561198000000001', 'en', 'US'))
+      .rejects.toBeInstanceOf(SetupCapacityReachedError);
+    await expect(fixture.setupService.configure('second-user', '76561198000000001', 'en', 'US'))
+      .rejects.toBeInstanceOf(SetupCapacityReachedError);
+    expect(fixture.userConfigRepository.findByDiscordUserId('second-user')).toBeNull();
+
+    const prepared = await fixture.setupService.prepareAccountChange('first-user', '76561198000000002', 'en', 'US');
+    await expect(fixture.setupService.changeAccount(prepared)).resolves.toMatchObject({
+      config: { steamId64: '76561198000000002' },
+    });
+    fixture.database.close();
+  });
+
+  it('switches the Steam account from a baseline, without alerts or the old rules', async () => {
+    const fixture = services();
+    await fixture.setupService.configure('discord-user', '76561198000000000', 'en', 'US');
+    const before = fixture.userConfigRepository.findByDiscordUserId('discord-user')!;
+    fixture.discountThresholdRepository.setGameOverride(before, 10, 70, '2026-08-23T00:00:00.000Z');
+    fixture.sender.sendInitialSummary.mockClear();
+
+    const prepared = await fixture.setupService.prepareAccountChange('discord-user', '76561198000000009', 'en', 'US');
+    const result = await fixture.setupService.changeAccount(prepared);
+
+    expect(result.wishlistLoaded).toBe(true);
+    expect(result.config).toMatchObject({ steamId64: '76561198000000009', enabled: true });
+    expect(result.config.configVersion).toBeGreaterThan(before.configVersion);
+    expect(result.config.configurationId).toBe(before.configurationId);
+    expect(fixture.discountThresholdRepository.findGameOverride(result.config, 10)).toBeNull();
+    // The game already on sale in the new list is a baseline, not an alert.
+    expect(fixture.wishlistStateRepository.countNotificationCandidates('discord-user', result.config.configVersion)).toBe(0);
+    expect(fixture.sender.sendInitialSummary).not.toHaveBeenCalled();
+    fixture.database.close();
+  });
+
+  it('refuses an account change for someone who has not set Dealio up', async () => {
+    const fixture = services();
+    await expect(fixture.setupService.prepareAccountChange('nobody', '76561198000000000', 'en', 'US')).rejects.toThrow();
+    fixture.database.close();
   });
 });

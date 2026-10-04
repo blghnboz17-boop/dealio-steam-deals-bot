@@ -204,6 +204,7 @@ describe('process lifecycle', () => {
       databasePath: ':memory:',
       pollIntervalHours: 6,
       notificationRetryIntervalSeconds: 60,
+      maxUsers: 200,
     }, { signal: controller.signal })).rejects.toThrow('Bot startup was cancelled');
   });
 
@@ -215,6 +216,7 @@ describe('process lifecycle', () => {
       databasePath: ':memory:',
       pollIntervalHours: 0,
       notificationRetryIntervalSeconds: 60,
+      maxUsers: 200,
     };
 
     await expect(startBot(environment)).rejects.toThrow(
@@ -234,6 +236,7 @@ describe('process lifecycle', () => {
       databasePath,
       pollIntervalHours: 6,
       notificationRetryIntervalSeconds: 60,
+      maxUsers: 200,
     };
 
     try {
