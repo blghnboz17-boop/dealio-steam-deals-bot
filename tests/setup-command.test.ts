@@ -731,3 +731,34 @@ it('lets a newcomer pick their language on the welcome screen before anything el
     await handling;
   }
 });
+
+it('keeps the start-again button working after confirming setup fails', async () => {
+  const collector = new SetupCollectorFake();
+  const interaction = setupInteraction(collector, 'en-US');
+  const service = setupService();
+  service.prepare.mockResolvedValue({
+    discordUserId: 'discord-user', steamId64: '76561198000000000', language: 'en', storeCountryCode: 'US',
+  });
+  service.confirm.mockRejectedValueOnce(new Error('database is locked'));
+  const modal = {
+    deferUpdate: vi.fn().mockResolvedValue(undefined),
+    fields: { getTextInputValue: () => '76561198000000000', getStringSelectValues: () => ['US'] },
+  };
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  try {
+    const handling = handleSetup(interaction as never, service as never);
+    await vi.waitFor(() => expect(interaction.editReply).toHaveBeenCalledOnce());
+    collector.emit('collect', setupStartComponent(modal));
+    await vi.waitFor(() => expect(JSON.stringify(interaction.editReply.mock.calls.at(-1)?.[0]))
+      .toContain('setup:setup-session:confirm'));
+    collector.emit('collect', { customId: 'setup:setup-session:confirm', deferUpdate: vi.fn().mockResolvedValue(undefined) });
+    await vi.waitFor(() => expect(JSON.stringify(interaction.editReply.mock.calls.at(-1)?.[0]))
+      .toContain('setup:setup-session:start'));
+    const retry = setupStartComponent(modal);
+    collector.emit('collect', retry);
+    await vi.waitFor(() => expect(retry.showModal).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(service.prepare).toHaveBeenCalledTimes(2));
+    collector.emit('end', [], 'time');
+    await handling;
+  } finally { errors.mockRestore(); }
+});

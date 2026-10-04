@@ -40,4 +40,5 @@ it('exports an open SQLite database encrypted and rehearses recovery without cha
     expect(db.prepare('SELECT value FROM recovery_probe').get()?.value).toBe('private-recovery-probe');
     expect(await readFile(artifact, 'utf8')).toBe(encrypted);
   } finally { db.close(); await rm(directory, { recursive: true, force: true }); }
-});
+  // RSA key generation and two child processes can exceed the default 5s on a cold start.
+}, 40_000);

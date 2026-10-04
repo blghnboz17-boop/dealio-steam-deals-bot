@@ -127,6 +127,43 @@ describe('offline service integration with a reopened SQLite file', () => {
     } finally { f.close(); }
   });
 
+  it('does not rescan Steam on every retry tick while a failed delivery waits for its retry time', async () => {
+    const f = reliabilityFixture();
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await sale(f);
+      f.discordTransport.failure = 'before-accept';
+      await f.services.notifications.deliverPending('fixture-user');
+      expect(f.counts()).toEqual([{ status: 'failed', count: 3 }]);
+      const scans = f.steamTransport.wishlistRequests;
+      for (let tick = 0; tick < 4; tick++) {
+        f.advance(60_000);
+        await f.services.notifications.deliverPending('fixture-user');
+      }
+      expect(f.steamTransport.wishlistRequests).toBe(scans);
+      f.discordTransport.failure = 'none';
+      f.advance(300_000);
+      await f.services.notifications.deliverPending('fixture-user');
+      expect(f.steamTransport.wishlistRequests).toBe(scans + 1);
+      expect(f.counts()).toEqual([{ status: 'sent', count: 3 }]);
+    } finally { f.close(); }
+  });
+
+  it('does not rescan Steam for a queued offer from a sale episode that already ended', async () => {
+    const f = reliabilityFixture();
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      await sale(f);
+      // The sale ended and a new one began before the first offer could be delivered.
+      f.services.db.prepare("UPDATE wishlist_item_state SET sale_episode_id = 'next-episode'").run();
+      const scans = f.steamTransport.wishlistRequests;
+      f.advance(60_000);
+      await f.services.notifications.deliverPending('fixture-user');
+      expect(f.steamTransport.wishlistRequests).toBe(scans);
+      expect(f.discordTransport.accepted).toHaveLength(0);
+    } finally { f.close(); }
+  });
+
   it('keeps all pending notifications through restart and concurrent delivery attempts', async () => {
     const f = reliabilityFixture(17);
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
