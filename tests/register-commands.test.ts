@@ -14,6 +14,7 @@ const environment: EnvironmentConfig = {
   databasePath: ':memory:',
   pollIntervalHours: 6,
   notificationRetryIntervalSeconds: 60,
+  maxUsers: 200,
 };
 
 describe('Discord command registration', () => {

@@ -56,12 +56,17 @@ Her oyun için ayrı hedef belirleyebilir, gece bildirim istemiyorsan sessiz saa
 - 🎮 **Listende kolayca gezin.** Oyun ara, filtrele, üçer oyunluk sayfalarda dolaş veya bir oyunun detayını aç.
 - 🎯 **Her oyuna ayrı karar ver.** Genel indirim eşiğini kullan, o oyuna özel bir yüzde seç ya da doğrudan fiyat yaz. İlgilenmediğin oyunu sustur.
 - 📬 **Bildirimini takip et.** Bekleyen ve gönderilen DM’leri gör. Mesaj alamıyorsan test bildirimiyle kontrol et; gönderim kaydı mesajın okunduğu anlamına gelmez.
-- 📊 **Fiyatın zamanla nasıl değiştiğine bak.** Dealio kendi gözlemlerini 90 gün tutar. Yeni izlenen oyunların geçmişi kısa olabilir; bu kayıtlar tüm zamanların en düşük fiyatını göstermez.
+- 📊 **Fiyatın zamanla nasıl değiştiğine bak.** Bildirimler ve oyun detayı, mağaza bölgendeki Steam en düşük fiyatını gösterir (IsThereAnyDeal’dan, yalnızca aynı para biriminde); oyun detayında son fiyat değişiklikleri de yer alır. Dealio kendi fiyat gözlemlerini 90 gün tutar.
+- 👤 **Baştan başlamadan hesap değiştir.** Steam hesabını ⚙️ Ayarlar’dan, kurulumdaki profil penceresiyle değiştir; genel indirim oranın, bildirim zamanlaman ve dilin aynı kalır.
 - 🌍 **Türkçe, İngilizce, Almanca ya da Fransızca kullan.** Kurulumdan bildirimlere kadar dört dil de mevcut; metinler samimi bir dille ve her dilde Steam’in kendi terimleriyle (ör. istek listesi) yazıldı. Almanca ve Fransızca yeni; henüz gerçek kullanıcı denemesinden geçmedi.
 
 <a name="son-gelismeler"></a>
 
 ## ✨ Son gelişmeler
+
+> **4 Ekim 2026 · Hesap değiştirme ve daha sağlam bildirimler**
+>
+> Steam hesabını artık verilerini silmeden ⚙️ Ayarlar’dan değiştirebilirsin. Steam bir oyunu istek listenden kısa süreliğine düşürürse, oyun geri geldiğinde Dealio bunu yeni indirim saymıyor; böylece aynı indirim için ikinci DM gelmiyor. İndirim DM’lerinde artık yalnızca panel butonu var; isteğe bağlı destek bağlantısı ana panele taşındı. Beta tek sunucuda çalıştığı için yeni kayıt sayısı sınırlı.
 
 > **30 Eylül 2026 · Sınırlı beta, ilk kullanıcılar**
 >
@@ -74,13 +79,13 @@ Bildirim güvenilirliği ve beta hazırlıkları bu sürümde bir araya geldi. [
 
 ## 🚀 Discord’da başla
 
-Dealio şu an küçük bir grupla deneniyor. Katılmak istersen [beta sayfasından](https://blghnboz17-boop.github.io/dealio-public-pages/) ulaşabilirsin. Kullanım ücretsiz; genel daveti testler tamamlandığında açacağız.
+Dealio şu an küçük bir grupla deneniyor. Katılmak istersen [beta sayfasından](https://blghnboz17-boop.github.io/dealio-public-pages/) ulaşabilirsin. Kullanım ücretsiz; genel daveti testler tamamlandığında açacağız. Betada yer sınırlı; yerler dolduğunda `/setup` bunu söyler ve hiçbir şey kaydetmez.
 
 1. **Botun bulunduğu sunucuya katıl.** Davet bilgilerini beta katılımı sırasında paylaşacağız.
-2. **`/setup` yaz.** SteamID64 veya profil bağlantını gir; gerçek Steam Store ülkeni ve dilini doğrula, ardından indirim DM’lerini açıkça onayla.
+2. **`/setup` yaz.** Dilini seç; Steam profil bağlantını, özel URL adını veya SteamID64’ünü gir; gerçek Steam Store ülkeni doğrula, ardından indirim DM’lerini açıkça onayla.
 3. **`/dealio` aç.** Wishlist’ini incele, bir oyun seç ve istediğin fiyatı belirle.
 
-Steam wishlist’in herkese açık olmalı; Discord, bottan DM almana izin vermeli. Dealio Steam şifreni, çerezlerini veya giriş oturumunu istemez.
+İstek listenin okunabilmesi için Steam profilin ve “Oyun ayrıntıları” herkese açık olmalı; Discord, bottan DM almana izin vermeli. Dealio Steam şifreni, çerezlerini veya giriş oturumunu istemez.
 
 ## 🔔 Bildirimler ne zaman gelir?
 
@@ -103,6 +108,8 @@ Dealio, her tarama bittikten **30 dakika sonra** yeniden kontrol eder. Kuralına
 | `/test-notification` | Wishlistinde şu an indirimde olan bir oyunla kendine test bildirimi gönder |
 | `/delete-data` | Onayından sonra aktif hesap verilerini sil |
 
+Silme dışındaki her şey `/dealio` panelinde de var: 🏠 Ana sayfa, 🎮 İstek listem, 🔔 Bildirimler ve ⚙️ Ayarlar. Bölgeni, dilini ya da Steam hesabını Ayarlar’dan değiştirebilirsin.
+
 Paneller sana özeldir; düğmeler paneli açan kullanıcıya bağlıdır. Süre dolunca veya bot yeniden başlayınca yeni bir komut açarak devam edebilirsin.
 
 <a name="beta-durumu"></a>
@@ -115,7 +122,7 @@ Paneller sana özeldir; düğmeler paneli açan kullanıcıya bağlıdır. Süre
 
 Dealio hesap kimliklerini, tercihlerini, oyun kurallarını, gözlemlenen wishlist fiyatlarını ve teslimat kayıtlarını tutar. Normal Discord mesajlarının içeriğini veya Steam giriş bilgilerini toplamaz.
 
-Bildirim geçmişi son **30 günü** gösterir; fiyat gözlemleri **90 gün** tutulur. Aktif teslimat ve devam eden tekliflerin tekrarını önleyen kayıtlar daha uzun kalabilir. `/delete-data` aktif hesap kayıtlarını siler; mevcut yedek kopyaları bu komutla yeniden yazılmaz.
+Bildirim geçmişi son **30 günü** gösterir; fiyat gözlemleri **90 gün** tutulur. Aktif teslimat ve devam eden tekliflerin tekrarını önleyen kayıtlar daha uzun kalabilir. `/delete-data` aktif hesap kayıtlarını siler. Mevcut yedek kopyaları yeniden yazılmaz; ancak ayrı tutulan bir silme kaydı (Discord kimliğinin tek yönlü özeti, 35 gün saklanır) yedekten geri dönülse bile verilerinin geri gelmemesini sağlar.
 
 [Gizlilik](https://blghnboz17-boop.github.io/dealio-public-pages/privacy-tr.html) · [Kullanım koşulları](https://blghnboz17-boop.github.io/dealio-public-pages/terms-tr.html) · [Yardım](https://blghnboz17-boop.github.io/dealio-public-pages/help-tr.html)
 
@@ -156,6 +163,13 @@ Kural kaydı başlangıç durumunu belirler. Zaten uygun olan teklif panelde gö
 </details>
 
 <details>
+<summary><strong>Başka bir Steam hesabına nasıl geçerim?</strong></summary>
+
+`/dealio` → ⚙️ Ayarlar → **Steam hesabını değiştir**’e bas. Kurulumdaki profil penceresinin aynısı açılır; Dealio yeni hesabı gösterir ve ancak onaylarsan değiştirir. Genel indirim oranın, bildirim zamanlaman ve dilin aynı kalır. Eski hesabındaki oyunlara koyduğun kurallar, hedefler ve bekleyen bildirimler taşınmaz; yeni listende zaten indirimde olan oyunlar için bildirim gelmez. Bunun için artık `/delete-data` gerekmez.
+
+</details>
+
+<details>
 <summary><strong>Kurulumumu silmeden bildirimleri durdurabilir miyim?</strong></summary>
 
 Evet. `/status` içindeki bildirim düğmesini kullan. Ayarların korunur. Otomatik bildirimler kapalıyken manuel `/check` çalışmaya devam eder.
@@ -165,7 +179,7 @@ Evet. `/status` içindeki bildirim düğmesini kullan. Ayarların korunur. Otoma
 <details>
 <summary><strong>Aynı bildirim iki kez gelebilir mi?</strong></summary>
 
-Dealio gönderdiği bildirimi kaydeder ve aynı teklif için normal kontrollerde tekrar mesaj atmaz. Yine de Discord mesajı kabul edip yanıtı kaybolursa yeniden deneme çift mesaj oluşturabilir. Böyle bir durum görürsen bildirebilirsin.
+Dealio gönderdiği bildirimi kaydeder ve aynı teklif için normal kontrollerde tekrar mesaj atmaz. Steam bir oyunu istek listenden kısa süreliğine düşürürse oyun bir süre indirim durumunu korur; geri geldiğinde yeni indirim sayılmaz. Yine de Discord mesajı kabul edip yanıtı kaybolursa yeniden deneme çift mesaj oluşturabilir. Böyle bir durum görürsen bildirebilirsin.
 
 </details>
 

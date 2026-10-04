@@ -126,6 +126,12 @@ export function openPanelButton(language: Language, style: ButtonStyle = ButtonS
     .setLabel(localizer(language)({ tr: 'Dealio paneli', en: 'Dealio panel', de: 'Dealio-Panel', fr: 'Panneau Dealio' }));
 }
 
+/** The optional "support Dealio" link; shown on the Home panel only, never in alert DMs. */
+export function supportButton(language: Language): ButtonBuilder {
+  return new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://buymeacoffee.com/dealio').setEmoji('☕')
+    .setLabel(localizer(language)({ tr: 'Destek ol', en: 'Support Dealio', de: 'Dealio unterstützen', fr: 'Soutenir Dealio' }));
+}
+
 /** Steam's own wording for each Steam Deck rating. */
 const steamDeckLabels: Record<'verified' | 'playable' | 'unsupported', Localized> = {
   verified: { tr: 'Doğrulandı', en: 'Verified', de: 'Verifiziert', fr: 'Vérifié' },

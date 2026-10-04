@@ -112,6 +112,7 @@ const environment = {
   databasePath: '',
   pollIntervalHours: 6,
   notificationRetryIntervalSeconds: 60,
+  maxUsers: 200,
 };
 
 function interaction(overrides: Partial<InteractionFake> = {}): InteractionFake {
@@ -275,7 +276,7 @@ describe('bot wiring', () => {
       pollIntervalHours: 6,
     }, { navigate: mocks.navigate }]],
     ['region', mocks.region, [expect.any(UserConfigurationService)]],
-    ['status', mocks.status, [expect.any(StatusService), expect.any(UserConfigurationService), expect.any(AbortSignal), expect.any(DiscountThresholdService), expect.any(TestNotificationService), { navigate: mocks.navigate }]],
+    ['status', mocks.status, [expect.any(StatusService), expect.any(UserConfigurationService), expect.any(AbortSignal), expect.any(DiscountThresholdService), expect.any(TestNotificationService), { navigate: mocks.navigate }, expect.any(SetupService)]],
     ['check', mocks.check, [expect.any(CheckService), expect.any(StatusService), expect.any(NotificationService), { navigate: mocks.navigate, lifecycleSignal: expect.any(AbortSignal) }]],
     ['wishlist', mocks.wishlist, [expect.any(WishlistViewService), expect.any(AbortSignal), expect.any(DiscountThresholdService), { navigate: mocks.navigate }]],
     ['test-notification', mocks.testNotification, [expect.any(UserConfigurationService), expect.any(TestNotificationService)]],

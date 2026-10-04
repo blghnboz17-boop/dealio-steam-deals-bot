@@ -204,6 +204,7 @@ async function handleInteraction(
         services.discountThresholdService,
         services.testNotificationService,
         ui,
+        services.setupService,
       );
       return;
     case 'check':

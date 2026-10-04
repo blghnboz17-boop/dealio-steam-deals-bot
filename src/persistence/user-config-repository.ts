@@ -112,6 +112,11 @@ export class UserConfigRepository {
     return row ? toUserConfig(row) : null;
   }
 
+  public countUsers(): number {
+    const row = this.database.prepare('SELECT COUNT(*) AS count FROM user_config').get() as { count: number };
+    return Number(row.count);
+  }
+
   public findEnabled(): UserConfig[] {
     const rows = this.database
       .prepare(

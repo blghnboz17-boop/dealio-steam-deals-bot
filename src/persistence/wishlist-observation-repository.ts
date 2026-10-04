@@ -17,6 +17,9 @@ import {
   type WishlistScope,
 } from './wishlist-state-codecs.js';
 
+/** How long a game must stay absent from the wishlist before its sale state is dropped. */
+export const missingItemGraceMs = 20 * 60 * 1000;
+
 export interface RecordObservationOptions {
   readonly baseline?: boolean;
 }
@@ -99,29 +102,41 @@ export class WishlistObservationRepository {
     const exclusion = uniqueAppIds.length > 0
       ? `AND app_id NOT IN (${uniqueAppIds.map(() => '?').join(', ')})`
       : '';
-    const result = preparedStatement(this.database,
+    const scopeValues = [scope.discordUserId, scope.steamId64, scope.configVersion] as const;
+    // A game counts as gone only after it stayed absent through the grace period.
+    // Steam sometimes leaves items out of one response (or returns an empty list);
+    // ending the sale episode on that blip would re-send every ongoing sale later.
+    const confirmedBefore = new Date(Date.parse(observedAt) - missingItemGraceMs).toISOString();
+    const confirmed = preparedStatement(this.database,
         `UPDATE wishlist_item_state
          SET on_sale = 0,
              sale_episode_id = NULL,
              sale_started_at = NULL,
              sale_key = NULL,
-              rule_event_id = NULL,
-              last_seen_at = ?,
-              observation_status = 'missing'
+             rule_event_id = NULL
          WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
+           AND observation_status = 'missing' AND last_seen_at <= ?
            ${exclusion}`,
       )
-      .run(
-        observedAt,
-        scope.discordUserId,
-        scope.steamId64,
-        scope.configVersion,
-        ...uniqueAppIds,
-      );
+      .run(...scopeValues, confirmedBefore, ...uniqueAppIds);
+    // First absence: remember when it started (last_seen_at) and keep the sale state.
+    const suspected = preparedStatement(this.database,
+        `UPDATE wishlist_item_state
+         SET observation_status = 'missing', last_seen_at = ?
+         WHERE discord_user_id = ? AND steam_id64 = ? AND config_version = ?
+           AND observation_status <> 'missing'
+           ${exclusion}`,
+      )
+      .run(observedAt, ...scopeValues, ...uniqueAppIds);
 
+    // Target rules restart only for games that are confirmed gone (or were never observed).
     preparedStatement(this.database,`UPDATE game_rule SET initialized=0,eligible=0,event_id=NULL
-      WHERE discord_user_id=? AND config_version=? ${exclusion}`).run(scope.discordUserId,scope.configVersion,...uniqueAppIds);
-    return Number(result.changes);
+      WHERE discord_user_id=? AND config_version=? ${exclusion}
+        AND NOT EXISTS (SELECT 1 FROM wishlist_item_state AS state
+          WHERE state.discord_user_id=game_rule.discord_user_id AND state.config_version=game_rule.config_version
+            AND state.app_id=game_rule.app_id AND state.observation_status='missing' AND state.last_seen_at>?)`)
+      .run(scope.discordUserId,scope.configVersion,...uniqueAppIds,confirmedBefore);
+    return Number(confirmed.changes) + Number(suspected.changes);
   }
 
   public markObservationStatus(

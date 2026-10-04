@@ -32,13 +32,9 @@ import { messagesFor } from './messages.js';
 import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, componentsV2TextLength, dealioFooter } from './ui/components-v2.js';
 
-/** The closing row of every Dealio DM: open the panel, or support the project. */
+/** The closing row of every Dealio DM: open the panel. Support links live in the panel, never in alerts. */
 function messageActionRow(language: Language): ActionRowBuilder<ButtonBuilder> {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    openPanelButton(language),
-    new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://buymeacoffee.com/dealio')
-      .setEmoji('☕').setLabel(localizer(language)({ tr: 'Destek ol', en: 'Support Dealio', de: 'Dealio unterstützen', fr: 'Soutenir Dealio' })),
-  );
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(openPanelButton(language));
 }
 
 /** One header for every alert: the kicker names the kind, the emoji its strength. */

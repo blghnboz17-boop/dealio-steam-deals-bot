@@ -24,7 +24,10 @@ import { parseStoreCountryCode } from '../../domain/store-country.js';
 import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-bar.js';
 import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
-import { buildStatusV2Panel } from '../status-view-v2.js';
+import { buildAccountChangePanel, buildStatusV2Panel } from '../status-view-v2.js';
+import type { SetupService } from '../../application/setup-service.js';
+import type { PreparedUserConfiguration } from '../../application/user-configuration-service.js';
+import { buildSetupModal, setupErrorMessage } from './setup.js';
 import {
   buildNoticePanel,
   buildExpiredPanel,
@@ -64,6 +67,7 @@ export async function handleStatus(
   thresholdService?: DiscountThresholdService,
   testNotificationService?: TestNotificationService,
   ui: PanelNavigation = {},
+  accountService?: Pick<SetupService, 'prepareAccountChange' | 'changeAccount'>,
 ): Promise<void> {
   if (!ui.inPlace) {
     await measureDiscordOperation(interaction, 'status-v2.ack', () => interaction.deferReply({ flags: MessageFlags.Ephemeral }));
@@ -115,6 +119,9 @@ export async function handleStatus(
   let controlsRemoved = false;
   let sessionActive = true;
   let handedOff = false;
+  // "Change Steam account": a profile waiting for its Store country, then the account waiting for confirmation.
+  let accountProfileInput: string | null = null;
+  let pendingAccount: PreparedUserConfiguration | null = null;
   const operations = new PanelOperationQueue(async (error) => {
     safeLogger.error('Discord panel update failed', error);
     await interaction.followUp({
@@ -151,6 +158,37 @@ export async function handleStatus(
     return true;
   };
 
+  const showAccountChange = async (profileInput: string, country: string): Promise<void> => {
+    if (!accountService) return;
+    const language = current.language;
+    await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+      components: [buildNoticePanel(language, 'info',
+        localizer(language)({ tr: 'Steam hesabına bakıyorum', en: 'Looking up your Steam account', de: 'Ich suche dein Steam-Konto', fr: 'Je cherche ton compte Steam' }),
+        messagesFor(language).setupWizardPreparing)],
+    }));
+    let prepared: PreparedUserConfiguration;
+    try {
+      prepared = await accountService.prepareAccountChange(interaction.user.id, profileInput, language, country);
+    } catch (error: unknown) {
+      await refresh(`🛑 ${setupErrorMessage(error, language)}`);
+      return;
+    }
+    if (!sessionActive) return;
+    if (prepared.steamId64 === current.config.steamId64) {
+      await refresh('ℹ️ ' + localizer(language)({
+        tr: 'Bu zaten bağlı Steam hesabın. Mağaza bölgesini değiştirmek için 🌍 Bölge butonunu kullan.',
+        en: 'That’s already your connected Steam account. To change the Store region, use 🌍 Region.',
+        de: 'Das ist bereits dein verbundenes Steam-Konto. Die Shop-Region änderst du unter 🌍 Region.',
+        fr: 'C’est déjà ton compte Steam connecté. Pour changer de région, utilise 🌍 Région.',
+      }));
+      return;
+    }
+    pendingAccount = prepared;
+    await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+      components: [buildAccountChangePanel(prepared, current.config, interaction.id)],
+    }));
+  };
+
   collector.on('collect', (component) => {
     const tab = parseTabAction(component.customId.slice(`status-v2:${interaction.id}:`.length));
     if (tab && component.customId.startsWith(`status-v2:${interaction.id}:`)) {
@@ -184,6 +222,7 @@ export async function handleStatus(
     }
     if (component.customId === `country:${interaction.id}:cancel` && component.isButton()) {
       const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
+      accountProfileInput = null;
       void operations.enqueue(acknowledgement, async () => {
         await refresh();
       });
@@ -218,7 +257,15 @@ export async function handleStatus(
     if (component.customId === `country:${interaction.id}:select` && component.isStringSelectMenu()) {
       const country = parseStoreCountryCode(component.values[0] ?? '');
       const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
+      const profileInput = accountProfileInput;
+      accountProfileInput = null;
       void operations.enqueue(acknowledgement, async () => {
+        if (profileInput !== null) {
+          // The country for a new Steam account, chosen under "Other country".
+          if (country) await showAccountChange(profileInput, country);
+          else await refresh();
+          return;
+        }
         if (country) {
           await userConfigurationService.setStoreCountry(interaction.user.id, country);
         }
@@ -231,6 +278,96 @@ export async function handleStatus(
       return;
     }
     const action = component.customId.slice(`status-v2:${interaction.id}:`.length);
+    if (action === 'account' && accountService) {
+      // The same Steam profile form as setup, with the current Store region preselected.
+      const modalId = `status-account:${interaction.id}:${++modalSequence}`;
+      const t = localizer(current.language);
+      void (async () => {
+        await measureDiscordOperation(component, 'status-v2.modal', () => component.showModal(buildSetupModal(
+          modalId, current.language, current.config.storeCountryCode, {
+            title: t({ tr: 'Steam hesabını değiştir', en: 'Change Steam account', de: 'Steam-Konto wechseln', fr: 'Changer de compte Steam' }),
+            regionDescription: t({
+              tr: 'Şu anki mağaza bölgen seçili; yeni hesabınki farklıysa değiştir.',
+              en: 'Your current Store region is selected; change it if the new account’s is different.',
+              de: 'Deine aktuelle Shop-Region ist ausgewählt; ändere sie, falls das neue Konto eine andere hat.',
+              fr: 'Ta région actuelle est sélectionnée ; change-la si celle du nouveau compte est différente.',
+            }),
+          })));
+        const modal = await component.awaitModalSubmit({
+          time: Math.max(1, sessionExpiresAt - Date.now()),
+          filter: (submission) => submission.customId === modalId && submission.user.id === interaction.user.id,
+        }).catch(() => null);
+        if (!modal) return;
+        if (!sessionActive) {
+          await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.reply({
+            flags: dealioEphemeralV2Flags,
+            components: [buildExpiredPanel(current.language)],
+          }));
+          return;
+        }
+        const profileInput = modal.fields.getTextInputValue('steam-profile');
+        const selected = modal.fields.getStringSelectValues('store-country')[0] ?? '';
+        const acknowledgement = measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate());
+        await operations.enqueue(acknowledgement, async () => {
+          const country = parseStoreCountryCode(selected);
+          if (!country) {
+            // "Other country": pick it from the full list, then continue with this profile.
+            accountProfileInput = profileInput;
+            await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+              components: [buildCountryRangePanel(current.language, interaction.id, { selected: current.config.storeCountryCode })],
+            }));
+            return;
+          }
+          await showAccountChange(profileInput, country);
+        });
+      })().catch((error: unknown) => safeLogger.error('Discord status account change failed', error));
+      return;
+    }
+    if (action === 'account-cancel') {
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
+      pendingAccount = null;
+      void operations.enqueue(acknowledgement, async () => {
+        await refresh();
+      });
+      return;
+    }
+    if (action === 'account-confirm' && accountService) {
+      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
+      const prepared = pendingAccount;
+      pendingAccount = null;
+      void operations.enqueue(acknowledgement, async () => {
+        if (!prepared) {
+          await refresh();
+          return;
+        }
+        const t = localizer(current.language);
+        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+          components: [buildAccountChangePanel(prepared, current.config, interaction.id, true)],
+        }));
+        let notice: string;
+        try {
+          const result = await accountService.changeAccount(prepared);
+          notice = '✅ ' + (result.wishlistLoaded
+            ? t({
+                tr: 'Steam hesabın değişti; yeni istek listeni okudum.',
+                en: 'Your Steam account is switched, and I’ve read the new wishlist.',
+                de: 'Dein Steam-Konto ist gewechselt, und ich habe die neue Wunschliste gelesen.',
+                fr: 'Ton compte Steam est changé, et j’ai lu ta nouvelle liste.',
+              })
+            : t({
+                tr: 'Steam hesabın değişti. Yeni istek listeni bir sonraki kontrolde okuyacağım.',
+                en: 'Your Steam account is switched. I’ll read the new wishlist on the next check.',
+                de: 'Dein Steam-Konto ist gewechselt. Die neue Wunschliste lese ich bei der nächsten Prüfung.',
+                fr: 'Ton compte Steam est changé. Je lirai ta nouvelle liste à la prochaine vérification.',
+              }));
+        } catch (error: unknown) {
+          safeLogger.error('Discord status account change failed', error);
+          notice = `🛑 ${setupErrorMessage(error, current.language)}`;
+        }
+        await refresh(notice);
+      });
+      return;
+    }
     if (action === 'region') {
       const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       void operations.enqueue(acknowledgement, async () => {

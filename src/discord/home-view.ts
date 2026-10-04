@@ -8,7 +8,7 @@ import type { StatusV2Options } from './status-view-v2.js';
 import { sanitizeGameName } from './notification-messages.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { dealioBrand } from './ui/brand.js';
-import { countryDisplay, hotPrefix, noPriceText, panelHeader, priceFetched, priceLine, savingsLine, tabAccent } from './ui/design.js';
+import { countryDisplay, hotPrefix, supportButton, noPriceText, panelHeader, priceFetched, priceLine, savingsLine, tabAccent } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 import { localizer } from './i18n.js';
 
@@ -119,6 +119,7 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
   root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
     button('check', t({ tr: 'Şimdi kontrol et', en: 'Check now', de: 'Jetzt prüfen', fr: 'Vérifier maintenant' }), '🔄'),
     button('refresh', t({ tr: 'Paneli yenile', en: 'Refresh', de: 'Aktualisieren', fr: 'Actualiser' }), '♻️'),
+    supportButton(language),
   ));
   divider();
   root.addActionRowComponents(buildTabBar('dealio', sessionId, language, { active: 'home', disabled }));

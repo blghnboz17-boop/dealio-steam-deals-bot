@@ -7,6 +7,8 @@ export interface EnvironmentConfig {
   readonly databasePath: string;
   readonly pollIntervalHours: number;
   readonly notificationRetryIntervalSeconds: number;
+  /** Most users who can complete setup; existing users are never removed. */
+  readonly maxUsers: number;
   readonly steamWebApiKey?: string;
   readonly isThereAnyDealApiKey?: string;
   readonly dealioBannerUrl?: string;
@@ -17,6 +19,8 @@ export interface EnvironmentConfig {
 const defaultDatabasePath = './data/wishlist.db';
 export const defaultPollIntervalHours = 0.5;
 const defaultNotificationRetryIntervalSeconds = 60;
+/** Sign-up limit for one 1 GiB host until a larger capacity test proves more. */
+export const defaultMaxUsers = 200;
 export const minPollIntervalHours = 0.25;
 export const maxPollIntervalHours = 24 * 7;
 
@@ -108,6 +112,10 @@ export function loadEnvironment(
       )
     : defaultNotificationRetryIntervalSeconds;
 
+  const maxUsers = environment.DEALIO_MAX_USERS?.trim()
+    ? boundedInteger(environment.DEALIO_MAX_USERS.trim(), 'DEALIO_MAX_USERS', 1, 1_000_000)
+    : defaultMaxUsers;
+
   if (environment.DEALIO_PRODUCTION === 'true' && !environment.AZURE_LEASE_CONTAINER_URL) {
     // Explicit single-host rollout while cloud resources await credit verification.
     // Copying this configuration to a different machine must not start a gateway.
@@ -130,6 +138,7 @@ export function loadEnvironment(
     databasePath,
     pollIntervalHours,
     notificationRetryIntervalSeconds,
+    maxUsers,
     ...(steamWebApiKey ? { steamWebApiKey } : {}),
     ...(isThereAnyDealApiKey ? { isThereAnyDealApiKey } : {}),
     ...(dealioBannerUrl ? { dealioBannerUrl } : {}),

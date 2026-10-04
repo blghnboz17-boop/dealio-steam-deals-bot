@@ -56,12 +56,17 @@ Set a different target for each game, or use one discount threshold across your 
 - 🎮 **A list you can browse.** Search, filter, move through three-game pages, or open a game's details.
 - 🎯 **A choice for each game.** Use your default discount threshold, set a different percentage, or enter a target price. Mute games you want to skip.
 - 📬 **A record of your alerts.** See pending and sent DMs, and try a test message if delivery isn't working. A delivery record doesn't mean the message was read.
-- 📊 **Prices over time.** Dealio keeps its own observations for 90 days. Newly tracked games may have little history; these records don't establish an all-time low.
+- 📊 **Prices over time.** Alerts and game details show Steam's historical low for your Store region (from IsThereAnyDeal, same currency only), and the game detail lists recent price changes. Dealio keeps its own price observations for 90 days.
+- 👤 **Switch accounts without starting over.** Change your Steam account from ⚙️ Settings with the same profile form as setup; your default discount, alert timing and language stay.
 - 🌍 **Turkish, English, German and French.** Every language covers setup, menus, and notifications, written in a friendly first-person voice and using Steam’s own words for the wishlist in each language. German and French are new and have not had real-user trials yet.
 
 <a name="latest-updates"></a>
 
 ## ✨ Latest updates
+
+> **4 October 2026 · Account switch and steadier alerts**
+>
+> You can now change your Steam account from ⚙️ Settings without deleting your data. If Steam briefly leaves a game out of your wishlist, Dealio no longer treats it as a new sale when the game comes back, so you won't get duplicate alerts. Sale DMs now carry only the panel button; the optional support link moved to the Home panel. New sign-ups are capped while the beta runs on a single server.
 
 > **30 September 2026 · Limited beta, first users**
 >
@@ -74,13 +79,13 @@ This release brings together the notification reliability work and beta preparat
 
 ## 🚀 Start in Discord
 
-Dealio is being tested with a small group. If you'd like to join, get in touch through the [beta page](https://blghnboz17-boop.github.io/dealio-public-pages/index-en.html). It's free to use; the general invite will open after acceptance testing.
+Dealio is being tested with a small group. If you'd like to join, get in touch through the [beta page](https://blghnboz17-boop.github.io/dealio-public-pages/index-en.html). It's free to use; the general invite will open after acceptance testing. The beta has a limited number of places; when they're full, `/setup` says so and saves nothing.
 
 1. **Join a server with the bot.** We'll share access details when you join the beta.
-2. **Run `/setup`.** Enter your SteamID64 or profile link, confirm your Steam Store country and language, then explicitly enable sale DMs.
+2. **Run `/setup`.** Pick your language, enter your Steam profile link, custom URL name or SteamID64, confirm your Steam Store country, then explicitly enable sale DMs.
 3. **Open `/dealio`.** Browse your wishlist, choose a game, and set the price you want.
 
-Your Steam wishlist must be publicly readable, and Discord must allow DMs from the bot. Dealio does not ask for a Steam password, cookie, or login session.
+Your Steam profile and “Game details” must be public so the wishlist can be read, and Discord must allow DMs from the bot. Dealio does not ask for a Steam password, cookie, or login session.
 
 ## 🔔 When will I hear from Dealio?
 
@@ -103,6 +108,8 @@ Initial setup may send a summary of existing discounts, rather than a new-sale a
 | `/test-notification` | Send yourself a test alert built from a game currently on sale on your wishlist |
 | `/delete-data` | Delete your active account data after confirmation |
 
+Everything except deletion is also in the `/dealio` panel: 🏠 Home, 🎮 Wishlist, 🔔 Alerts and ⚙️ Settings, where you can also change your region, language or Steam account.
+
 Panels are private and bound to the person who opened them. After a timeout or bot restart, open a fresh command to continue.
 
 <a name="beta-status"></a>
@@ -115,7 +122,7 @@ Three users reported successful Turkish desktop setup and command trials. We're 
 
 Dealio stores your account identifiers, preferences, game rules, observed wishlist prices, and delivery records. It does not collect ordinary Discord message content or Steam credentials.
 
-Notification history displays the last **30 days**; price observations are retained for **90 days**. Active deliveries and ongoing-offer deduplication records may be kept longer. `/delete-data` removes active account records; existing backup copies are not rewritten by that command.
+Notification history displays the last **30 days**; price observations are retained for **90 days**. Active deliveries and ongoing-offer deduplication records may be kept longer. `/delete-data` removes active account records. Existing backup copies are not rewritten, but a separate deletion record (a one-way hash of your Discord ID, kept for 35 days) makes sure a restore from backup can't bring your data back.
 
 [Privacy](https://blghnboz17-boop.github.io/dealio-public-pages/privacy.html) · [Terms](https://blghnboz17-boop.github.io/dealio-public-pages/terms.html) · [Help](https://blghnboz17-boop.github.io/dealio-public-pages/help.html)
 
@@ -156,6 +163,13 @@ Saving a rule establishes its starting state. An already-matching offer is visib
 </details>
 
 <details>
+<summary><strong>How do I switch to another Steam account?</strong></summary>
+
+Open `/dealio` → ⚙️ Settings → **Change Steam account**. The same profile form as setup opens; Dealio shows the new account and switches only after you confirm. Your default discount, alert timing and language stay. Rules, targets and waiting alerts for the old account's games don't carry over, and games already on sale in the new list don't trigger alerts. You no longer need `/delete-data` for this.
+
+</details>
+
+<details>
 <summary><strong>Can I pause alerts without deleting my setup?</strong></summary>
 
 Yes. Use the notification toggle in `/status`. Your settings remain available. Manual `/check` still works while automatic notifications are disabled.
@@ -165,7 +179,7 @@ Yes. Use the notification toggle in `/status`. Your settings remain available. M
 <details>
 <summary><strong>Can an alert arrive twice?</strong></summary>
 
-Dealio records the alerts it sends and skips routine repeats for the same offer. If Discord accepts a message but its acknowledgement is lost, a retry can still produce a duplicate. Please report it if you see one.
+Dealio records the alerts it sends and skips routine repeats for the same offer. A game that Steam briefly leaves out of your wishlist keeps its sale state for a short grace period, so its return isn't a new sale. If Discord accepts a message but its acknowledgement is lost, a retry can still produce a duplicate. Please report it if you see one.
 
 </details>
 

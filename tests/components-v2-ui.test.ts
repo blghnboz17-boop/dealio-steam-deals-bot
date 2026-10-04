@@ -61,18 +61,15 @@ describe('Dealio Components V2 UI', () => {
     expect(text).not.toContain(language==='tr'?'şu anda indirimde oyun yok':'no discounted games');
     expect(text).not.toContain(language==='tr'?'Şu anda indirimde oyun bulunmuyor':'No games are currently discounted');
   });
-  it.each(['tr','en'] as const)('includes one optional donation link in sale and initial wishlist DMs in %s', language => {
+  it.each(['tr','en'] as const)('keeps donation links out of sale and initial wishlist DMs in %s', language => {
     const sale=buildSaleNotificationPanel([notification(1),notification(2)],language).toJSON();
     const summary={discordUserId:'u',steamId64:'76561198000000000',language,storeCountryCode:'TR' as const,
       minimumDiscountPercent:0,totalGameCount:0,failedItemCount:0,capturedAt:'2026-09-19T00:00:00Z',sales:[]};
     const initial=buildInitialWishlistV2Page(summary,{},'session',0,true).components[0].toJSON();
     for(const panel of [sale,initial]) {
       const buttons=panel.components.filter(c=>c.type===1).flatMap(row=>row.components);
-      const donation=buttons.filter(b=>'url' in b&&b.url==='https://buymeacoffee.com/dealio');
-      expect(donation).toHaveLength(1);
-      expect(donation[0]).toMatchObject({style:5,label:language==='tr'?'Destek ol':'Support Dealio',emoji:{name:'☕'}});
-      expect(donation[0]).not.toHaveProperty('custom_id');
-      expect(donation[0].disabled).not.toBe(true);
+      expect(buttons.filter(b=>'url' in b&&String(b.url).includes('buymeacoffee'))).toHaveLength(0);
+      expect(JSON.stringify(panel)).not.toContain(language==='tr'?'Destek ol':'Support Dealio');
       expect(countComponentsV2([panel])).toBeLessThanOrEqual(40);
     }
   });
@@ -191,8 +188,8 @@ describe('Dealio Components V2 UI', () => {
     expect(serialized).toContain(mode === 'home' ? 'Senin istek listen, senin kuralların!' : 'Hesabın ve tercihlerin');
     expect(serialized).toContain(mode === 'home' ? 'İlk kontrol birazdan' : 'Henüz kontrol yapılmadı');
     const rows = panel.toJSON().components.filter((component) => component.type === 1);
-    // Home: check + refresh, then the four tabs.
-    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [2, 4] : [3, 2]);
+    // Home: check + refresh + support link, then the four tabs.
+    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [3, 4] : [3, 3]);
     expect(serialized).not.toContain('↻');
   });
 

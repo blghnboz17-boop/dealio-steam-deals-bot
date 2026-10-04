@@ -11,7 +11,10 @@ import {
   SeparatorSpacingSize,
   TextDisplayBuilder,
   ThumbnailBuilder,
+  escapeMarkdown,
 } from 'discord.js';
+import type { PreparedUserConfiguration } from '../application/user-configuration-service.js';
+import type { UserConfig } from '../domain/user-config.js';
 import type { StatusDashboardResult } from '../application/status-service.js';
 import type { CheckStatus } from '../domain/check-state.js';
 import { languageLocale, type Language } from '../domain/user-config.js';
@@ -19,6 +22,7 @@ import { languageNames, localizer, percentText } from './i18n.js';
 import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { uiCopy } from './ui/copy.js';
+import { messagesFor } from './messages.js';
 import { countryDisplay, panelHeader, tabAccent } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 
@@ -146,6 +150,7 @@ function buildSettingsPanel(
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       button('region', t({ tr: 'Bölge', en: 'Region', de: 'Region', fr: 'Région' }), '🌍'),
       button('language', t({ tr: 'Dil', en: 'Language', de: 'Sprache', fr: 'Langue' }), '🌐'),
+      button('account', t(changeAccountLabel), '👤'),
     ),
   );
   if (options.tabs) {
@@ -171,6 +176,59 @@ function displayCount(value: number | null | undefined, emptyValue: string): str
 
 function maskSteamId(steamId64: string): string {
   return `${steamId64.slice(0, 5)}••••••••${steamId64.slice(-4)}`;
+}
+
+const changeAccountLabel = {
+  tr: 'Steam hesabını değiştir', en: 'Change Steam account', de: 'Steam-Konto wechseln', fr: 'Changer de compte Steam',
+} as const;
+
+/**
+ * The account switch before it is saved: the new profile as Steam shows it, what
+ * stays and what is left behind, then Confirm or Cancel.
+ */
+export function buildAccountChangePanel(
+  prepared: PreparedUserConfiguration,
+  current: UserConfig,
+  sessionId: string,
+  disabled = false,
+): ContainerBuilder {
+  const language = current.language;
+  const t = localizer(language);
+  const messages = messagesFor(language);
+  const profileUrl = `https://steamcommunity.com/profiles/${prepared.steamId64}`;
+  const container = new ContainerBuilder().setAccentColor(dealioBrand.colors.warning);
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(panelHeader('settings', language,
+    t(changeAccountLabel),
+    t({ tr: 'Bu hesabı mı bağlayayım?', en: 'Should I connect this account?', de: 'Soll ich dieses Konto verbinden?', fr: 'Je connecte ce compte ?' }))));
+  container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+  const account = new TextDisplayBuilder().setContent([
+    `👤 **${messages.setupWizardProfileField}:** [${prepared.steamId64}](${profileUrl})`,
+    ...(prepared.profile ? [`🏷️ **${messages.setupWizardProfileNameField}:** ${escapeMarkdown(prepared.profile.personaName)}`] : []),
+    `🌍 **${messages.setupWizardRegionField}:** ${countryDisplay(prepared.storeCountryCode, language)}`,
+  ].join('\n'));
+  container.addSectionComponents(prepared.profile?.avatarUrl
+    ? new SectionBuilder().addTextDisplayComponents(account).setThumbnailAccessory(
+      new ThumbnailBuilder().setURL(prepared.profile.avatarUrl).setDescription(prepared.profile.personaName.slice(0, 100)))
+    : new SectionBuilder().addTextDisplayComponents(account).setButtonAccessory(
+      new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(profileUrl).setLabel('Steam')));
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(t({
+    tr: '> ⚠️ Eski hesabındaki oyunlara koyduğun kurallar, hedef fiyatlar ve bekleyen bildirimler yeni hesaba taşınmaz. Genel indirim oranın, bildirim zamanlaman ve dilin aynı kalır.\n> Yeni listende şu an indirimde olan oyunlar için DM atmam; bundan sonra başlayan indirimleri haber veririm.',
+    en: '> ⚠️ Rules, target prices and waiting alerts for your old account’s games don’t carry over. Your default discount, alert timing and language stay the same.\n> I won’t DM you about games already on sale in the new list; I’ll tell you about sales that start from now on.',
+    de: '> ⚠️ Regeln, Wunschpreise und wartende Benachrichtigungen für die Spiele deines alten Kontos werden nicht übernommen. Dein Standardrabatt, deine Benachrichtigungszeiten und deine Sprache bleiben.\n> Für Spiele, die in der neuen Liste schon reduziert sind, schicke ich keine DM; ich melde Angebote, die ab jetzt beginnen.',
+    fr: '> ⚠️ Les règles, prix cibles et alertes en attente des jeux de ton ancien compte ne sont pas repris. Ta réduction par défaut, tes horaires d’alerte et ta langue restent les mêmes.\n> Je ne t’enverrai pas de MP pour les jeux déjà en promo dans la nouvelle liste ; je te signalerai les promos qui commencent à partir de maintenant.',
+  })));
+  container.addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small));
+  container.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`status-v2:${sessionId}:account-confirm`).setStyle(ButtonStyle.Success).setEmoji('✅')
+      .setLabel(t({ tr: 'Bu hesabı bağla', en: 'Connect this account', de: 'Dieses Konto verbinden', fr: 'Connecter ce compte' }))
+      .setDisabled(disabled),
+    new ButtonBuilder().setCustomId(`status-v2:${sessionId}:account-cancel`).setStyle(ButtonStyle.Secondary).setEmoji('↩️')
+      .setLabel(t({ tr: 'Vazgeç', en: 'Cancel', de: 'Abbrechen', fr: 'Annuler' }))
+      .setDisabled(disabled),
+  ));
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(dealioFooter(language)));
+  assertComponentsV2Limit([container]);
+  return container;
 }
 
 const trackingOn = { tr: 'Takip açık', en: 'Tracking on', de: 'Überwachung aktiv', fr: 'Suivi actif' } as const;

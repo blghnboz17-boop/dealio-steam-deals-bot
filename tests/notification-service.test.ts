@@ -291,6 +291,11 @@ describe('NotificationService', () => {
       [],
       '2026-08-21T00:06:00.000Z',
     );
+    services.repository.markMissingItemsInactive(
+      services.config,
+      [],
+      '2026-08-21T00:36:00.000Z',
+    );
 
     await expect(services.service.deliverPending('discord-user')).resolves.toEqual({
       candidateCount: 0,

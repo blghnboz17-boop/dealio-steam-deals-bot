@@ -16,6 +16,7 @@ describe('loadEnvironment', () => {
       databasePath: './data/wishlist.db',
       pollIntervalHours: 0.5,
       notificationRetryIntervalSeconds: 60,
+      maxUsers: 200,
     });
   });
 
@@ -36,6 +37,7 @@ describe('loadEnvironment', () => {
       databasePath: './data/wishlist.db',
       pollIntervalHours: 0.5,
       notificationRetryIntervalSeconds: 60,
+      maxUsers: 200,
     });
   });
 

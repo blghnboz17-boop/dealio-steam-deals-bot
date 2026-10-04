@@ -115,6 +115,72 @@ describe('settings region flow', () => {
   });
 });
 
+describe('settings account change', () => {
+  const dashboard = {
+    status: 'ready', language: 'tr',
+    config: {
+      discordUserId: 'owner', configurationId: 'config', configVersion: 1, steamId64: '76561198000000000',
+      storeCountryCode: 'TR', language: 'tr', enabled: true, minimumDiscountPercent: 20, dmDeliveryBlockedAt: null,
+    },
+    checkState: null, notificationQueue: { pending: 0, retry: 0, sending: 0, sent: 0, terminalFailed: 0, expired: 0 },
+    latestPriceCurrencies: ['USD'], gameDiscountOverrideCount: 0,
+  };
+
+  it('opens the setup profile form, shows the new account and switches only after confirmation', async () => {
+    const collector = Object.assign(new EventEmitter(), { stop(reason = 'user') { this.emit('end', new Map(), reason); } });
+    const interaction = {
+      id: 'account-flow', user: { id: 'owner' }, locale: 'tr', client: { user: null },
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      editReply: vi.fn().mockResolvedValue({ createMessageComponentCollector: () => collector }),
+      followUp: vi.fn().mockResolvedValue(undefined),
+    };
+    const prepared = { discordUserId: 'owner', steamId64: '76561198000000009', language: 'tr', storeCountryCode: 'TR',
+      profile: { personaName: 'Yeni Hesap', avatarUrl: 'https://avatars.steamstatic.com/a_full.jpg' } };
+    const accountService = {
+      prepareAccountChange: vi.fn().mockResolvedValue(prepared),
+      changeAccount: vi.fn().mockResolvedValue({ config: {}, wishlistLoaded: true }),
+    };
+    const click = (customId: string, extra: object = {}) => {
+      const component = { customId, user: { id: 'owner' }, isButton: () => true, isStringSelectMenu: () => false,
+        deferUpdate: vi.fn().mockResolvedValue(undefined), ...extra };
+      collector.emit('collect', component);
+      return component;
+    };
+    const last = () => JSON.stringify(interaction.editReply.mock.calls.at(-1));
+    const task = handleStatus(interaction as unknown as ChatInputCommandInteraction,
+      { getDashboard: vi.fn().mockReturnValue(dashboard) } as never, {} as never,
+      undefined, undefined, undefined, {}, accountService as never);
+    try {
+      await vi.waitFor(() => expect(collector.listenerCount('collect')).toBe(1));
+      expect(last()).toContain('status-v2:account-flow:account');
+
+      let modal: { custom_id: string; title: string; components: unknown[] } | undefined;
+      click('status-v2:account-flow:account', {
+        showModal: vi.fn(async (built: { toJSON: () => typeof modal }) => { modal = built.toJSON(); }),
+        awaitModalSubmit: vi.fn(async () => ({
+          customId: modal!.custom_id, user: { id: 'owner' }, deferUpdate: vi.fn().mockResolvedValue(undefined),
+          fields: { getTextInputValue: () => 'yenihesap', getStringSelectValues: () => ['TR'] },
+        })),
+      });
+      await vi.waitFor(() => expect(last()).toContain('status-v2:account-flow:account-confirm'));
+      // The same two fields as setup: the Steam profile and the Store country, current region selected.
+      expect(JSON.stringify(modal)).toContain('"custom_id":"steam-profile"');
+      expect(JSON.stringify(modal)).toMatch(/"custom_id":"store-country".*"value":"TR","default":true/);
+      expect(modal!.title).toBe('Steam hesabını değiştir');
+      expect(accountService.prepareAccountChange).toHaveBeenCalledWith('owner', 'yenihesap', 'tr', 'TR');
+      expect(last()).toContain('Yeni Hesap');
+      expect(accountService.changeAccount).not.toHaveBeenCalled();
+
+      click('status-v2:account-flow:account-confirm');
+      await vi.waitFor(() => expect(last()).toContain('Steam hesabın değişti'));
+      expect(accountService.changeAccount).toHaveBeenCalledWith(prepared);
+    } finally {
+      collector.stop();
+      await task;
+    }
+  });
+});
+
 describe('first contact', () => {
   it('greets a newcomer on /dealio with the setup welcome itself, in one message', async () => {
     const collector = Object.assign(new EventEmitter(), { stop(reason = 'user') { this.emit('end', new Map(), reason); } });
