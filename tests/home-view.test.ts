@@ -23,7 +23,7 @@ it.each(['tr', 'en'] as const)('fits the complete home panel and disables nested
     priority: 1, dateAdded: 1700000000, priceObservedAt: '2026-09-12T00:00:00Z',
   };
   const panel = buildHomePanel(result, 'session', {
-    featuredDeal: item, trackedGameCount: 24, eligibleDealCount: 1, disabled: true,
+    featuredDeal: item, trackedGameCount: 24, eligibleDealCount: 1, disabled: true, staleTargetCount: 2,
     notificationPreference: {mode: 'quiet', timezone: 'Europe/Istanbul', quietStart: 1320, quietEnd: 480, digestMinute: null},
   });
   expect(() => assertComponentsV2Limit([panel])).not.toThrow();
@@ -45,4 +45,7 @@ it.each(['tr', 'en'] as const)('fits the complete home panel and disables nested
   expect(serialized).toContain('**6**');
   expect(serialized).not.toContain('NaN');
   expect(serialized).toContain('/steam/apps/570/header.jpg');
+  expect(serialized).toContain(language === 'tr'
+    ? '**2** oyunun hedef fiyatı eski para biriminde'
+    : '**2** games have targets in an old currency');
 });

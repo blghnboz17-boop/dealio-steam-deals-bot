@@ -21,6 +21,8 @@ export interface WishlistItemState {
   readonly discountPercent: number | null;
   readonly lastSeenAt: string;
   readonly observationStatus: WishlistObservationStatus;
+  /** The discount already alerted (or taken as a baseline) in this sale; null when none. */
+  readonly alertedDiscountPercent: number | null;
 }
 
 export interface NotificationCandidate {

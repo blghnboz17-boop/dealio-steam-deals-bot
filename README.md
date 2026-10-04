@@ -91,7 +91,7 @@ Your Steam profile and “Game details” must be public so the wishlist can be 
 
 Dealio checks again **30 minutes after each scan finishes**. When a price change meets your rule, it sends a DM according to your notification schedule. Steam or Discord issues can add delay.
 
-Initial setup may send a summary of existing discounts, rather than a new-sale alert for each one. Saving a target that the current price already meets won't trigger an immediate DM either. Prices use your selected Steam Store currency; check the final price on Steam before buying.
+Initial setup may send a summary of existing discounts, rather than a new-sale alert for each one. Saving a rule, or changing your default discount, while a game already meets it won't trigger a DM either; Dealio alerts when that sale gets clearly better (at least 10 more discount points, or a met target 10% lower). Prices use your selected Steam Store currency; check the final price on Steam before buying.
 
 <a name="commands"></a>
 
@@ -158,7 +158,7 @@ If you've just changed your Steam privacy settings, give it a moment and try aga
 <details>
 <summary><strong>I set a target. Why didn't a DM arrive immediately?</strong></summary>
 
-Saving a rule establishes its starting state. An already-matching offer is visible in the panel; alerts wait for a later qualifying transition. Check the game's rule, mute state, and your notification schedule.
+Saving a rule establishes its starting state. An already-matching offer is visible in the panel; Dealio alerts when the price drops at least 10% further, or when it rises above your target and comes back. Check the game's rule, mute state, and your notification schedule. If your Store region changed currency, save the target again; until then the default discount rule applies.
 
 </details>
 

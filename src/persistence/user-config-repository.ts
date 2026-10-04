@@ -1,4 +1,5 @@
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
+import { rebaselineDiscountAlerts } from './alert-levels.js';
 import { randomUUID } from 'node:crypto';
 import { isLanguage, type Language, type UserConfig } from '../domain/user-config.js';
 import {
@@ -381,6 +382,8 @@ export class UserConfigRepository {
       if (!config) {
         throw new Error('User configuration could not be read after threshold update');
       }
+      // Same as saving a game rule: ongoing sales get a new baseline under the new default.
+      rebaselineDiscountAlerts(this.database, config, { inheritingOnly: true });
       this.database.exec('COMMIT');
       return config;
     } catch (error: unknown) {

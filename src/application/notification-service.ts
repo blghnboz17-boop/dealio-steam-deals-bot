@@ -346,6 +346,18 @@ export class NotificationService {
         return { sentCount: 0, failedCount: 0, cancelled: true };
       }
 
+      // Discord's rate limit means "not now", not a failed delivery: wait as long as
+      // Discord asks and keep every attempt, or a busy sale day could drop alerts.
+      const rateLimitDelayMs = discordRateLimitDelayMs(error);
+      if (rateLimitDelayMs !== null) {
+        this.wishlistStateRepository.deferNotificationBatch(
+          batch,
+          'DISCORD_RATE_LIMITED',
+          new Date(this.now().getTime() + rateLimitDelayMs).toISOString(),
+        );
+        return { sentCount: 0, failedCount: batch.notifications.length, cancelled: false };
+      }
+
       const message = isDiscordDmBlocked(error) ? 'DISCORD_DM_BLOCKED' : redactSecrets(error instanceof Error ? error.message : 'Unknown Discord error');
       const attemptCount = batch.attemptCount + 1;
       const permanentlyBlocked = isDiscordDmBlocked(error);
@@ -418,6 +430,28 @@ export function isPermanentDiscordError(error: unknown): boolean {
 
   const status = 'status' in error ? Number(error.status) : Number.NaN;
   return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
+const minimumRateLimitDelayMs = 5_000;
+const maximumRateLimitDelayMs = 15 * 60 * 1000;
+
+/**
+ * How long Discord asked us to wait, when the error is a rate limit; null otherwise.
+ * discord.js raises RateLimitError (retryAfter / timeToReset in ms) because the REST
+ * client rejects on rate limits; a plain HTTP 429 is handled the same way.
+ */
+export function discordRateLimitDelayMs(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null) {
+    return null;
+  }
+  const record = error as Record<string, unknown>;
+  const isRateLimit = record.name === 'RateLimitError' || Number(record.status) === 429;
+  if (!isRateLimit) {
+    return null;
+  }
+  const requested = [record.retryAfter, record.timeToReset]
+    .find((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+  return Math.min(Math.max(requested ?? minimumRateLimitDelayMs, minimumRateLimitDelayMs), maximumRateLimitDelayMs);
 }
 
 /** Only an explicit recipient delivery error establishes a DM privacy block. */

@@ -91,7 +91,7 @@ Dealio şu an küçük bir grupla deneniyor. Katılmak istersen [beta sayfasınd
 
 Dealio, her tarama bittikten **30 dakika sonra** yeniden kontrol eder. Kuralına uyan bir fiyat değişimi olduğunda, seçtiğin bildirim zamanına göre DM gönderir. Steam veya Discord’da sorun varsa gecikme olabilir.
 
-İlk kurulum mevcut indirimlerin bir özetini gönderebilir; hepsi için ayrı yeni-indirim bildirimi oluşturmaz. Şu anki fiyatın zaten karşıladığı bir hedefi kaydetmek de hemen DM göndermez. Fiyatlar seçtiğin Steam mağazasının para birimindedir; satın alırken son fiyatı Steam’de kontrol et.
+İlk kurulum mevcut indirimlerin bir özetini gönderebilir; hepsi için ayrı yeni-indirim bildirimi oluşturmaz. Bir oyun kuralına zaten uyarken kural kaydetmek ya da genel indirim oranını değiştirmek de DM göndermez; o indirim belirgin şekilde iyileşirse (en az 10 puan daha fazla indirim ya da tutturulmuş hedefte %10 daha düşük fiyat) haber verir. Fiyatlar seçtiğin Steam mağazasının para birimindedir; satın alırken son fiyatı Steam’de kontrol et.
 
 <a name="komutlar"></a>
 
@@ -158,7 +158,7 @@ Steam gizlilik ayarlarını değiştirdiysen biraz bekleyip yeniden dene. Liste 
 <details>
 <summary><strong>Hedef belirledim. Neden hemen DM gelmedi?</strong></summary>
 
-Kural kaydı başlangıç durumunu belirler. Zaten uygun olan teklif panelde gösterilir; bildirim, daha sonraki uygun geçişi bekler. Oyunun kuralını, susturma durumunu ve bildirim zamanını kontrol et.
+Kural kaydı başlangıç durumunu belirler. Zaten uygun olan teklif panelde gösterilir; fiyat %10 daha düşerse ya da hedefinin üstüne çıkıp yeniden inerse DM gelir. Oyunun kuralını, susturma durumunu ve bildirim zamanını kontrol et. Mağaza bölgenin para birimi değiştiyse hedefi yeniden kaydet; o zamana kadar genel indirim kuralın geçerli.
 
 </details>
 

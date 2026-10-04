@@ -106,7 +106,7 @@ describe('SetupService', () => {
     fixture.discountThresholdRepository.setGameOverride(
       oldConfig,
       10,
-      70,
+      40,
       '2026-08-23T00:02:10.000Z',
     );
 
@@ -119,7 +119,7 @@ describe('SetupService', () => {
 
     expect(fixture.userConfigRepository.findByDiscordUserId('discord-user')).toEqual(oldConfig);
     expect(fixture.wishlistStateRepository.findNotificationStatus(oldCandidate)).toBe('candidate');
-    expect(fixture.discountThresholdRepository.findGameOverride(oldConfig, 10)).toBe(70);
+    expect(fixture.discountThresholdRepository.findGameOverride(oldConfig, 10)).toBe(40);
     expect(fixture.sender.sendInitialSummary).not.toHaveBeenCalled();
     fixture.database.close();
   });

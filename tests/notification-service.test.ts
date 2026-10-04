@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   NotificationDeliveryCancelledError,
+  discordRateLimitDelayMs,
   NotificationService,
   type NotificationSender,
 } from '../src/application/notification-service.js';
@@ -233,9 +234,6 @@ describe('NotificationService', () => {
     async (observationStatus) => {
       const sender = createSender();
       const services = createService('en', sender);
-      services.database.prepare(
-        'UPDATE user_config SET minimum_discount_percent = 70 WHERE discord_user_id = ?',
-      ).run('discord-user');
       services.repository.markObservationStatus(
         services.config,
         [services.candidate.appId],
@@ -282,6 +280,28 @@ describe('NotificationService', () => {
       services.database.close();
     },
   );
+
+  it('retires a waiting alert whose sale no longer meets the rule', async () => {
+    const sender = createSender();
+    const services = createService('en', sender);
+    services.database.prepare(
+      'UPDATE user_config SET minimum_discount_percent = 70 WHERE discord_user_id = ?',
+    ).run('discord-user');
+    const repeated = services.repository.recordObservation(services.config, {
+      item: {
+        ...saleItem,
+        price: { ...saleItem.price!, currency: 'EUR', initialMinor: 2_000, finalMinor: 800, discountPercent: 60 },
+      },
+      saleKey: 'EUR:2000:800:60',
+      observedAt: '2026-08-21T00:07:00.000Z',
+    });
+
+    expect(repeated.notificationCandidate).toBeNull();
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('expired');
+    await expect(services.service.deliverPending('discord-user')).resolves.toMatchObject({ sentCount: 0 });
+    expect(sender.send).not.toHaveBeenCalled();
+    services.database.close();
+  });
 
   it('expires a pending sale when a successful snapshot confirms it is missing', async () => {
     const sender = createSender();
@@ -625,6 +645,53 @@ describe('NotificationService', () => {
     expect(finalResult).toEqual({ candidateCount: 0, sentCount: 0, failedCount: 0 });
     expect(sender.send).toHaveBeenCalledTimes(2);
     services.database.close();
+  });
+
+  it('waits out Discord rate limits without using up delivery attempts', async () => {
+    const rateLimited = Object.assign(new Error('rate limited'), { name: 'RateLimitError', retryAfter: 30_000 });
+    const send = vi.fn()
+      .mockRejectedValueOnce(rateLimited)
+      .mockRejectedValueOnce(rateLimited)
+      .mockRejectedValueOnce(rateLimited)
+      .mockResolvedValue(undefined);
+    const sender = createSender(send);
+    const services = createService('en', sender);
+    let now = new Date('2026-08-21T00:10:00.000Z');
+    const service = new NotificationService(
+      services.userConfigRepository,
+      services.repository,
+      sender,
+      { now: () => now, maxAttempts: 2, retryBaseDelayMs: 1_000 },
+    );
+    const attempts = () => services.database.prepare(
+      'SELECT attempt_count, next_attempt_at, last_error FROM notification_log',
+    ).get();
+
+    for (let round = 0; round < 3; round += 1) {
+      await service.deliverPending('discord-user');
+      expect(attempts()).toEqual({
+        attempt_count: 0,
+        next_attempt_at: new Date(now.getTime() + 30_000).toISOString(),
+        last_error: 'DISCORD_RATE_LIMITED',
+      });
+      // Not due yet: nothing is sent before Discord's wait is over.
+      await service.deliverPending('discord-user');
+      expect(send).toHaveBeenCalledTimes(round + 1);
+      now = new Date(now.getTime() + 30_000);
+    }
+
+    await expect(service.deliverPending('discord-user')).resolves.toMatchObject({ sentCount: 1 });
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('sent');
+    services.database.close();
+  });
+
+  it('reads the wait Discord asks for and keeps it within sensible bounds', () => {
+    expect(discordRateLimitDelayMs({ name: 'RateLimitError', retryAfter: 12_000 })).toBe(12_000);
+    expect(discordRateLimitDelayMs({ name: 'RateLimitError', timeToReset: 100 })).toBe(5_000);
+    expect(discordRateLimitDelayMs({ status: 429 })).toBe(5_000);
+    expect(discordRateLimitDelayMs({ name: 'RateLimitError', retryAfter: 3_600_000 })).toBe(900_000);
+    expect(discordRateLimitDelayMs(new Error('network'))).toBeNull();
+    expect(discordRateLimitDelayMs({ status: 403, code: 50_007 })).toBeNull();
   });
 
   it('claims a candidate so concurrent delivery cannot send two DMs', async () => {

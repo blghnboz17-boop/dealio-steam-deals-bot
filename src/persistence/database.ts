@@ -87,6 +87,7 @@ export function createDatabase(databasePath: string): DatabaseSync {
     migrateDmConsentAndDelivery(database);
     migrateAssistant(database);
     migrateLanguages(database);
+    migrateAlertLevels(database);
     return database;
   } catch (error: unknown) {
     try {
@@ -98,6 +99,78 @@ export function createDatabase(databasePath: string): DatabaseSync {
       );
     }
     throw new DatabaseInitializationError(error, true);
+  }
+}
+
+/**
+ * v12 records how far an alert already went in an ongoing sale: the discount
+ * (wishlist_item_state) and the target-rule price (game_rule) that were alerted or
+ * taken as a baseline. A clearly deeper drop in the same sale can then alert again.
+ * Existing sales are backfilled conservatively, so the upgrade sends nothing by itself.
+ */
+function migrateAlertLevels(database: DatabaseSync): void {
+  const versionRow = database.prepare('PRAGMA user_version').get() as {
+    user_version: number;
+  };
+  if (versionRow.user_version >= 12) {
+    return;
+  }
+
+  const hasColumn = (table: string, column: string): boolean => (database.prepare(`PRAGMA table_info(${table})`)
+    .all() as Array<{ name: string }>).some((row) => row.name === column);
+  const hasTable = (table: string): boolean => database.prepare(
+    "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?",
+  ).get(table) !== undefined;
+
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    // Backfills need the columns of the v2+ sale-episode schema.
+    const episodeSchema = hasTable('notification_log') && hasColumn('notification_log', 'sale_episode_id')
+      && hasColumn('notification_log', 'config_version') && hasTable('wishlist_item_state')
+      && hasColumn('wishlist_item_state', 'config_version') && hasColumn('wishlist_item_state', 'notification_eligible');
+    if (hasTable('wishlist_item_state') && !hasColumn('wishlist_item_state', 'alerted_discount_percent')) {
+      database.exec(`
+        ALTER TABLE wishlist_item_state ADD COLUMN alerted_discount_percent INTEGER
+          CHECK (alerted_discount_percent IS NULL OR alerted_discount_percent BETWEEN 0 AND 100);
+      `);
+    }
+    if (episodeSchema) {
+      database.exec(`
+        UPDATE wishlist_item_state
+        SET alerted_discount_percent = COALESCE(
+          (SELECT MAX(notification.discount_percent) FROM notification_log AS notification
+           WHERE notification.discord_user_id = wishlist_item_state.discord_user_id
+             AND notification.config_version = wishlist_item_state.config_version
+             AND notification.app_id = wishlist_item_state.app_id
+             AND notification.sale_episode_id = wishlist_item_state.sale_episode_id),
+          CASE WHEN notification_eligible = 0 THEN discount_percent END)
+        WHERE on_sale = 1 AND alerted_discount_percent IS NULL;
+      `);
+    }
+    if (hasTable('game_rule') && !hasColumn('game_rule', 'alerted_minor')) {
+      database.exec(`
+        ALTER TABLE game_rule ADD COLUMN alerted_minor INTEGER
+          CHECK (alerted_minor IS NULL OR alerted_minor >= 0);
+      `);
+    }
+    if (episodeSchema && hasTable('game_rule')) {
+      database.exec(`
+        UPDATE game_rule
+        SET alerted_minor = (
+          SELECT state.final_price_minor FROM wishlist_item_state AS state
+          WHERE state.discord_user_id = game_rule.discord_user_id
+            AND state.config_version = game_rule.config_version
+            AND state.app_id = game_rule.app_id)
+        WHERE eligible = 1 AND alerted_minor IS NULL;
+      `);
+    }
+    database.exec('PRAGMA user_version = 12');
+    database.exec('COMMIT');
+  } catch (error: unknown) {
+    if (database.isTransaction) {
+      database.exec('ROLLBACK');
+    }
+    throw error;
   }
 }
 
