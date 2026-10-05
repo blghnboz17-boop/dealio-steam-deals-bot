@@ -71,7 +71,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       throw new Error('Configuration changed');
     const selected=items.find(i=>i.appId===view.selectedAppId);
     const historyKey=selected?.price?.currency?`${current.storeCountryCode}:${selected.appId}:${selected.price.currency}`:null;
-    return {config:current,items,errors,capturedAt,
+    return {config:current,items,errors,capturedAt,pollIntervalHours:service.pollIntervalHours,
       rules:view.screen==='wishlist'||view.screen==='detail'?service.repository.rules(current):new Map(),
       preference:service.repository.preference(user),history:view.screen==='history'?service.repository.history(user):[],
       ...(view.screen==='detail'&&service.priceHistory&&historyKey?{priceHistory:histories.get(historyKey)??{status:'loading'}}:{})};

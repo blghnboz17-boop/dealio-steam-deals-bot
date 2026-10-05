@@ -3,12 +3,7 @@ import { MessageFlags } from 'discord.js';
 import { commands } from '../src/discord/register-commands.js';
 import { handleCheck } from '../src/discord/commands/check.js';
 import { handleSetup } from '../src/discord/commands/setup.js';
-import { handleRegion } from '../src/discord/commands/region.js';
-import { handleTestNotification } from '../src/discord/commands/test-notification.js';
-import {
-  findStoreCountryChoices,
-  handleStoreCountryAutocomplete,
-} from '../src/discord/store-country-options.js';
+import { findStoreCountryChoices } from '../src/discord/store-country-options.js';
 import { SteamWishlistError } from '../src/domain/steam.js';
 import { SteamIdentityError } from '../src/domain/steam-identity.js';
 
@@ -18,28 +13,12 @@ describe('Discord slash commands', () => {
   );
 
   it('registers the supported commands', () => {
+    // Everything else lives in the /dealio panel.
     expect(commands.map((command) => command.name)).toEqual([
       'dealio',
       'setup',
-      'region',
-      'status',
-      'check',
-      'wishlist',
-      'test-notification',
       'delete-data',
     ]);
-  });
-
-  it('registers the test notification command without options', () => {
-    const command = commands.find((candidate) => candidate.name === 'test-notification');
-
-    expect(command?.toJSON()).toMatchObject({
-      name: 'test-notification',
-      description_localizations: {
-        tr: 'Kendine örnek bir indirim bildirimi DM olarak gönder',
-      },
-      options: [],
-    });
   });
 
   it('uses an option-free interactive confirmation flow for data deletion', () => {
@@ -88,11 +67,7 @@ describe('Discord slash commands', () => {
     expect(service.configure).not.toHaveBeenCalled();
   });
 
-  it('registers autocomplete country selection for setup and region', () => {
-    const region = commands.find((command) => command.name === 'region')?.toJSON();
-    expect(region?.options).toEqual([
-      expect.objectContaining({ name: 'country', required: true, autocomplete: true }),
-    ]);
+  it('finds Store countries by name or code for the region search', () => {
     expect(findStoreCountryChoices('united st', 'en')[0]).toEqual({
       name: 'United States (US)',
       value: 'US',
@@ -102,44 +77,6 @@ describe('Discord slash commands', () => {
       value: 'DE',
     });
     expect(findStoreCountryChoices('', 'en')).toHaveLength(25);
-  });
-
-  it('responds to store-country autocomplete without an external request', async () => {
-    const interaction = {
-      commandName: 'setup',
-      locale: 'en-US',
-      options: { getFocused: vi.fn().mockReturnValue({ name: 'store-country', value: 'jap' }) },
-      respond: vi.fn().mockResolvedValue(undefined),
-    };
-
-    await handleStoreCountryAutocomplete(interaction as never);
-
-    expect(interaction.respond).toHaveBeenCalledWith(expect.arrayContaining([
-      { name: 'Japan (JP)', value: 'JP' },
-    ]));
-  });
-
-  it('changes the configured Steam Store country through /region', async () => {
-    const interaction = {
-      user: { id: 'discord-user' },
-      locale: 'en-US',
-      options: { getString: vi.fn().mockReturnValue('DE') },
-      deferReply: vi.fn().mockResolvedValue(undefined),
-      editReply: vi.fn().mockResolvedValue(undefined),
-    };
-    const service = {
-      get: vi.fn().mockReturnValue({
-        language: 'en', storeCountryCode: 'US', configVersion: 1,
-      }),
-      setStoreCountry: vi.fn().mockResolvedValue({
-        language: 'en', storeCountryCode: 'DE', configVersion: 2,
-      }),
-    };
-
-    await handleRegion(interaction as never, service as never);
-
-    expect(service.setStoreCountry).toHaveBeenCalledWith('discord-user', 'DE');
-    expect(componentText(interaction.editReply.mock.calls.at(-1)?.[0])).toContain('🇩🇪 Germany');
   });
 
   it('explains an inaccessible wishlist after a manual check', async () => {
@@ -416,74 +353,5 @@ describe('Discord slash commands', () => {
     expect(content).toContain(expectedText);
     expect(content).not.toContain('secret-api-key');
     expect(content).not.toContain('endpoint');
-  });
-
-  it('sends a test notification only to the invoking user in the configured language', async () => {
-    const interaction = {
-      user: { id: 'invoking-user' },
-      locale: 'en-US',
-      deferReply: vi.fn().mockResolvedValue(undefined),
-      editReply: vi.fn().mockResolvedValue(undefined),
-    };
-    const userConfigurationService = {
-      get: vi.fn().mockReturnValue({ language: 'tr' }),
-    };
-    const testNotificationService = {
-      send: vi.fn().mockResolvedValue(undefined),
-    };
-
-    await handleTestNotification(
-      interaction as never,
-      userConfigurationService as never,
-      testNotificationService as never,
-    );
-
-    expect(interaction.deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
-    expect(testNotificationService.send).toHaveBeenCalledWith('invoking-user', 'tr', 'TR');
-    expect(componentText(interaction.editReply.mock.calls[0]?.[0])).toContain('Deneme mesajı yolda');
-  });
-
-  it('uses the Discord locale when the user has no saved configuration', async () => {
-    const interaction = {
-      user: { id: 'invoking-user' },
-      locale: 'en-GB',
-      deferReply: vi.fn().mockResolvedValue(undefined),
-      editReply: vi.fn().mockResolvedValue(undefined),
-    };
-    const testNotificationService = { send: vi.fn().mockResolvedValue(undefined) };
-
-    await handleTestNotification(
-      interaction as never,
-      { get: vi.fn().mockReturnValue(null) } as never,
-      testNotificationService as never,
-    );
-
-    expect(testNotificationService.send).toHaveBeenCalledWith('invoking-user', 'en', 'TR');
-    expect(componentText(interaction.editReply.mock.calls[0]?.[0])).toContain('Test message on its way');
-  });
-
-  it('hides technical Discord errors behind an understandable localized result', async () => {
-    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const interaction = {
-      user: { id: 'invoking-user' },
-      locale: 'tr',
-      deferReply: vi.fn().mockResolvedValue(undefined),
-      editReply: vi.fn().mockResolvedValue(undefined),
-    };
-    const technicalMessage = 'Discord API 50007: secret diagnostic';
-
-    try {
-      await handleTestNotification(
-        interaction as never,
-        { get: vi.fn().mockReturnValue(null) } as never,
-        { send: vi.fn().mockRejectedValue(new Error(technicalMessage)) } as never,
-      );
-    } finally {
-      errorLog.mockRestore();
-    }
-
-    const reply = componentText(interaction.editReply.mock.calls[0]?.[0]);
-    expect(reply).toContain('geçici bir sorun');
-    expect(reply).not.toContain(technicalMessage);
   });
 });

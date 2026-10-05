@@ -99,16 +99,11 @@ Initial setup may send a summary of existing discounts, rather than a new-sale a
 
 | Command | Purpose |
 | :--- | :--- |
-| `/dealio` | Your home: deals, tracking, and personal controls |
+| `/dealio` | Your panel: 🏠 Home, 🎮 Wishlist, 🔔 Alerts and ⚙️ Settings |
 | `/setup` | Connect your Steam profile and choose your preferences |
-| `/wishlist` | Browse, search, set targets, mute games, and inspect price observations |
-| `/status` | Account settings, global discount threshold, and notification status |
-| `/check` | Request a check, subject to a short cooldown |
-| `/region` | Choose your Steam Store country |
-| `/test-notification` | Send yourself a test alert built from a game currently on sale on your wishlist |
 | `/delete-data` | Delete your active account data after confirmation |
 
-Everything except deletion is also in the `/dealio` panel: 🏠 Home, 🎮 Wishlist, 🔔 Alerts and ⚙️ Settings, where you can also change your region, language or Steam account.
+Everything else is in the `/dealio` panel: browse and search your wishlist, set targets or mute games, choose when alerts arrive, check Steam now, send a test DM, and change your region, language or Steam account in ⚙️ Settings (which also has *Delete my data*).
 
 Panels are private and bound to the person who opened them. After a timeout or bot restart, open a fresh command to continue.
 
@@ -140,7 +135,7 @@ Give it a moment, then try the command once more. If a cooldown is shown, wait f
 <details>
 <summary><strong>The bot works, but I'm not getting DMs. What should I check?</strong></summary>
 
-Start with `/test-notification`. If the sample doesn't arrive either, check that you haven't blocked the bot and that you allow DMs from your shared server. If alerts were paused because DMs were blocked, re-enable them in `/dealio` → ⚙️ Settings after fixing the setting.
+Start with **Test DM** in `/dealio` → ⚙️ Settings. If the sample doesn't arrive either, check that you haven't blocked the bot and that you allow DMs from your shared server. If tracking was paused because DMs were blocked, press **Resume tracking** in ⚙️ Settings after fixing the setting.
 
 If the test arrives but a sale alert doesn't, check your notification status in `/dealio` → ⚙️ Settings, the game's target or discount threshold, its mute setting, and your quiet hours or daily digest. A test DM confirms you can receive messages; it doesn't mean every game currently qualifies for an alert.
 
@@ -172,7 +167,7 @@ Open `/dealio` → ⚙️ Settings → **Change Steam account**. The same profil
 <details>
 <summary><strong>Can I pause alerts without deleting my setup?</strong></summary>
 
-Yes. Use the notification toggle in `/status`. Your settings remain available. Manual `/check` still works while automatic notifications are disabled.
+Yes. Press **Pause tracking** in `/dealio` → ⚙️ Settings. Your settings remain available, and **Check Steam now** on 🏠 Home still works while tracking is paused.
 
 </details>
 

@@ -99,16 +99,11 @@ Dealio, her tarama bittikten **30 dakika sonra** yeniden kontrol eder. Kuralına
 
 | Komut | İşlev |
 | :--- | :--- |
-| `/dealio` | Ana ekran: fırsatlar, takip ve kişisel kontroller |
+| `/dealio` | Panelin: 🏠 Ana sayfa, 🎮 İstek listem, 🔔 Bildirimler ve ⚙️ Ayarlar |
 | `/setup` | Steam profilini bağla, tercihlerini belirle |
-| `/wishlist` | Oyun ara, hedef belirle, sustur ve fiyat gözlemlerini incele |
-| `/status` | Hesap, genel indirim eşiği ve bildirim durumu |
-| `/check` | Kısa bekleme sınırına tabi olarak kontrol iste |
-| `/region` | Steam Store ülkeni seç |
-| `/test-notification` | Wishlistinde şu an indirimde olan bir oyunla kendine test bildirimi gönder |
 | `/delete-data` | Onayından sonra aktif hesap verilerini sil |
 
-Silme dışındaki her şey `/dealio` panelinde de var: 🏠 Ana sayfa, 🎮 İstek listem, 🔔 Bildirimler ve ⚙️ Ayarlar. Bölgeni, dilini ya da Steam hesabını Ayarlar’dan değiştirebilirsin.
+Geri kalan her şey `/dealio` panelinde: istek listende gezin ve ara, hedef koy ya da oyun sustur, bildirimlerin ne zaman geleceğini seç, Steam’de hemen kontrol et, deneme DM’i gönder; bölgeni, dilini ya da Steam hesabını ⚙️ Ayarlar’dan değiştir (orada *Verilerimi sil* butonu da var).
 
 Paneller sana özeldir; düğmeler paneli açan kullanıcıya bağlıdır. Süre dolunca veya bot yeniden başlayınca yeni bir komut açarak devam edebilirsin.
 
@@ -140,7 +135,7 @@ Biraz bekleyip komutu bir kez daha dene; bekleme süresi gösteriliyorsa dolmas�
 <details>
 <summary><strong>Bot çalışıyor ama DM gelmiyor. Neyi kontrol etmeliyim?</strong></summary>
 
-Önce `/test-notification` ile bir örnek mesaj iste. O da gelmiyorsa botu engellemediğini ve ortak sunucudan DM almaya izin verdiğini kontrol et. Bildirimler DM engeli nedeniyle duraklatılmışsa ayarı düzelttikten sonra `/dealio` → ⚙️ Ayarlar üzerinden yeniden aç.
+Önce `/dealio` → ⚙️ Ayarlar’daki **Test DM** ile bir örnek mesaj iste. O da gelmiyorsa botu engellemediğini ve ortak sunucudan DM almaya izin verdiğini kontrol et. Takip DM engeli nedeniyle durdurulduysa ayarı düzelttikten sonra ⚙️ Ayarlar’da **Takibi sürdür**’e bas.
 
 Test mesajı geliyor ama indirim bildirimi gelmiyorsa `/dealio` → ⚙️ Ayarlar içindeki bildirim durumuna, oyunun hedef fiyatına veya indirim eşiğine, susturma seçeneğine ve sessiz saat/günlük özet ayarlarına bak. Test DM’si mesaj alabileceğini gösterir; her oyunun o anda bildirim koşulunu karşıladığı anlamına gelmez.
 
@@ -172,7 +167,7 @@ Kural kaydı başlangıç durumunu belirler. Zaten uygun olan teklif panelde gö
 <details>
 <summary><strong>Kurulumumu silmeden bildirimleri durdurabilir miyim?</strong></summary>
 
-Evet. `/status` içindeki bildirim düğmesini kullan. Ayarların korunur. Otomatik bildirimler kapalıyken manuel `/check` çalışmaya devam eder.
+Evet. `/dealio` → ⚙️ Ayarlar’da **Takibi durdur**’a bas. Ayarların korunur; takip durmuşken de 🏠 Ana sayfadaki **Steam’de şimdi kontrol et** çalışır.
 
 </details>
 

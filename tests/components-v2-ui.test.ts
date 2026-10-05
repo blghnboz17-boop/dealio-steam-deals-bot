@@ -188,8 +188,9 @@ describe('Dealio Components V2 UI', () => {
     expect(serialized).toContain(mode === 'home' ? 'Senin istek listen, senin kuralların!' : 'Hesabın ve tercihlerin');
     expect(serialized).toContain(mode === 'home' ? 'İlk kontrol birazdan' : 'Henüz kontrol yapılmadı');
     const rows = panel.toJSON().components.filter((component) => component.type === 1);
-    // Home: check + refresh + support link, then the four tabs.
-    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [3, 4] : [3, 3]);
+    // Home: check + support link, then the four tabs. Settings: tracking, discount, test DM;
+    // region, language, account, delete.
+    expect(rows.map((row) => row.components.length)).toEqual(mode === 'home' ? [2, 4] : [3, 4]);
     expect(serialized).not.toContain('↻');
   });
 

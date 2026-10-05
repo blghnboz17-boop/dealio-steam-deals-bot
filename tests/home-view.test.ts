@@ -28,7 +28,7 @@ it.each(['tr', 'en'] as const)('fits the complete home panel and disables nested
   });
   expect(() => assertComponentsV2Limit([panel])).not.toThrow();
   const serialized = JSON.stringify(panel.toJSON());
-  for (const action of ['tab-home', 'tab-games', 'tab-alerts', 'tab-settings', 'check', 'refresh']) {
+  for (const action of ['tab-home', 'tab-games', 'tab-alerts', 'tab-settings', 'check']) {
     expect(serialized).toContain('dealio:session:' + action);
   }
   const controls: {disabled?:boolean}[] = [];
@@ -37,7 +37,9 @@ it.each(['tr', 'en'] as const)('fits the complete home panel and disables nested
     if (value && value.type === 2) (value.style === 5 ? links : controls).push(value);
     return value;
   });
-  expect(controls).toHaveLength(6);
+  expect(controls).toHaveLength(5);
+  // A fresh Steam check is the only Home action; there is no second "refresh" button.
+  expect(serialized).not.toContain('dealio:session:refresh');
   // The support link lives here, on the panel, and never in alert DMs.
   expect(links).toEqual([expect.objectContaining({url: 'https://buymeacoffee.com/dealio'})]);
   expect(controls.every(control => control.disabled)).toBe(true);

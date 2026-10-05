@@ -93,7 +93,7 @@ describe('Discord command registration', () => {
   it('fails startup verification when Discord GET omits a deployed command', async () => {
     const put = vi.fn().mockResolvedValue(discordCommands);
     const get = vi.fn().mockResolvedValue(
-      discordCommands.filter((command) => command.name !== 'wishlist'),
+      discordCommands.filter((command) => command.name !== 'delete-data'),
     );
 
     await expect(registerGlobalCommands(
@@ -102,7 +102,7 @@ describe('Discord command registration', () => {
       undefined,
       vi.fn(),
     )).rejects.toThrow(
-      'Discord global command verification failed; missing commands: wishlist',
+      'Discord global command verification failed; missing commands: delete-data',
     );
   });
 

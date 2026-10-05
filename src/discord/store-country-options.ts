@@ -1,11 +1,9 @@
-import type { AutocompleteInteraction } from 'discord.js';
 import {
   storeCountryCodes,
   storeCountryLabel,
   type StoreCountryCode,
 } from '../domain/store-country.js';
 import type { Language } from '../domain/user-config.js';
-import { languageFromDiscordLocale } from './language.js';
 
 function searchable(value: string): string {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('en-US');
@@ -29,15 +27,4 @@ export function findStoreCountryChoices(
     })
     .slice(0, Math.max(0, Math.min(25, limit)))
     .map(({ code, label }) => ({ name: label, value: code }));
-}
-
-export async function handleStoreCountryAutocomplete(
-  interaction: AutocompleteInteraction,
-): Promise<void> {
-  const focused = interaction.options.getFocused(true);
-  const supported = (interaction.commandName === 'setup' && focused.name === 'store-country')
-    || (interaction.commandName === 'region' && focused.name === 'country');
-  await interaction.respond(supported
-    ? findStoreCountryChoices(String(focused.value), languageFromDiscordLocale(interaction.locale))
-    : []);
 }

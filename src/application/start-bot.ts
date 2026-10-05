@@ -186,7 +186,8 @@ export async function startBot(
       },
     });
     const assistantService = new AssistantService(wishlistStateRepository.assistant,userConfigRepository,userOperationCoordinator,
-      config=>testNotificationService.send(config.discordUserId,config.language,config.storeCountryCode),priceHistory);
+      config=>testNotificationService.send(config.discordUserId,config.language,config.storeCountryCode),priceHistory,
+      environment.pollIntervalHours);
     const wishlistViewService = new WishlistViewService(
       userConfigRepository,
       steamClient,

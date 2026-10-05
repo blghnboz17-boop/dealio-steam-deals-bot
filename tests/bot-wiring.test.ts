@@ -21,32 +21,16 @@ const mocks = vi.hoisted(() => ({
   retryStart: vi.fn(),
   retryStop: vi.fn(async () => undefined),
   setup: vi.fn(async () => undefined),
-  region: vi.fn(async () => undefined),
-  status: vi.fn(async () => undefined),
-  check: vi.fn(async () => undefined),
-  wishlist: vi.fn(async () => undefined),
-  testNotification: vi.fn(async () => undefined),
   deleteData: vi.fn(async () => undefined),
   dealio: vi.fn(async () => undefined),
   navigate: vi.fn(async () => undefined),
-  autocomplete: vi.fn(async () => undefined),
   createClient: vi.fn(),
 }));
 
 vi.mock('../src/discord/register-commands.js', () => ({ registerCommands: mocks.registerCommands }));
 vi.mock('../src/discord/commands/setup.js', () => ({ handleSetup: mocks.setup }));
-vi.mock('../src/discord/commands/region.js', () => ({ handleRegion: mocks.region }));
-vi.mock('../src/discord/commands/status.js', () => ({ handleStatus: mocks.status }));
 vi.mock('../src/discord/commands/dealio.js', () => ({ handleDealio: mocks.dealio, createDealioNavigator: () => mocks.navigate }));
-vi.mock('../src/discord/commands/check.js', () => ({ handleCheck: mocks.check }));
-vi.mock('../src/discord/commands/wishlist.js', () => ({ handleWishlist: mocks.wishlist }));
-vi.mock('../src/discord/commands/test-notification.js', () => ({
-  handleTestNotification: mocks.testNotification,
-}));
 vi.mock('../src/discord/commands/delete-data.js', () => ({ handleDeleteData: mocks.deleteData }));
-vi.mock('../src/discord/store-country-options.js', () => ({
-  handleStoreCountryAutocomplete: mocks.autocomplete,
-}));
 vi.mock('../src/application/scheduler.js', () => ({
   WishlistScheduler: class {
     public readonly start = mocks.wishlistStart;
@@ -275,11 +259,6 @@ describe('bot wiring', () => {
       bannerUrl: undefined,
       pollIntervalHours: 6,
     }, { navigate: mocks.navigate }]],
-    ['region', mocks.region, [expect.any(UserConfigurationService)]],
-    ['status', mocks.status, [expect.any(StatusService), expect.any(UserConfigurationService), expect.any(AbortSignal), expect.any(DiscountThresholdService), expect.any(TestNotificationService), { navigate: mocks.navigate }, expect.any(SetupService)]],
-    ['check', mocks.check, [expect.any(CheckService), expect.any(StatusService), expect.any(NotificationService), { navigate: mocks.navigate, lifecycleSignal: expect.any(AbortSignal) }]],
-    ['wishlist', mocks.wishlist, [expect.any(WishlistViewService), expect.any(AbortSignal), expect.any(DiscountThresholdService), { navigate: mocks.navigate }]],
-    ['test-notification', mocks.testNotification, [expect.any(UserConfigurationService), expect.any(TestNotificationService)]],
     ['delete-data', mocks.deleteData, [expect.any(UserConfigurationService), expect.any(SetupService), expect.any(AbortSignal), {
       bannerUrl: undefined,
       pollIntervalHours: 6,
@@ -295,6 +274,20 @@ describe('bot wiring', () => {
 
     expect(handler).toHaveBeenCalledWith(input, ...dependencies);
   });
+
+  it.each(['region', 'status', 'check', 'wishlist', 'test-notification'])(
+    'opens the Dealio panel for the retired /%s shortcut', async (name) => {
+      const { client } = await launch();
+      const input = interaction({ commandName: name });
+      client.emit(Events.InteractionCreate, input);
+      await vi.waitFor(() => expect(mocks.dealio).toHaveBeenCalledOnce());
+      expect(mocks.dealio).toHaveBeenCalledWith(input, expect.objectContaining({
+        statusService: expect.any(StatusService),
+        lifecycleSignal: expect.any(AbortSignal),
+      }), { navigate: mocks.navigate });
+      expect(input.reply).not.toHaveBeenCalled();
+    },
+  );
 
   it('routes /dealio with the shared UI services', async () => {
     const { client } = await launch();
@@ -336,7 +329,7 @@ describe('bot wiring', () => {
     }));
   });
 
-  it('ignores interactions that are neither autocomplete nor chat commands', async () => {
+  it('ignores interactions that are not chat commands', async () => {
     const { client } = await launch();
     const input = interaction({ isChatInputCommand: () => false });
 
@@ -345,20 +338,6 @@ describe('bot wiring', () => {
 
     expect(input.reply).not.toHaveBeenCalled();
     for (const handler of commandCases.map((entry) => entry[1])) expect(handler).not.toHaveBeenCalled();
-  });
-
-  it.each([false, true])('responds with no autocomplete choices after failure only when responded=%s', async (responded) => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    mocks.autocomplete.mockRejectedValueOnce(new Error('autocomplete failed'));
-    const { client } = await launch();
-    const input = interaction({ responded, isAutocomplete: () => true, isChatInputCommand: () => false });
-
-    client.emit(Events.InteractionCreate, input);
-    await vi.waitFor(() => expect(mocks.autocomplete).toHaveBeenCalledOnce());
-    await Promise.resolve();
-
-    if (responded) expect(input.respond).not.toHaveBeenCalled();
-    else expect(input.respond).toHaveBeenCalledWith([]);
   });
 
   it.each([

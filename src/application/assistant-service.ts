@@ -9,7 +9,9 @@ export class AssistantService {
   constructor(public readonly repository: AssistantRepository, private readonly users: UserConfigRepository,
     private readonly coordinator: UserOperationCoordinator,
     private readonly sendTest?: (config:UserConfig)=>Promise<void>,
-    public readonly priceHistory?: GameHistorySource) {}
+    public readonly priceHistory?: GameHistorySource,
+    /** The configured check interval, shown to users as it really is. */
+    public readonly pollIntervalHours?: number) {}
   config(user:string) { return this.users.findByDiscordUserId(user); }
   async rule(user:string,identity:string,appId:number,rule:Omit<GameRule,'revision'>,version:number):Promise<void> {
     await this.coordinator.runExclusive(user,()=>{
