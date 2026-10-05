@@ -192,26 +192,6 @@ export async function handleDealio(
       ).catch((error: unknown) => safeLogger.error('Dealio home setup navigation failed', error));
       return;
     }
-    if (action === 'refresh') {
-      const acknowledgement = acknowledge();
-      void operations.enqueue(acknowledgement, async () => {
-        current = services.statusService.getDashboard(interaction.user.id, fallbackLanguage);
-        const refreshed = current.status === 'ready'
-          ? buildStatusV2Panel(current, interaction.id, { mode: 'home', bannerUrl, avatarUrl, ...featured() })
-          : buildNoticePanel(
-              current.language,
-              current.status === 'not-configured' ? 'warning' : 'danger',
-              current.status === 'not-configured'
-                ? uiCopy(current.language).notSetUpTitle
-                : uiCopy(current.language).detailsUnavailableTitle,
-              current.status === 'not-configured'
-                ? messagesFor(current.language).statusNotConfigured
-                : messagesFor(current.language).statusDashboardUnavailable,
-            );
-        await editPanel({ components: [refreshed] });
-      });
-      return;
-    }
     void operations.enqueue(acknowledge(), async () => undefined);
   });
 

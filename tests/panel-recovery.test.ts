@@ -37,26 +37,24 @@ function click(prefix: string, action: string) {
   };
 }
 describe('dashboard recovery', () => {
-  it.each(['dealio', 'status-v2'])('%s remains usable after a transient update failure', async (kind) => {
+  it('settings remain usable after a transient update failure', async () => {
+    const kind = 'status-v2';
     const f = fixture();
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const setEnabled = vi.fn().mockRejectedValueOnce(new Error('database busy')).mockResolvedValue(null);
-    const handling = kind === 'dealio'
-      ? handleDealio(f.interaction as never, { statusService: f.statusService } as never)
-      : handleStatus(f.interaction as never, f.statusService as never, { setEnabled } as never);
+    const handling = handleStatus(f.interaction as never, f.statusService as never, { setEnabled } as never);
     try {
       await vi.waitFor(() => expect(f.createMessageComponentCollector).toHaveBeenCalledOnce());
-      if (kind === 'dealio') f.interaction.editReply.mockRejectedValueOnce(new Error('Discord unavailable'));
-      f.collector.emit('collect', click(kind, kind === 'dealio' ? 'refresh' : 'disable'));
+      f.collector.emit('collect', click(kind, 'disable'));
       await vi.waitFor(() => expect(f.interaction.followUp).toHaveBeenCalledOnce());
-      f.collector.emit('collect', click(kind, kind === 'dealio' ? 'refresh' : 'disable'));
-      await vi.waitFor(() => expect(f.interaction.editReply.mock.calls.length).toBeGreaterThanOrEqual(kind === 'dealio' ? 3 : 2));
+      f.collector.emit('collect', click(kind, 'disable'));
+      await vi.waitFor(() => expect(f.interaction.editReply.mock.calls.length).toBeGreaterThanOrEqual(2));
     } finally {
       f.collector.stop('time');
       await handling;
       log.mockRestore();
     }
-    expect(dealioUiSessions.resolve(kind + ':recovery-session:refresh', 'owner')).toBe('expired');
+    expect(dealioUiSessions.resolve(kind + ':recovery-session:disable', 'owner')).toBe('expired');
   });
 
   it.each(['dealio', 'status-v2'])('%s closes if shutdown occurred while the first panel loaded', async (kind) => {
@@ -73,12 +71,12 @@ describe('dashboard recovery', () => {
 
   it('reports a dashboard outage without telling users their setup was deleted', async () => {
     const f = fixture();
+    f.statusService.getDashboard.mockReturnValue({ status: 'unavailable', language: 'en' } as never);
     const handling = handleDealio(f.interaction as never, { statusService: f.statusService } as never);
     await vi.waitFor(() => expect(f.createMessageComponentCollector).toHaveBeenCalledOnce());
-    f.statusService.getDashboard.mockReturnValue({ status: 'unavailable', language: 'en' } as never);
-    f.collector.emit('collect', click('dealio', 'refresh'));
-    await vi.waitFor(() => expect(f.interaction.editReply).toHaveBeenCalledTimes(2));
-    expect(JSON.stringify(f.interaction.editReply.mock.calls[1]?.[0])).toContain('Couldn’t load your details');
+    const shown = JSON.stringify(f.interaction.editReply.mock.calls[0]?.[0]);
+    expect(shown).toContain('I couldn’t load your details right now');
+    expect(shown).not.toContain('setup');
     f.collector.stop('time');
     await handling;
   });

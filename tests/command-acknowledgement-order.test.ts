@@ -4,9 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { handleCheck } from '../src/discord/commands/check.js';
 import { handleDealio } from '../src/discord/commands/dealio.js';
 import { handleDeleteData } from '../src/discord/commands/delete-data.js';
-import { handleRegion } from '../src/discord/commands/region.js';
 import { handleStatus } from '../src/discord/commands/status.js';
-import { handleTestNotification } from '../src/discord/commands/test-notification.js';
 
 class EndingCollector extends EventEmitter {
   public stop(reason: string): void {
@@ -110,41 +108,5 @@ describe('Discord command acknowledgement order', () => {
 
     expectAcknowledgedBefore(deferReply, get);
     expect(interaction.reply).not.toHaveBeenCalled();
-  });
-
-  it('acknowledges /region before reading configuration state', async () => {
-    const deferReply = vi.fn().mockResolvedValue(undefined);
-    const get = vi.fn().mockReturnValue(null);
-    const interaction = {
-      user: { id: 'owner' },
-      locale: 'en-US',
-      deferReply,
-      reply: vi.fn(),
-      editReply: vi.fn().mockResolvedValue(undefined),
-    };
-
-    await handleRegion(interaction as never, { get } as never);
-
-    expectAcknowledgedBefore(deferReply, get);
-    expect(interaction.reply).not.toHaveBeenCalled();
-  });
-
-  it('acknowledges /test-notification before reading configuration state', async () => {
-    const deferReply = vi.fn().mockResolvedValue(undefined);
-    const get = vi.fn().mockReturnValue(null);
-    const interaction = {
-      user: { id: 'owner' },
-      locale: 'en-US',
-      deferReply,
-      editReply: vi.fn().mockResolvedValue(undefined),
-    };
-
-    await handleTestNotification(
-      interaction as never,
-      { get } as never,
-      { send: vi.fn().mockResolvedValue(undefined) } as never,
-    );
-
-    expectAcknowledgedBefore(deferReply, get);
   });
 });

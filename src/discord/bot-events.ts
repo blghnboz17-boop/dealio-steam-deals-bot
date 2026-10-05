@@ -12,15 +12,9 @@ import type { StatusService } from '../application/status-service.js';
 import type { TestNotificationService } from '../application/test-notification-service.js';
 import type { UserConfigurationService } from '../application/user-configuration-service.js';
 import type { WishlistViewService } from '../application/wishlist-view-service.js';
-import { handleCheck } from './commands/check.js';
 import { handleDeleteData } from './commands/delete-data.js';
-import { handleRegion } from './commands/region.js';
 import { handleSetup } from './commands/setup.js';
-import { handleStatus } from './commands/status.js';
-import { handleTestNotification } from './commands/test-notification.js';
-import { handleWishlist } from './commands/wishlist.js';
 import { createDealioNavigator, handleDealio } from './commands/dealio.js';
-import { handleStoreCountryAutocomplete } from './store-country-options.js';
 import type { SetupPresentationOptions } from './setup-view.js';
 import { buildExpiredPanel, buildNoticePanel, dealioEphemeralV2Flags, openPanelCustomId } from './ui/components-v2.js';
 import { dealioUiSessions } from './ui/session-manager.js';
@@ -71,19 +65,6 @@ export function registerBotEvents(options: BotEventOptions): void {
   client.on(Events.Invalidated, () => health?.refreshDiscordReady());
 
   client.on(Events.InteractionCreate, (interaction) => {
-    if (interaction.isAutocomplete()) {
-      taskTracker.run(async () => {
-        try {
-          await handleStoreCountryAutocomplete(interaction);
-        } catch (error: unknown) {
-          safeLogger.error('Discord store-country autocomplete failed', error);
-          if (!interaction.responded) {
-            await interaction.respond([]).catch(() => undefined);
-          }
-        }
-      });
-      return;
-    }
     if (typeof interaction.isButton === 'function' && interaction.isButton()
       && interaction.customId === openPanelCustomId) {
       // "🏠 Dealio panel" in DMs and expired panels: a fresh panel, like /dealio.
@@ -193,44 +174,12 @@ async function handleInteraction(
       );
       return;
     case 'region':
-      await handleRegion(interaction, services.userConfigurationService);
-      return;
     case 'status':
-      await handleStatus(
-        interaction,
-        services.statusService,
-        services.userConfigurationService,
-        lifecycleSignal,
-        services.discountThresholdService,
-        services.testNotificationService,
-        ui,
-        services.setupService,
-      );
-      return;
     case 'check':
-      await handleCheck(
-        interaction,
-        services.checkService,
-        services.statusService,
-        services.notificationService,
-        { ...ui, lifecycleSignal },
-      );
-      return;
     case 'wishlist':
-      await handleWishlist(
-        interaction,
-        services.wishlistViewService,
-        lifecycleSignal,
-        services.discountThresholdService,
-        ui,
-      );
-      return;
     case 'test-notification':
-      await handleTestNotification(
-        interaction,
-        services.userConfigurationService,
-        services.testNotificationService,
-      );
+      // Retired shortcuts: a Discord client that still lists them opens the panel instead.
+      await handleDealio(interaction, { ...services, lifecycleSignal }, ui);
       return;
     case 'delete-data':
       await handleDeleteData(

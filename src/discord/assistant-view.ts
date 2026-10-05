@@ -31,6 +31,8 @@ export interface AssistantViewData {
   priceHistory?:GameHistoryState;
   /** Steam's item errors from the same wishlist read; region-locked and removed games are listed as facts. */
   errors?:readonly WishlistItemError[];
+  /** The configured check interval; the default when not given. */
+  pollIntervalHours?:number;
 }
 export type GameHistoryState={status:'loading'}|{status:'ready';history:GameHistory|null};
 const text=(value:string)=>new TextDisplayBuilder().setContent(value);
@@ -65,9 +67,18 @@ export function staleTargetsNotice(count:number,lang:UserConfig['language']):str
     fr:`**${count}** ${one?'jeu a un prix cible':'jeux ont des prix cibles'} dans une ancienne devise. Jusqu’à ce que tu en enregistres de nouveaux, ta règle par défaut s’applique.`,
   });
 }
+/**
+ * The list order: deals that match the user's rule first, then other discounts,
+ * each by the deepest discount; everything else keeps Steam's wishlist order.
+ */
 export function filteredAssistantItems(data:AssistantViewData,view:AssistantView):WishlistItem[] {
-  return data.items.filter(item=>item.name.toLocaleLowerCase(data.config.language).includes(view.query.toLocaleLowerCase(data.config.language))
-    && (!view.eligibleOnly || matchesRule(item,data.rules.get(item.appId),data.config.minimumDiscountPercent)));
+  const rank=(item:WishlistItem)=>matchesRule(item,data.rules.get(item.appId),data.config.minimumDiscountPercent)?0:item.onSale===true?1:2;
+  return data.items
+    .map((item,index)=>({item,index,rank:rank(item),discount:item.price?.discountPercent??0}))
+    .filter(({item})=>item.name.toLocaleLowerCase(data.config.language).includes(view.query.toLocaleLowerCase(data.config.language))
+      && (!view.eligibleOnly || matchesRule(item,data.rules.get(item.appId),data.config.minimumDiscountPercent)))
+    .sort((a,b)=>a.rank-b.rank||(a.rank<2?b.discount-a.discount:0)||a.index-b.index)
+    .map(({item})=>item);
 }
 function pricedItem(item:WishlistItem){
   const p=item.price;
@@ -114,10 +125,12 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
     const upcoming=data.items.filter(i=>i.upcoming&&!i.price).length;
     const staleTargets=data.items.filter(i=>staleTarget(i,data.rules.get(i.appId))).length;
     add(panelHeader('games',lang,t({tr:'İstek listen ve hedeflerin',en:'Your wishlist & targets',de:'Deine Wunschliste & Wunschpreise',fr:'Ta liste et tes prix cibles'}),
-      `✅ **${count}** ${t({tr:'fırsat kuralına uyuyor',en:'matching deals',de:'passende Angebote',fr:'bons plans pour toi'})}`+
+      `✅ **${count}** ${t({tr:'oyun kuralına uyuyor',en:'matching deals',de:'passende Angebote',fr:'bons plans pour toi'})}`+
       `　🎮 **${data.items.length}** ${t({tr:'oyun',en:'games',de:'Spiele',fr:'jeux'})}`+
       (upcoming?`　🗓️ **${upcoming}** ${t({tr:'yakında çıkacak',en:'coming soon',de:'erscheinen bald',fr:'à venir'})}`:'')+
       `　${countryDisplay(data.config.storeCountryCode,lang)}`)+
+      '\n-# ↕️ '+t({tr:'Önce kuralına uyanlar, sonra en büyük indirimler',en:'Matching deals first, then the biggest discounts',
+        de:'Passende Angebote zuerst, dann die größten Rabatte',fr:'D’abord les bons plans pour toi, puis les plus grosses réductions'})+
       '\n-# 🕒 '+priceFetched(relative(data.items.map(i=>i.priceObservedAt??data.capturedAt).sort()[0]??data.capturedAt),lang,true)+
       (view.refreshing?' · '+t({tr:'Steam’den yeniliyorum…',en:'Refreshing from Steam…',de:'Aktualisiere von Steam …',fr:'Actualisation depuis Steam…'}):''));
     notice();
@@ -210,10 +223,12 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
         })));
       const history=data.priceHistory;
       const low=history?.status==='ready'?history.history?.low:undefined;
+      // The rule in force is highlighted, so the three choices read as one setting.
+      const activeMode=rule?.mode??'inherit';
       root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-        button(prefix+'inherit',t({tr:'Genel ayarım',en:'Use default',de:'Standardregel',fr:'Règle par défaut'}),'♻️'),
-        button(prefix+'percent',t({tr:'İndirim oranı',en:'Discount %',de:'Rabatt in %',fr:'Réduction en %'}),'🏷️'),
-        button(prefix+'target',t({tr:'Hedef fiyat',en:'Target price',de:'Wunschpreis',fr:'Prix cible'}),'🎯',true).setDisabled(disabled||!p),
+        button(prefix+'inherit',t({tr:'Genel ayarım',en:'Use default',de:'Standardregel',fr:'Règle par défaut'}),'♻️',activeMode==='inherit'),
+        button(prefix+'percent',t({tr:'İndirim oranı',en:'Discount %',de:'Rabatt in %',fr:'Réduction en %'}),'🏷️',activeMode==='percent'),
+        button(prefix+'target',t({tr:'Hedef fiyat',en:'Target price',de:'Wunschpreis',fr:'Prix cible'}),'🎯',activeMode==='target').setDisabled(disabled||!p),
         // One tap: a target at the recorded Steam low in the current currency.
         ...(low&&p&&low.currency===p.currency?[button(prefix+'low',t({
           tr:'En düşüğe inince haber ver',en:'Alert me at the lowest',de:'Beim Tiefstpreis melden',fr:'Me prévenir au plus bas',
@@ -320,7 +335,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
         .setPlaceholder('🌍 '+t({tr:'Saat dilimini değiştir',en:'Change time zone',de:'Zeitzone ändern',fr:'Changer de fuseau horaire'}))
         .addOptions(timezoneChoices(data.config.storeCountryCode,zone).map(choice=>({
           label:timezoneLabel(choice),value:choice,default:choice===zone})))));
-    const frequency=messagesFor(lang).setupWizardFrequency(defaultPollIntervalHours);
+    const frequency=messagesFor(lang).setupWizardFrequency(data.pollIntervalHours??defaultPollIntervalHours);
     add('-# 🔄 '+t({
       tr:`Kontrol sıklığı: ${frequency}. Bekleyen bildirimlerin fiyatını göndermeden önce bir kez daha kontrol ederim.`,
       en:`Checks: ${frequency.toLowerCase()}. I double-check the price of waiting alerts before sending them.`,

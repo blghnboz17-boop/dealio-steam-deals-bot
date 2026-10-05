@@ -91,7 +91,7 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
   const matching = options.eligibleDealCount ?? '—';
   root.addTextDisplayComponents(display(
     '🎮 **' + tracked + '** ' + t({ tr: 'oyun', en: 'games', de: 'Spiele', fr: 'jeux' }) +
-    '　✅ **' + matching + '** ' + t({ tr: 'fırsat kuralına uyuyor', en: 'matching deals', de: 'passende Angebote', fr: 'bons plans pour toi' }) +
+    '　✅ **' + matching + '** ' + t({ tr: 'oyun kuralına uyuyor', en: 'matching deals', de: 'passende Angebote', fr: 'bons plans pour toi' }) +
     '　📬 **' + pending + '** ' + t({ tr: 'bildirim sırada', en: 'alerts queued', de: 'DMs in Warteschlange', fr: 'alertes en attente' }) +
     '\n-# 🕒 ' + t({ tr: 'Son kontrol ', en: 'Last check ', de: 'Letzte Prüfung ', fr: 'Dernière vérification ' }) +
     relative(checkState?.lastSuccessCompletedAt, t({ tr: 'henüz yok', en: 'not yet', de: 'noch keine', fr: 'pas encore' })) +
@@ -119,8 +119,8 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
     fr: 'Autorise les MP dans Discord, puis envoie un MP de test depuis ⚙️ Réglages.',
   })));
   root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-    button('check', t({ tr: 'Şimdi kontrol et', en: 'Check now', de: 'Jetzt prüfen', fr: 'Vérifier maintenant' }), '🔄'),
-    button('refresh', t({ tr: 'Paneli yenile', en: 'Refresh', de: 'Aktualisieren', fr: 'Actualiser' }), '♻️'),
+    // One action: a fresh Steam check, whose result screen leads back to an up-to-date Home.
+    button('check', t({ tr: 'Steam’de şimdi kontrol et', en: 'Check Steam now', de: 'Jetzt bei Steam prüfen', fr: 'Vérifier Steam maintenant' }), '🔄'),
     supportButton(language),
   ));
   divider();

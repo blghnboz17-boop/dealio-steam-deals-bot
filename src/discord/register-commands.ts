@@ -6,23 +6,17 @@ import {
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from 'discord.js';
 import type { EnvironmentConfig } from '../config/environment.js';
-import { checkCommand } from './commands/check.js';
 import { setupCommand } from './commands/setup.js';
-import { statusCommand } from './commands/status.js';
 import { deleteDataCommand } from './commands/delete-data.js';
-import { testNotificationCommand } from './commands/test-notification.js';
-import { wishlistCommand } from './commands/wishlist.js';
-import { regionCommand } from './commands/region.js';
 import { dealioCommand } from './commands/dealio.js';
 
+/**
+ * Everything else (wishlist, alerts, settings, region, test DM, a check) lives in
+ * the /dealio panel; deletion keeps its own deliberate command.
+ */
 export const commands = [
   dealioCommand,
   setupCommand,
-  regionCommand,
-  statusCommand,
-  checkCommand,
-  wishlistCommand,
-  testNotificationCommand,
   deleteDataCommand,
 ];
 

@@ -3,7 +3,6 @@ import { safeLogger } from '../../application/safe-logger.js';
 import {
   ChatInputCommandInteraction,
   MessageFlags,
-  SlashCommandBuilder,
 } from 'discord.js';
 import type { CheckService } from '../../application/check-service.js';
 import type { NotificationService } from '../../application/notification-service.js';
@@ -16,15 +15,6 @@ import { dealioUiSessionTimeoutMs, dealioV2Flags } from '../ui/components-v2.js'
 import { uiCopy } from '../ui/copy.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
 import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-bar.js';
-
-export const checkCommand = new SlashCommandBuilder()
-  .setName('check')
-  .setDescription('Check your Steam wishlist for sales right now')
-  .setDescriptionLocalizations({
-    tr: 'Steam istek listendeki indirimlere hemen bak',
-    de: 'Deine Steam-Wunschliste sofort nach Angeboten durchsuchen',
-    fr: 'Vérifier tout de suite les promos de ta liste de souhaits Steam',
-  });
 
 export interface CheckPanelOptions extends PanelNavigation {
   readonly lifecycleSignal?: AbortSignal;

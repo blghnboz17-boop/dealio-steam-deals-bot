@@ -133,10 +133,10 @@ function buildSettingsPanel(
   }
   if (config.dmDeliveryBlockedAt) {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(t({
-      tr: '> 🛑 **DM’lerini şimdilik durdurdum.** Discord gizlilik ayarını düzelt, bir Test DM gönder ve bildirimleri yeniden aç.',
-      en: '> 🛑 **I’ve paused your DMs for now.** Fix your Discord privacy settings, send a Test DM, then turn alerts back on.',
-      de: '> 🛑 **Deine DMs sind vorerst pausiert.** Pass deine Discord-Privatsphäre-Einstellungen an, schick eine Test-DM und schalte die Benachrichtigungen wieder ein.',
-      fr: '> 🛑 **J’ai mis tes MP en pause.** Corrige tes paramètres de confidentialité Discord, envoie un MP de test, puis réactive les alertes.',
+      tr: '> 🛑 **DM’ler engellendiği için takibi durdurdum.** Discord gizlilik ayarını düzelt, bir Test DM gönder ve ▶️ Takibi sürdür’e bas.',
+      en: '> 🛑 **I paused tracking because DMs were blocked.** Fix your Discord privacy settings, send a Test DM, then press ▶️ Resume tracking.',
+      de: '> 🛑 **Ich habe die Überwachung pausiert, weil DMs blockiert waren.** Pass deine Discord-Privatsphäre-Einstellungen an, schick eine Test-DM und tippe auf ▶️ Überwachung fortsetzen.',
+      fr: '> 🛑 **J’ai mis le suivi en pause car les MP étaient bloqués.** Corrige tes paramètres de confidentialité Discord, envoie un MP de test, puis appuie sur ▶️ Reprendre le suivi.',
     })));
   }
 
@@ -144,8 +144,9 @@ function buildSettingsPanel(
   container.addActionRowComponents(
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       config.enabled
-        ? button('disable', t({ tr: 'Bildirimleri durdur', en: 'Pause alerts', de: 'Pausieren', fr: 'Mettre en pause' }), '🔕')
-        : button('enable', t({ tr: 'Bildirimleri aç', en: 'Resume alerts', de: 'Wieder einschalten', fr: 'Réactiver' }), '🔔', ButtonStyle.Success),
+        // Pausing stops the Steam checks too, so the button says "tracking", like the status line.
+        ? button('disable', t({ tr: 'Takibi durdur', en: 'Pause tracking', de: 'Überwachung pausieren', fr: 'Mettre le suivi en pause' }), '⏸️')
+        : button('enable', t({ tr: 'Takibi sürdür', en: 'Resume tracking', de: 'Überwachung fortsetzen', fr: 'Reprendre le suivi' }), '▶️', ButtonStyle.Success),
       button('minimum-discount', t({ tr: 'İndirim yüzdesini belirle', en: 'Set discount %', de: 'Rabatt-% festlegen', fr: 'Fixer le % de réduction' }), '🏷️'),
       button('test', t({ tr: 'Test DM', en: 'Test DM', de: 'Test-DM', fr: 'MP de test' }), '✉️'),
     ),
@@ -153,6 +154,7 @@ function buildSettingsPanel(
       button('region', t({ tr: 'Bölge', en: 'Region', de: 'Region', fr: 'Région' }), '🌍'),
       button('language', t({ tr: 'Dil', en: 'Language', de: 'Sprache', fr: 'Langue' }), '🌐'),
       button('account', t(changeAccountLabel), '👤'),
+      button('delete', t({ tr: 'Verilerimi sil', en: 'Delete my data', de: 'Meine Daten löschen', fr: 'Supprimer mes données' }), '🗑️', ButtonStyle.Danger),
     ),
   );
   if (options.tabs) {

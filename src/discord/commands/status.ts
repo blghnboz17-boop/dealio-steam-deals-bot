@@ -6,7 +6,6 @@ import {
   ModalBuilder,
   RadioGroupBuilder,
   RadioGroupOptionBuilder,
-  SlashCommandBuilder,
   TextInputBuilder,
   TextInputStyle,
   type ChatInputCommandInteraction,
@@ -28,6 +27,7 @@ import { buildAccountChangePanel, buildStatusV2Panel } from '../status-view-v2.j
 import type { SetupService } from '../../application/setup-service.js';
 import type { PreparedUserConfiguration } from '../../application/user-configuration-service.js';
 import { buildSetupModal, setupErrorMessage } from './setup.js';
+import { handleDeleteData } from './delete-data.js';
 import {
   buildNoticePanel,
   buildExpiredPanel,
@@ -42,15 +42,6 @@ import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
 
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
-
-export const statusCommand = new SlashCommandBuilder()
-  .setName('status')
-  .setDescription('Open your Dealio settings: alerts, region, language')
-  .setDescriptionLocalizations({
-    tr: 'Dealio ayarlarını aç: bildirimler, bölge, dil',
-    de: 'Deine Dealio-Einstellungen öffnen: Benachrichtigungen, Region, Sprache',
-    fr: 'Ouvrir tes réglages Dealio : alertes, région, langue',
-  });
 
 export function parseDiscountPercent(value: string): number | null {
   if (!/^\d+$/.test(value)) {
@@ -327,6 +318,13 @@ export async function handleStatus(
           await showAccountChange(profileInput, country);
         });
       })().catch((error: unknown) => safeLogger.error('Discord status account change failed', error));
+      return;
+    }
+    if (action === 'delete') {
+      // The same confirmation flow as /delete-data, in its own private message.
+      void handleDeleteData(component as unknown as ChatInputCommandInteraction, userConfigurationService,
+        accountService as SetupService | undefined, lifecycleSignal)
+        .catch((error: unknown) => safeLogger.error('Discord status delete-data failed', error));
       return;
     }
     if (action === 'account-cancel') {
