@@ -40,6 +40,21 @@ import { TestNotificationService, wishlistTestSale } from './test-notification-s
 import { UserConfigurationService } from './user-configuration-service.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
 import { WishlistViewService } from './wishlist-view-service.js';
+import { AdminPanel } from '../admin/admin-panel.js';
+import { readRoutes } from '../admin/admin-routes.js';
+import { DiscordClientDirectory } from '../admin/discord-directory.js';
+import { LogBuffer } from '../admin/log-buffer.js';
+import { AdminRepository } from '../persistence/admin-repository.js';
+import { AdminQueryService } from './admin/admin-query-service.js';
+import { actionRoutes } from '../admin/admin-action-routes.js';
+import { AdminActionService } from './admin/admin-action-service.js';
+import { BroadcastService } from './admin/broadcast-service.js';
+import { RuntimeSettings } from './admin/runtime-settings.js';
+import { DiscordAnnouncementSender } from '../discord/announcement-sender.js';
+import { applyPresence, registerGuildTracking } from '../discord/guild-tracking.js';
+import { AdminControlRepository } from '../persistence/admin-control-repository.js';
+import { BroadcastRepository } from '../persistence/broadcast-repository.js';
+import { TelemetryRepository } from '../persistence/telemetry-repository.js';
 
 export interface StartBotOptions {
   readonly signal?: AbortSignal;
@@ -149,11 +164,24 @@ export async function startBot(
       checkService,
       notificationSender,
     );
+    // Owner controls exist whether or not the admin panel is enabled: the sign-up
+    // limit, blocks and usage telemetry also apply to a bot without the panel.
+    const telemetryRepository = new TelemetryRepository(database);
+    const adminControlRepository = new AdminControlRepository(database);
+    const broadcastRepository = new BroadcastRepository(database);
+    const runtimeSettings = new RuntimeSettings(adminControlRepository, environment.maxUsers);
     const setupService = new SetupService(
       userConfigurationService,
       initialWishlistSummaryService,
       userOperationCoordinator,
-      { maxUsers: environment.maxUsers },
+      {
+        maxUsers: () => runtimeSettings.maxUsers(),
+        signupsOpen: () => runtimeSettings.signupsOpen(),
+        onStep: (discordUserId, step, code) => telemetryRepository.recordInteraction({
+          discordUserId, guildId: null, context: 'unknown', install: 'unknown', kind: 'setup',
+          action: code ? `${step}:${code}` : step, locale: null, occurredAt: new Date().toISOString(),
+        }),
+      },
     );
     const priceHistory = environment.isThereAnyDealApiKey
       ? new IsThereAnyDealClient({
@@ -202,7 +230,7 @@ export async function startBot(
         return {items:[...result.wishlistItems],errors:[...result.failedItems,...result.unavailableItems]};
       },
     );
-    const retentionTimer=setInterval(()=>{try{wishlistStateRepository.assistant.cleanup();}catch(error){safeLogger.error('Retention cleanup failed',error);}},3600000);
+    const retentionTimer=setInterval(()=>{try{wishlistStateRepository.assistant.cleanup();telemetryRepository.cleanup();adminControlRepository.cleanup();broadcastRepository.cleanup();}catch(error){safeLogger.error('Retention cleanup failed',error);}},3600000);
     retentionTimer.unref();
     const scheduler = new WishlistScheduler({
       intervalHours: environment.pollIntervalHours,
@@ -216,13 +244,79 @@ export async function startBot(
       userConfigRepository,
       notificationService,
     });
+    const adminRepository = new AdminRepository(database);
+    const broadcastService = environment.adminPanel ? new BroadcastService({
+      repository: broadcastRepository,
+      users: () => adminRepository.users(),
+      isBlocked: (discordUserId) => adminControlRepository.isUserBlocked(discordUserId),
+      sender: new DiscordAnnouncementSender(client),
+      onDmBlocked: (discordUserId) => { userConfigurationService.markDmDeliveryBlocked(discordUserId); },
+    }) : null;
+    const adminPanel = environment.adminPanel && broadcastService ? (() => {
+      const logs = new LogBuffer();
+      logs.install();
+      const query = new AdminQueryService({
+        adminRepository,
+        userConfigRepository,
+        assistant: wishlistStateRepository.assistant,
+        pollSchedule: pollScheduleRepository,
+        directory: new DiscordClientDirectory(client),
+        schedulerStatus: () => scheduler.status(),
+        ...(health ? { health: () => health!.current() } : {}),
+        ...(deletionJournal ? { deletionJournal } : {}),
+        telemetry: telemetryRepository,
+        controls: adminControlRepository,
+        broadcasts: broadcastRepository,
+        runtimeSettings: () => runtimeSettings.snapshot(),
+        databasePath: environment.databasePath,
+        settings: {
+          pollIntervalHours: environment.pollIntervalHours,
+          notificationRetryIntervalSeconds: environment.notificationRetryIntervalSeconds,
+          priceHistoryEnabled: priceHistory !== undefined,
+          steamVanityEnabled: environment.steamWebApiKey !== undefined,
+          production: environment.production === true,
+        },
+      });
+      const actions = new AdminActionService({
+        users: userConfigurationService,
+        checks: checkService,
+        notifications: notificationService,
+        testNotifications: testNotificationService,
+        scheduler,
+        retryScheduler: notificationRetryScheduler,
+        controls: adminControlRepository,
+        broadcasts: broadcastService,
+        settings: runtimeSettings,
+        telemetry: telemetryRepository,
+        applyPresence: (text) => applyPresence(client, text),
+        guilds: {
+          name: (guildId) => client.guilds.cache.get(guildId)?.name ?? null,
+          leave: async (guildId) => {
+            const guild = client.guilds.cache.get(guildId);
+            if (!guild) return false;
+            await guild.leave();
+            return true;
+          },
+        },
+      });
+      return new AdminPanel(environment.adminPanel!, () => [
+        ...readRoutes({ query, logs }),
+        ...actionRoutes({ actions, query, broadcasts: broadcastService }),
+      ], logs);
+    })() : null;
+    registerGuildTracking({
+      client,
+      telemetry: telemetryRepository,
+      controls: adminControlRepository,
+      presenceText: () => runtimeSettings.presenceText(),
+    });
     runtime = new BotRuntime(scheduler, client, database, {
       taskTracker,
       afterDisconnect: async()=>{await cloudLease?.stop();},
       processLock,
       additionalSchedulers: [notificationRetryScheduler,{
         stop: async () => { clearInterval(retentionTimer); },
-      }],
+      }, ...(broadcastService ? [broadcastService] : []), ...(adminPanel ? [adminPanel] : [])],
       cancelActiveWork: () => applicationAbortController.abort(),
       health,
     });
@@ -258,6 +352,8 @@ export async function startBot(
       },
       lifecycleSignal: applicationAbortController.signal,
       health,
+      telemetry: telemetryRepository,
+      blocks: adminControlRepository,
     });
 
     if(environment.azureLeaseContainerUrl) cloudLease = await AzureApplicationLease.forApplication(
@@ -270,6 +366,9 @@ export async function startBot(
         if(options.nodePidPath) writeFileSync(join(dirname(options.nodePidPath),'shutdown.request'),String(process.pid));
         else void startedRuntime.stop().catch(error=>safeLogger.error('Shutdown after lease loss failed',error));
       });
+    await adminPanel?.start();
+    // Announcements need the REST token that login sets.
+    if (broadcastService) client.once('clientReady', () => broadcastService.start());
     await registerCommands(environment, options.signal);
     if (options.signal?.aborted) {
       throw new BotStartupCancelledError();

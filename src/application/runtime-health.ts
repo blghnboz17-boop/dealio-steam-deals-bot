@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 
 export type RuntimePhase = 'starting' | 'ready' | 'stopping' | 'stopped' | 'failed';
 
-interface RuntimeHealthDocument {
+export interface RuntimeHealthDocument {
   readonly schemaVersion: 1;
   readonly phase: RuntimePhase;
   readonly pid: number;
@@ -74,6 +74,10 @@ export class RuntimeHealth {
     this.write();
     this.timer = this.clock.setInterval(() => this.heartbeat(), heartbeatIntervalMs);
     this.timer.unref?.();
+  }
+
+  public current(): RuntimeHealthDocument {
+    return this.document;
   }
 
   public markReady(): void {

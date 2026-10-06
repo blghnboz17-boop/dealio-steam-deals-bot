@@ -1,0 +1,127 @@
+import { html, useEffect, useState, type VNode } from '../vendor/preact-htm.js';
+import { api } from '../api.js';
+import { useAction } from '../actions.js';
+import { bytes, dateTime, duration, num, relative } from '../format.js';
+import type { RuntimeSettings, SystemInfo } from '../types.js';
+import { Badge, Card, ErrorBox, Facts, Loading, Page, useAsync, useTicker } from '../ui.js';
+import { SchedulerFacts } from './overview.js';
+
+const phaseNames: Record<string, string> = {
+  starting: 'Başlıyor', ready: 'Hazır', stopping: 'Duruyor', stopped: 'Durdu', failed: 'Hata',
+};
+
+function enabled(value: boolean): VNode {
+  return value ? Badge({ tone: 'good', label: 'Açık' }) : Badge({ tone: 'neutral', label: 'Kapalı' });
+}
+
+function SettingsForm(props: { settings: RuntimeSettings; userCount: number | null; onSaved: () => void }): VNode {
+  const { busy, run } = useAction();
+  const [maxUsers, setMaxUsers] = useState(String(props.settings.maxUsersOverride ?? ''));
+  const [presence, setPresence] = useState(props.settings.presenceText ?? '');
+  useEffect(() => {
+    setMaxUsers(String(props.settings.maxUsersOverride ?? ''));
+    setPresence(props.settings.presenceText ?? '');
+  }, [props.settings.maxUsersOverride, props.settings.presenceText]);
+  const save = (body: unknown, message: string): void => {
+    void run('settings', '/api/settings', body, message).then((result) => { if (result !== null) props.onSaved(); });
+  };
+  const parsed = maxUsers.trim() === '' ? null : Number(maxUsers);
+  const validLimit = parsed === null || (Number.isSafeInteger(parsed) && parsed >= 1);
+  return html`
+    <div class="settings">
+      <div class="setting-row">
+        <div><strong>Yeni kayıtlar</strong>
+          <p class="muted small">Kapalıyken /setup “beta şu an dolu” der; mevcut kullanıcılar etkilenmez.</p></div>
+        <button class=${`btn ${props.settings.signupsOpen ? '' : 'btn-primary'}`} disabled=${busy !== null}
+          onClick=${() => save({ signupsOpen: !props.settings.signupsOpen }, props.settings.signupsOpen ? 'Kayıtlar kapatıldı' : 'Kayıtlar açıldı')}>
+          ${props.settings.signupsOpen ? 'Kayıtları kapat' : 'Kayıtları aç'}</button>
+      </div>
+      <div class="setting-row">
+        <div><strong>Kullanıcı sınırı</strong>
+          <p class="muted small">Şu an ${num(props.settings.maxUsers)}${props.userCount !== null ? ` (${num(props.userCount)} kayıtlı)` : ''}.
+            Boş bırakırsan ortam değeri (${num(props.settings.defaultMaxUsers)}) geçerli. Artırmadan önce VM kapasitesini kontrol et.</p></div>
+        <div class="inline-form">
+          <input class="input narrow" inputMode="numeric" placeholder=${String(props.settings.defaultMaxUsers)} value=${maxUsers}
+            aria-label="Kullanıcı sınırı" onInput=${(event: Event) => setMaxUsers((event.target as HTMLInputElement).value)} />
+          <button class="btn" disabled=${busy !== null || !validLimit || parsed === props.settings.maxUsersOverride}
+            onClick=${() => save({ maxUsers: parsed }, 'Kullanıcı sınırı kaydedildi')}>Kaydet</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div><strong>Bot durum metni</strong>
+          <p class="muted small">Discord’da botun adının altında görünür (en fazla 128 karakter). Boş = yok.</p></div>
+        <div class="inline-form">
+          <input class="input" maxLength="128" placeholder="ör. Steam indirimlerini izliyor" value=${presence}
+            aria-label="Bot durum metni" onInput=${(event: Event) => setPresence((event.target as HTMLInputElement).value)} />
+          <button class="btn" disabled=${busy !== null || presence.trim() === (props.settings.presenceText ?? '')}
+            onClick=${() => save({ presenceText: presence.trim() || null }, 'Durum metni güncellendi')}>Kaydet</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+export function SystemPage(): VNode {
+  const state = useAsync(() => api.get<SystemInfo>('/api/system'), []);
+  const { busy, run } = useAction();
+  useTicker(15_000);
+  const data = state.data;
+  return Page({
+    title: 'Sistem',
+    actions: html`
+      <button class="btn" disabled=${busy !== null || data?.scheduler.running === true}
+        onClick=${() => run('scan', '/api/system/scan-now', {}, 'Tam tarama başladı').then(() => setTimeout(state.reload, 800))}>↻ Şimdi tara</button>
+      <button class="btn" disabled=${busy !== null}
+        onClick=${() => run('retry', '/api/system/retry-now', {}, 'Bekleyen bildirimler denendi').then(state.reload)}>✉ Bildirimleri şimdi dene</button>
+      <button class="btn" onClick=${state.reload} disabled=${state.loading}>Yenile</button>`,
+    children: !data
+      ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
+      : html`
+        ${Card({ title: 'Çalışma zamanı ayarları', children: html`<${SettingsForm} settings=${data.runtimeSettings} userCount=${null} onSaved=${state.reload} />` })}
+        <div class="grid-3">
+          ${Card({ title: 'Çalışma durumu', children: Facts({ rows: [
+            ['Aşama', data.health
+              ? Badge({ tone: data.health.phase === 'ready' ? 'good' : data.health.phase === 'failed' ? 'bad' : 'warn',
+                label: phaseNames[data.health.phase] ?? data.health.phase })
+              : Badge({ tone: 'neutral', label: 'Sağlık dosyası yok (geliştirme)' })],
+            ['Discord', data.discord.ready ? Badge({ tone: 'good', label: 'Bağlı' }) : Badge({ tone: 'bad', label: 'Bağlı değil' })],
+            ['Gecikme', data.discord.pingMs === null ? '—' : `${num(data.discord.pingMs)} ms`],
+            ['Başladı', data.health ? dateTime(data.health.startedAt) : '—'],
+            ['Hazır oldu', data.health?.readyAt ? relative(data.health.readyAt) : '—'],
+            ['Son nabız', data.health ? relative(data.health.heartbeatAt) : '—'],
+          ] }) })}
+          ${Card({ title: 'Süreç', children: Facts({ rows: [
+            ['PID', String(data.process.pid)],
+            ['Node.js', data.process.node],
+            ['Platform', data.process.platform],
+            ['Çalışma süresi', duration(data.process.uptimeSeconds * 1000)],
+            ['Bellek (RSS)', bytes(data.process.rssBytes)],
+            ['Heap', `${bytes(data.process.heapUsedBytes)} / ${bytes(data.process.heapTotalBytes)}`],
+            ['Harici', bytes(data.process.externalBytes)],
+          ] }) })}
+          ${Card({ title: 'Veritabanı', children: Facts({ rows: [
+            ['Dosya', html`<code class="small">${data.database.path}</code>`],
+            ['Boyut', bytes(data.database.sizeBytes)],
+            ['WAL', bytes(data.database.walBytes)],
+            ['Şema sürümü', `v${data.database.schemaVersion}`],
+            ['Silme günlüğü', `${num(data.deletionsKept)} kayıt (35 gün)`],
+          ] }) })}
+        </div>
+        <div class="grid-2">
+          ${Card({ title: 'Tarayıcı', children: SchedulerFacts({ scheduler: data.scheduler }) })}
+          ${Card({ title: 'Yapılandırma', children: Facts({ rows: [
+            ['Tarama aralığı', duration(data.settings.pollIntervalHours * 3_600_000)],
+            ['Yeniden deneme', `${num(data.settings.notificationRetryIntervalSeconds)} sn`],
+            ['Fiyat geçmişi (ITAD)', enabled(data.settings.priceHistoryEnabled)],
+            ['Steam vanity çözümleme', enabled(data.settings.steamVanityEnabled)],
+            ['Üretim modu', enabled(data.settings.production)],
+          ] }) })}
+        </div>
+        ${Card({ title: 'Engellenen kullanıcılar', children: data.blockedUsers.length === 0
+          ? html`<p class="empty">Engellenen kullanıcı yok.</p>`
+          : html`<ul class="list">${data.blockedUsers.map((block) => html`<li>
+              <a href=${`#/users/${block.discordUserId}`}><code>${block.discordUserId}</code></a>
+              <span class="muted small">${block.reason ?? 'sebep yok'} · ${relative(block.blockedAt)}</span>
+              <button class="btn btn-small" disabled=${busy !== null}
+                onClick=${() => run('unblock', `/api/users/${block.discordUserId}/unblock`, {}, 'Engel kaldırıldı').then(state.reload)}>Engeli kaldır</button></li>`)}</ul>` })}`,
+  });
+}

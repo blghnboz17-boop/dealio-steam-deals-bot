@@ -1,5 +1,5 @@
 import { safeLogger } from '../application/safe-logger.js';
-import { Events, MessageFlags, type ChatInputCommandInteraction, type Client } from 'discord.js';
+import { Events, MessageFlags, type ChatInputCommandInteraction, type Client, type Interaction } from 'discord.js';
 import type { ApplicationTaskTracker } from '../application/application-task-tracker.js';
 import type { CheckService } from '../application/check-service.js';
 import type { DiscountThresholdService } from '../application/discount-threshold-service.js';
@@ -20,6 +20,8 @@ import { buildExpiredPanel, buildNoticePanel, dealioEphemeralV2Flags, openPanelC
 import { dealioUiSessions } from './ui/session-manager.js';
 import { localizer } from './i18n.js';
 import { languageFromDiscordLocale } from './language.js';
+import { recordInteraction } from './interaction-telemetry.js';
+import type { TelemetryRepository } from '../persistence/telemetry-repository.js';
 
 export interface BotCommandServices {
   readonly userConfigurationService: UserConfigurationService;
@@ -41,6 +43,17 @@ export interface BotEventOptions {
   readonly services: BotCommandServices;
   readonly lifecycleSignal?: AbortSignal;
   readonly health?: Pick<RuntimeHealth, 'markReady' | 'refreshDiscordReady'>;
+  /** Usage telemetry for the owner's admin panel. */
+  readonly telemetry?: Pick<TelemetryRepository, 'recordInteraction'>;
+  /** Accounts the owner blocked from the admin panel. */
+  readonly blocks?: { isUserBlocked(discordUserId: string): boolean };
+}
+
+/** Deleting one's data stays possible for a blocked account. */
+export function allowedWhileBlocked(interaction: Interaction): boolean {
+  if (interaction.isChatInputCommand()) return interaction.commandName === 'delete-data';
+  if (interaction.isMessageComponent() || interaction.isModalSubmit()) return interaction.customId.startsWith('delete-v2:');
+  return false;
 }
 
 export function registerBotEvents(options: BotEventOptions): void {
@@ -52,6 +65,8 @@ export function registerBotEvents(options: BotEventOptions): void {
     services,
     lifecycleSignal,
     health,
+    telemetry,
+    blocks,
   } = options;
 
   client.once(Events.ClientReady, () => {
@@ -65,6 +80,34 @@ export function registerBotEvents(options: BotEventOptions): void {
   client.on(Events.Invalidated, () => health?.refreshDiscordReady());
 
   client.on(Events.InteractionCreate, (interaction) => {
+    recordInteraction(telemetry, interaction);
+    let blocked = false;
+    try {
+      blocked = blocks?.isUserBlocked(interaction.user.id) === true;
+    } catch (error: unknown) {
+      safeLogger.error('Could not read the user block list', error);
+    }
+    if (blocked && !allowedWhileBlocked(interaction)) {
+      if (interaction.isRepliable()) {
+        const language = languageFromDiscordLocale(interaction.locale);
+        const t = localizer(language);
+        taskTracker.run(async () => {
+          await interaction.reply({
+            flags: dealioEphemeralV2Flags,
+            components: [buildNoticePanel(language, 'danger',
+              t({ tr: 'Dealio bu hesap için kapalı', en: 'Dealio is turned off for this account',
+                de: 'Dealio ist für dieses Konto deaktiviert', fr: 'Dealio est désactivé pour ce compte' }),
+              t({
+                tr: 'Bu hesabın Dealio erişimi kapatıldı. Verilerini /delete-data ile yine de silebilirsin.',
+                en: 'Dealio access has been turned off for this account. You can still delete your data with /delete-data.',
+                de: 'Der Dealio-Zugang für dieses Konto wurde deaktiviert. Deine Daten kannst du trotzdem mit /delete-data löschen.',
+                fr: 'L’accès à Dealio a été désactivé pour ce compte. Tu peux toujours supprimer tes données avec /delete-data.',
+              }))],
+          }).catch(() => undefined);
+        });
+      }
+      return;
+    }
     if (typeof interaction.isButton === 'function' && interaction.isButton()
       && interaction.customId === openPanelCustomId) {
       // "🏠 Dealio panel" in DMs and expired panels: a fresh panel, like /dealio.

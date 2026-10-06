@@ -30,9 +30,20 @@ export class SetupCapacityReachedError extends Error {
   }
 }
 
+export type SetupStep = 'prepare-ok' | 'prepare-failed' | 'confirm-ok' | 'confirm-failed';
+
 export interface SetupServiceOptions {
   /** Most users Dealio accepts; existing users are never affected. Unlimited when omitted. */
-  readonly maxUsers?: number;
+  readonly maxUsers?: number | (() => number);
+  /** The owner can close new sign-ups from the admin panel. Open when omitted. */
+  readonly signupsOpen?: () => boolean;
+  /** Setup funnel telemetry; a failing sink never affects setup. */
+  readonly onStep?: (discordUserId: string, step: SetupStep, code?: string) => void;
+}
+
+function errorCode(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') return error.code;
+  return error instanceof Error ? error.name : 'UNKNOWN';
 }
 
 export interface AccountChangeResult {
@@ -42,7 +53,9 @@ export interface AccountChangeResult {
 }
 
 export class SetupService {
-  private readonly maxUsers?: number;
+  private readonly maxUsers?: number | (() => number);
+  private readonly signupsOpen: () => boolean;
+  private readonly onStep: (discordUserId: string, step: SetupStep, code?: string) => void;
 
   public constructor(
     private readonly userConfigurationService: UserConfigurationService,
@@ -51,6 +64,16 @@ export class SetupService {
     options: SetupServiceOptions = {},
   ) {
     this.maxUsers = options.maxUsers;
+    this.signupsOpen = options.signupsOpen ?? (() => true);
+    this.onStep = options.onStep ?? (() => undefined);
+  }
+
+  private step(discordUserId: string, step: SetupStep, error?: unknown): void {
+    try {
+      this.onStep(discordUserId, step, error === undefined ? undefined : errorCode(error));
+    } catch {
+      // Telemetry only.
+    }
   }
 
   public configure(
@@ -84,17 +107,34 @@ export class SetupService {
     language: Language,
     storeCountryInput: string,
   ): Promise<PreparedUserConfiguration> {
-    this.assertNotConfigured(discordUserId);
-    this.assertCapacity();
-    return this.userConfigurationService.prepare(
-      discordUserId,
-      profileInput,
-      language,
-      storeCountryInput,
-    );
+    try {
+      this.assertNotConfigured(discordUserId);
+      this.assertCapacity();
+      const prepared = await this.userConfigurationService.prepare(
+        discordUserId,
+        profileInput,
+        language,
+        storeCountryInput,
+      );
+      this.step(discordUserId, 'prepare-ok');
+      return prepared;
+    } catch (error: unknown) {
+      this.step(discordUserId, 'prepare-failed', error);
+      throw error;
+    }
   }
 
   public confirm(prepared: PreparedUserConfiguration): Promise<SetupResult> {
+    return this.confirmExclusive(prepared).then((result) => {
+      this.step(prepared.discordUserId, 'confirm-ok');
+      return result;
+    }, (error: unknown) => {
+      this.step(prepared.discordUserId, 'confirm-failed', error);
+      throw error;
+    });
+  }
+
+  private confirmExclusive(prepared: PreparedUserConfiguration): Promise<SetupResult> {
     return this.coordinator.runExclusive(prepared.discordUserId, async () => {
       this.assertNotConfigured(prepared.discordUserId);
       this.assertCapacity();
@@ -150,7 +190,9 @@ export class SetupService {
 
   /** False while the user limit is reached, so setup can say so before asking anything. */
   public acceptsNewUsers(): boolean {
-    return this.maxUsers === undefined || this.userConfigurationService.countUsers() < this.maxUsers;
+    if (!this.signupsOpen()) return false;
+    const maxUsers = typeof this.maxUsers === 'function' ? this.maxUsers() : this.maxUsers;
+    return maxUsers === undefined || this.userConfigurationService.countUsers() < maxUsers;
   }
 
   private assertCapacity(): void {

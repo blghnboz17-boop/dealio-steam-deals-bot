@@ -1,0 +1,414 @@
+import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
+import { preparedStatement } from './prepared-statement.js';
+
+/**
+ * Read-only aggregates for the owner's admin panel. Every query is scoped to each
+ * user's current configuration generation, like the user-facing panels.
+ */
+
+export interface AdminUserRow {
+  readonly discordUserId: string;
+  readonly steamId64: string;
+  readonly language: string;
+  readonly storeCountryCode: string;
+  readonly enabled: boolean;
+  readonly minimumDiscountPercent: number;
+  readonly dmDeliveryBlockedAt: string | null;
+  readonly dmDeliveryErrorCode: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly lastCheckStatus: string | null;
+  readonly lastCheckErrorCode: string | null;
+  readonly lastCheckCompletedAt: string | null;
+  readonly lastSuccessAt: string | null;
+  readonly wishlistCount: number | null;
+  readonly onSaleCount: number;
+  readonly ruleCount: number;
+  readonly mutedCount: number;
+  readonly notificationMode: string;
+  readonly alertsSent: number;
+  readonly lastAlertAt: string | null;
+  readonly pendingAlerts: number;
+}
+
+export interface CountRow { readonly key: string; readonly count: number }
+export interface DayCount { readonly day: string; readonly count: number }
+
+export interface AdminOverviewCounts {
+  readonly users: number;
+  readonly enabled: number;
+  readonly paused: number;
+  readonly dmBlocked: number;
+  readonly newUsers24h: number;
+  readonly newUsers7d: number;
+  readonly alertsSent24h: number;
+  readonly alertsSent7d: number;
+  readonly alertsSentTotal: number;
+  readonly queuePending: number;
+  readonly queueRetry: number;
+  readonly queueSending: number;
+  readonly terminalFailed7d: number;
+  readonly trackedGames: number;
+  readonly gamesOnSale: number;
+  readonly rules: number;
+  readonly priceObservations: number;
+}
+
+export interface AdminGameRow {
+  readonly appId: number;
+  readonly name: string;
+  readonly count: number;
+  readonly maxDiscountPercent?: number | null;
+}
+
+export interface AdminNotificationRow {
+  readonly appId: number;
+  readonly gameName: string;
+  readonly status: string;
+  readonly reason: string;
+  readonly currency: string;
+  readonly normalPriceMinor: number;
+  readonly finalPriceMinor: number;
+  readonly discountPercent: number;
+  readonly attemptCount: number;
+  readonly createdAt: string;
+  readonly lastAttemptAt: string | null;
+  readonly deliveredAt: string | null;
+  readonly lastError: string | null;
+  readonly storeCountryCode: string;
+}
+
+export interface AdminCheckState {
+  readonly lastStartedAt: string | null;
+  readonly lastCompletedAt: string | null;
+  readonly lastStatus: string | null;
+  readonly lastErrorCode: string | null;
+  readonly nextScheduledAt: string | null;
+  readonly lastSuccessCompletedAt: string | null;
+  readonly lastSuccessCheckedCount: number | null;
+  readonly lastSuccessOnSaleCount: number | null;
+  readonly lastSuccessFreeCount: number | null;
+  readonly lastSuccessUnknownPriceCount: number | null;
+  readonly lastSuccessFailedItemCount: number | null;
+}
+
+type Row = Record<string, SQLOutputValue>;
+
+function text(value: SQLOutputValue): string {
+  return typeof value === 'string' ? value : String(value ?? '');
+}
+function textOrNull(value: SQLOutputValue): string | null {
+  return value === null || value === undefined ? null : text(value);
+}
+function int(value: SQLOutputValue): number {
+  return typeof value === 'number' ? value : typeof value === 'bigint' ? Number(value) : 0;
+}
+function intOrNull(value: SQLOutputValue): number | null {
+  return value === null || value === undefined ? null : int(value);
+}
+
+/** Names come from each user's latest wishlist snapshot (Steam's localized title). */
+const snapshotGamesCte = `
+  snapshot_game AS (
+    SELECT snapshot.discord_user_id AS discord_user_id,
+           CAST(json_extract(item.value, '$.appId') AS INTEGER) AS app_id,
+           json_extract(item.value, '$.name') AS name
+    FROM wishlist_snapshot AS snapshot
+    JOIN user_config AS config
+      ON config.discord_user_id = snapshot.discord_user_id
+     AND config.config_version = snapshot.config_version
+    JOIN json_each(snapshot.payload, '$.items') AS item
+  ),
+  game_name AS (
+    SELECT app_id, MAX(name) AS name FROM snapshot_game GROUP BY app_id
+  )`;
+
+export class AdminRepository {
+  public constructor(private readonly database: DatabaseSync) {}
+
+  public schemaVersion(): number {
+    return int((this.database.prepare('PRAGMA user_version').get() as Row).user_version);
+  }
+
+  public overviewCounts(now: Date = new Date()): AdminOverviewCounts {
+    const day = new Date(now.getTime() - 24 * 3600_000).toISOString();
+    const week = new Date(now.getTime() - 7 * 24 * 3600_000).toISOString();
+    const users = this.database.prepare(`
+      SELECT COUNT(*) AS users,
+             COUNT(CASE WHEN enabled = 1 THEN 1 END) AS enabled,
+             COUNT(CASE WHEN enabled = 0 AND dm_delivery_blocked_at IS NULL THEN 1 END) AS paused,
+             COUNT(CASE WHEN dm_delivery_blocked_at IS NOT NULL THEN 1 END) AS dm_blocked,
+             COUNT(CASE WHEN created_at >= ? THEN 1 END) AS new_24h,
+             COUNT(CASE WHEN created_at >= ? THEN 1 END) AS new_7d
+      FROM user_config`).get(day, week) as Row;
+    const alerts = this.database.prepare(`
+      SELECT COUNT(CASE WHEN n.status = 'sent' AND COALESCE(n.delivered_at, n.last_attempt_at) >= ? THEN 1 END) AS sent_24h,
+             COUNT(CASE WHEN n.status = 'sent' AND COALESCE(n.delivered_at, n.last_attempt_at) >= ? THEN 1 END) AS sent_7d,
+             COUNT(CASE WHEN n.status = 'sent' THEN 1 END) AS sent_total,
+             COUNT(CASE WHEN n.status = 'candidate' THEN 1 END) AS pending,
+             COUNT(CASE WHEN n.status = 'failed' THEN 1 END) AS retry,
+             COUNT(CASE WHEN n.status = 'sending' THEN 1 END) AS sending,
+             COUNT(CASE WHEN n.status = 'terminal_failed' AND COALESCE(n.last_attempt_at, n.created_at) >= ? THEN 1 END)
+               AS terminal_7d
+      FROM notification_log AS n
+      JOIN user_config AS config
+        ON config.discord_user_id = n.discord_user_id
+       AND config.config_version = n.config_version`).get(day, week, week) as Row;
+    const games = this.database.prepare(`
+      SELECT COUNT(DISTINCT state.app_id) AS tracked,
+             COUNT(DISTINCT CASE WHEN state.on_sale = 1 THEN state.app_id END) AS on_sale
+      FROM wishlist_item_state AS state
+      JOIN user_config AS config
+        ON config.discord_user_id = state.discord_user_id
+       AND config.config_version = state.config_version
+      WHERE state.observation_status != 'missing'`).get() as Row;
+    const rules = this.database.prepare(`
+      SELECT COUNT(*) AS rules FROM game_rule AS rule
+      JOIN user_config AS config
+        ON config.discord_user_id = rule.discord_user_id AND config.config_version = rule.config_version
+      WHERE rule.mode != 'inherit' OR rule.muted = 1`).get() as Row;
+    const observations = this.database.prepare('SELECT COUNT(*) AS n FROM price_observation').get() as Row;
+    return {
+      users: int(users.users),
+      enabled: int(users.enabled),
+      paused: int(users.paused),
+      dmBlocked: int(users.dm_blocked),
+      newUsers24h: int(users.new_24h),
+      newUsers7d: int(users.new_7d),
+      alertsSent24h: int(alerts.sent_24h),
+      alertsSent7d: int(alerts.sent_7d),
+      alertsSentTotal: int(alerts.sent_total),
+      queuePending: int(alerts.pending),
+      queueRetry: int(alerts.retry),
+      queueSending: int(alerts.sending),
+      terminalFailed7d: int(alerts.terminal_7d),
+      trackedGames: int(games.tracked),
+      gamesOnSale: int(games.on_sale),
+      rules: int(rules.rules),
+      priceObservations: int(observations.n),
+    };
+  }
+
+  /** New configurations per UTC day; deleted users are no longer counted. */
+  public signupsByDay(days: number, now: Date = new Date()): DayCount[] {
+    const since = new Date(now.getTime() - days * 24 * 3600_000).toISOString();
+    return this.dayCounts(`
+      SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS count
+      FROM user_config WHERE created_at >= ? GROUP BY day ORDER BY day`, since);
+  }
+
+  public alertsByDay(days: number, now: Date = new Date()): DayCount[] {
+    const since = new Date(now.getTime() - days * 24 * 3600_000).toISOString();
+    return this.dayCounts(`
+      SELECT substr(COALESCE(delivered_at, last_attempt_at), 1, 10) AS day, COUNT(*) AS count
+      FROM notification_log
+      WHERE status = 'sent' AND COALESCE(delivered_at, last_attempt_at) >= ?
+      GROUP BY day ORDER BY day`, since);
+  }
+
+  public distribution(column: 'store_country_code' | 'language'): CountRow[] {
+    return (this.database.prepare(`
+      SELECT ${column} AS key, COUNT(*) AS count FROM user_config GROUP BY key ORDER BY count DESC, key`)
+      .all() as Row[]).map((row) => ({ key: text(row.key), count: int(row.count) }));
+  }
+
+  public notificationModes(): CountRow[] {
+    return (this.database.prepare(`
+      SELECT COALESCE(preference.mode, 'instant') AS key, COUNT(*) AS count
+      FROM user_config AS config
+      LEFT JOIN notification_preference AS preference ON preference.discord_user_id = config.discord_user_id
+      GROUP BY key ORDER BY count DESC`).all() as Row[])
+      .map((row) => ({ key: text(row.key), count: int(row.count) }));
+  }
+
+  public checkStatuses(): CountRow[] {
+    return (this.database.prepare(`
+      SELECT COALESCE(state.last_status, 'never') AS key, COUNT(*) AS count
+      FROM user_config AS config
+      LEFT JOIN check_state AS state ON state.discord_user_id = config.discord_user_id
+      GROUP BY key ORDER BY count DESC`).all() as Row[])
+      .map((row) => ({ key: text(row.key), count: int(row.count) }));
+  }
+
+  public checkErrorCodes(): CountRow[] {
+    return (this.database.prepare(`
+      SELECT last_error_code AS key, COUNT(*) AS count FROM check_state
+      WHERE last_error_code IS NOT NULL AND last_status IN ('unavailable', 'failed')
+      GROUP BY key ORDER BY count DESC`).all() as Row[])
+      .map((row) => ({ key: text(row.key), count: int(row.count) }));
+  }
+
+  public users(): AdminUserRow[] {
+    return (preparedStatement(this.database, `
+      SELECT config.discord_user_id, config.steam_id64, config.language, config.store_country_code,
+             config.enabled, config.minimum_discount_percent, config.dm_delivery_blocked_at,
+             config.dm_delivery_error_code, config.created_at, config.updated_at,
+             state.last_status, state.last_error_code, state.last_completed_at,
+             state.last_success_completed_at, state.last_success_checked_count,
+             (SELECT json_array_length(snapshot.payload, '$.items') FROM wishlist_snapshot AS snapshot
+               WHERE snapshot.discord_user_id = config.discord_user_id
+                 AND snapshot.config_version = config.config_version
+               ORDER BY snapshot.captured_at DESC LIMIT 1) AS snapshot_count,
+             (SELECT COUNT(*) FROM wishlist_item_state AS item
+               WHERE item.discord_user_id = config.discord_user_id
+                 AND item.config_version = config.config_version AND item.on_sale = 1) AS on_sale_count,
+             (SELECT COUNT(*) FROM game_rule AS rule
+               WHERE rule.discord_user_id = config.discord_user_id
+                 AND rule.config_version = config.config_version AND rule.mode != 'inherit') AS rule_count,
+             (SELECT COUNT(*) FROM game_rule AS rule
+               WHERE rule.discord_user_id = config.discord_user_id
+                 AND rule.config_version = config.config_version AND rule.muted = 1) AS muted_count,
+             COALESCE((SELECT mode FROM notification_preference AS preference
+               WHERE preference.discord_user_id = config.discord_user_id), 'instant') AS notification_mode,
+             (SELECT COUNT(*) FROM notification_log AS notification
+               WHERE notification.discord_user_id = config.discord_user_id AND notification.status = 'sent') AS alerts_sent,
+             (SELECT MAX(COALESCE(notification.delivered_at, notification.last_attempt_at)) FROM notification_log AS notification
+               WHERE notification.discord_user_id = config.discord_user_id AND notification.status = 'sent') AS last_alert_at,
+             (SELECT COUNT(*) FROM notification_log AS notification
+               WHERE notification.discord_user_id = config.discord_user_id
+                 AND notification.config_version = config.config_version
+                 AND notification.status IN ('candidate', 'failed', 'sending')) AS pending_alerts
+      FROM user_config AS config
+      LEFT JOIN check_state AS state ON state.discord_user_id = config.discord_user_id
+      ORDER BY config.created_at DESC`).all() as Row[]).map((row) => ({
+      discordUserId: text(row.discord_user_id),
+      steamId64: text(row.steam_id64),
+      language: text(row.language),
+      storeCountryCode: text(row.store_country_code),
+      enabled: int(row.enabled) === 1,
+      minimumDiscountPercent: int(row.minimum_discount_percent),
+      dmDeliveryBlockedAt: textOrNull(row.dm_delivery_blocked_at),
+      dmDeliveryErrorCode: textOrNull(row.dm_delivery_error_code),
+      createdAt: text(row.created_at),
+      updatedAt: text(row.updated_at),
+      lastCheckStatus: textOrNull(row.last_status),
+      lastCheckErrorCode: textOrNull(row.last_error_code),
+      lastCheckCompletedAt: textOrNull(row.last_completed_at),
+      lastSuccessAt: textOrNull(row.last_success_completed_at),
+      wishlistCount: intOrNull(row.snapshot_count) ?? intOrNull(row.last_success_checked_count),
+      onSaleCount: int(row.on_sale_count),
+      ruleCount: int(row.rule_count),
+      mutedCount: int(row.muted_count),
+      notificationMode: text(row.notification_mode),
+      alertsSent: int(row.alerts_sent),
+      lastAlertAt: textOrNull(row.last_alert_at),
+      pendingAlerts: int(row.pending_alerts),
+    }));
+  }
+
+  public checkState(discordUserId: string): AdminCheckState | null {
+    const row = preparedStatement(this.database, 'SELECT * FROM check_state WHERE discord_user_id = ?')
+      .get(discordUserId) as Row | undefined;
+    if (!row) return null;
+    return {
+      lastStartedAt: textOrNull(row.last_started_at),
+      lastCompletedAt: textOrNull(row.last_completed_at),
+      lastStatus: textOrNull(row.last_status),
+      lastErrorCode: textOrNull(row.last_error_code),
+      nextScheduledAt: textOrNull(row.next_scheduled_at),
+      lastSuccessCompletedAt: textOrNull(row.last_success_completed_at),
+      lastSuccessCheckedCount: intOrNull(row.last_success_checked_count),
+      lastSuccessOnSaleCount: intOrNull(row.last_success_on_sale_count),
+      lastSuccessFreeCount: intOrNull(row.last_success_free_count),
+      lastSuccessUnknownPriceCount: intOrNull(row.last_success_unknown_price_count),
+      lastSuccessFailedItemCount: intOrNull(row.last_success_failed_item_count),
+    };
+  }
+
+  public notifications(discordUserId: string, limit: number): AdminNotificationRow[] {
+    return (preparedStatement(this.database, `
+      SELECT app_id, game_name, status, reason, currency, normal_price_minor, final_price_minor,
+             discount_percent, attempt_count, created_at, last_attempt_at, delivered_at, last_error,
+             store_country_code
+      FROM notification_log WHERE discord_user_id = ?
+      ORDER BY created_at DESC LIMIT ?`).all(discordUserId, limit) as Row[]).map((row) => ({
+      appId: int(row.app_id),
+      gameName: text(row.game_name),
+      status: text(row.status),
+      reason: text(row.reason),
+      currency: text(row.currency),
+      normalPriceMinor: int(row.normal_price_minor),
+      finalPriceMinor: int(row.final_price_minor),
+      discountPercent: int(row.discount_percent),
+      attemptCount: int(row.attempt_count),
+      createdAt: text(row.created_at),
+      lastAttemptAt: textOrNull(row.last_attempt_at),
+      deliveredAt: textOrNull(row.delivered_at),
+      lastError: textOrNull(row.last_error),
+      storeCountryCode: text(row.store_country_code),
+    }));
+  }
+
+  /** Games on the most current wishlists. */
+  public topWishlistedGames(limit: number): AdminGameRow[] {
+    return (this.database.prepare(`
+      WITH ${snapshotGamesCte}
+      SELECT app_id, MAX(name) AS name, COUNT(DISTINCT discord_user_id) AS count
+      FROM snapshot_game GROUP BY app_id ORDER BY count DESC, name LIMIT ?`).all(limit) as Row[])
+      .map((row) => ({ appId: int(row.app_id), name: text(row.name), count: int(row.count) }));
+  }
+
+  /** Games on sale right now for the most users, with the deepest discount seen. */
+  public topGamesOnSale(limit: number): AdminGameRow[] {
+    return (this.database.prepare(`
+      WITH ${snapshotGamesCte}
+      SELECT state.app_id, COALESCE(game_name.name, '#' || state.app_id) AS name,
+             COUNT(DISTINCT state.discord_user_id) AS count, MAX(state.discount_percent) AS max_discount
+      FROM wishlist_item_state AS state
+      JOIN user_config AS config
+        ON config.discord_user_id = state.discord_user_id AND config.config_version = state.config_version
+      LEFT JOIN game_name ON game_name.app_id = state.app_id
+      WHERE state.on_sale = 1
+      GROUP BY state.app_id ORDER BY count DESC, max_discount DESC LIMIT ?`).all(limit) as Row[])
+      .map((row) => ({
+        appId: int(row.app_id), name: text(row.name), count: int(row.count),
+        maxDiscountPercent: intOrNull(row.max_discount),
+      }));
+  }
+
+  public topAlertedGames(days: number, limit: number, now: Date = new Date()): AdminGameRow[] {
+    const since = new Date(now.getTime() - days * 24 * 3600_000).toISOString();
+    return (this.database.prepare(`
+      SELECT app_id, MAX(game_name) AS name, COUNT(*) AS count, MAX(discount_percent) AS max_discount
+      FROM notification_log WHERE status = 'sent' AND COALESCE(delivered_at, last_attempt_at) >= ?
+      GROUP BY app_id ORDER BY count DESC, name LIMIT ?`).all(since, limit) as Row[])
+      .map((row) => ({
+        appId: int(row.app_id), name: text(row.name), count: int(row.count),
+        maxDiscountPercent: intOrNull(row.max_discount),
+      }));
+  }
+
+  public topRuledGames(limit: number): Array<AdminGameRow & { readonly muted: number; readonly targets: number }> {
+    return (this.database.prepare(`
+      WITH ${snapshotGamesCte}
+      SELECT rule.app_id, COALESCE(game_name.name, '#' || rule.app_id) AS name, COUNT(*) AS count,
+             COUNT(CASE WHEN rule.muted = 1 THEN 1 END) AS muted,
+             COUNT(CASE WHEN rule.mode = 'target' THEN 1 END) AS targets
+      FROM game_rule AS rule
+      JOIN user_config AS config
+        ON config.discord_user_id = rule.discord_user_id AND config.config_version = rule.config_version
+      LEFT JOIN game_name ON game_name.app_id = rule.app_id
+      WHERE rule.mode != 'inherit' OR rule.muted = 1
+      GROUP BY rule.app_id ORDER BY count DESC, name LIMIT ?`).all(limit) as Row[])
+      .map((row) => ({
+        appId: int(row.app_id), name: text(row.name), count: int(row.count),
+        muted: int(row.muted), targets: int(row.targets),
+      }));
+  }
+
+  public currencies(): CountRow[] {
+    return (this.database.prepare(`
+      SELECT state.currency AS key, COUNT(DISTINCT state.discord_user_id) AS count
+      FROM wishlist_item_state AS state
+      JOIN user_config AS config
+        ON config.discord_user_id = state.discord_user_id AND config.config_version = state.config_version
+      WHERE state.currency IS NOT NULL AND state.observation_status = 'known'
+      GROUP BY key ORDER BY count DESC`).all() as Row[])
+      .map((row) => ({ key: text(row.key), count: int(row.count) }));
+  }
+
+  private dayCounts(sql: string, since: string): DayCount[] {
+    return (this.database.prepare(sql).all(since) as Row[])
+      .map((row) => ({ day: text(row.day), count: int(row.count) }));
+  }
+}

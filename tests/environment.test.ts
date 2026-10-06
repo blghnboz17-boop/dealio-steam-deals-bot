@@ -125,4 +125,17 @@ describe('production host boundary', () => {
     expect(() => loadEnvironment({ ...validEnvironment, DISCORD_CLIENT_ID: '1540325119690412172' }))
       .toThrow('Development must use a separate Discord application');
   });
+
+  it('enables the admin panel only with a long enough token', () => {
+    expect(loadEnvironment(validEnvironment).adminPanel).toBeUndefined();
+    const token = 'a'.repeat(32);
+    expect(loadEnvironment({ ...validEnvironment, DEALIO_ADMIN_TOKEN: ` ${token} ` }).adminPanel)
+      .toEqual({ token, port: 8787 });
+    expect(loadEnvironment({ ...validEnvironment, DEALIO_ADMIN_TOKEN: token, DEALIO_ADMIN_PORT: '9000' }).adminPanel)
+      .toEqual({ token, port: 9000 });
+    expect(() => loadEnvironment({ ...validEnvironment, DEALIO_ADMIN_TOKEN: 'short' }))
+      .toThrow('DEALIO_ADMIN_TOKEN must be at least 32 characters');
+    expect(() => loadEnvironment({ ...validEnvironment, DEALIO_ADMIN_TOKEN: token, DEALIO_ADMIN_PORT: '80' }))
+      .toThrow('DEALIO_ADMIN_PORT must be between 1024 and 65535');
+  });
 });

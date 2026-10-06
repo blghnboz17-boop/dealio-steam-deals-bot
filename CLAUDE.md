@@ -9,7 +9,7 @@ own price rules, with the context needed to trust the alert.
 ## Rules
 
 - Use TypeScript with strict mode.
-- Keep Steam, Discord, persistence, and scheduling code in separate modules (`src/steam`, `src/discord`, `src/persistence`, `src/application`, `src/domain`, `src/operations`, `src/price-history`).
+- Keep Steam, Discord, persistence, and scheduling code in separate modules (`src/steam`, `src/discord`, `src/persistence`, `src/application`, `src/domain`, `src/operations`, `src/price-history`, `src/admin`; the admin panel UI lives in `admin-ui/`).
 - Never commit secrets. Read tokens and IDs from environment variables.
 - Use Node's built-in `node:sqlite` module; avoid native database dependencies.
 - Add tests for price-change, rule-matching, and duplicate-notification logic.
@@ -32,9 +32,10 @@ Dealio is in **limited beta** on a single Azure VM. Implemented:
 - Persistent deduplication per sale episode; a game absent from one wishlist read keeps its sale state for a 20-minute grace period, so Steam omissions never re-send an ongoing sale. Delivery history, DM access test, and `/delete-data` (recorded as a hashed entry in `data/deletions.jsonl`, re-applied at startup so a restore cannot undo it).
 - Changing the Steam account from Settings reuses the setup profile form, needs confirmation, and starts the new wishlist from a baseline. New sign-ups are capped by `DEALIO_MAX_USERS` (default 200). The support link appears on the Home panel only, never in DMs.
 - Price observations kept 90 days, notification history shown for 30 days; shared five-minute price cache.
+- Owner admin panel (`docs/admin-panel.tr.md`): a web UI inside the bot process on 127.0.0.1 only, reached by SSH tunnel, enabled by `DEALIO_ADMIN_TOKEN`. Servers, users (live Discord profiles, never stored), games, usage telemetry (`interaction_event`, 90 days; server join/leave history), owner actions through the same services and per-user coordinator as commands (pause, check, test alert, region/language, block, delete), announcements and DMs persisted per recipient before Discord is called, runtime settings (sign-ups open, user limit override, presence), audit trail and logs. Blocked accounts can still run `/delete-data`. The privacy policy (6 October 2026) covers this data; keep it in sync when telemetry changes.
 - Operations: encrypted off-site backup and restore rehearsal (GitHub Actions), independent Healthchecks alerts, a static public site (privacy, terms, help) on GitHub Pages, release gate (`npm run release:check`), and anonymous latency metrics (`npm run metrics:report`).
 
-Out of scope: payments, a separate web dashboard, other stores, estimated currency conversion, Steam credentials or private wishlists, real-time Steam events.
+Out of scope: payments, a user-facing web dashboard (the owner admin panel is the only web UI), other stores, estimated currency conversion, Steam credentials or private wishlists, real-time Steam events.
 
 ## Operating Constraints
 

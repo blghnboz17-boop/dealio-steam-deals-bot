@@ -1,3 +1,4 @@
+import { migrateAdmin } from './admin-schema.js';
 import { migrateAssistant } from './assistant-schema.js';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -88,6 +89,7 @@ export function createDatabase(databasePath: string): DatabaseSync {
     migrateAssistant(database);
     migrateLanguages(database);
     migrateAlertLevels(database);
+    migrateAdmin(database);
     return database;
   } catch (error: unknown) {
     try {
