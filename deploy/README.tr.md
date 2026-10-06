@@ -80,7 +80,10 @@ süreci kapatır; bu ayarlar o anın botu düşürmemesi içindir:
   (`/etc/sysctl.d/90-dealio-swap.conf`): swap yalnız son çaredir. `fstab`
   yedeği: `/etc/fstab.bak-20261007`.
 - `/etc/systemd/system/dealio.service.d/memory.conf`: `OOMScoreAdjust=-500`.
-  Bellek tükenirse çekirdek önce diğer süreçleri kapatır.
+  Bellek tükenirse çekirdek önce diğer süreçleri kapatır. Aynı dosya `ExecStart`'ı
+  `node --optimize-for-size` ile yeniden tanımlar: 200 kullanıcılık yük testinde en
+  yüksek bellek 369 MB'tan 132 MB'a indi, hız ölçüm gürültüsü içinde kaldı. Boştaki
+  bellek (~116 MB, çoğu yüklü kod) değişmez. Önceki hali: `memory.conf.bak-20261007`.
 - Sunucuda işe yaramayan servisler kapatıldı: `fwupd` (maskelendi, `fwupd-refresh.timer`
   kapalı), `multipathd` (tek disk, multipath aygıtı yok), `ModemManager`, `udisks2`.
   Azure ajanı (`walinuxagent`), SSH ve `unattended-upgrades` açık kalır.
@@ -92,7 +95,8 @@ Geri alma: `sudo swapoff /swapfile`, `fstab` satırını sil, `sudo rm /swapfile
 ardından `sudo systemctl daemon-reload`.
 
 Kontrol: `free -m`, `swapon --show`, `cat /proc/$(systemctl show -p MainPID --value dealio)/oom_score_adj`
-(-500 olmalı). VM'de kalıcı başka araç çalıştırmak (ör. bir kod ajanı sunucusu) RAM'i
+(-500 olmalı), `tr '\0' ' ' < /proc/$(systemctl show -p MainPID --value dealio)/cmdline`
+(`--optimize-for-size` görünmeli). VM'de kalıcı başka araç çalıştırmak (ör. bir kod ajanı sunucusu) RAM'i
 doğrudan bottan alır.
 
 ## İsteğe bağlı yerel WSL servisi

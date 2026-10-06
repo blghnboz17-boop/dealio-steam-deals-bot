@@ -10,7 +10,7 @@ Type=simple
 User=bilgehan
 Group=bilgehan
 WorkingDirectory=/home/bilgehan/code/steam-wishlist-discord-bot
-ExecStart=/home/bilgehan/.local/bin/node /home/bilgehan/code/steam-wishlist-discord-bot/dist/index.js
+ExecStart=/home/bilgehan/.local/bin/node --optimize-for-size /home/bilgehan/code/steam-wishlist-discord-bot/dist/index.js
 Environment=NODE_ENV=production
 Restart=on-failure
 RestartSec=15
