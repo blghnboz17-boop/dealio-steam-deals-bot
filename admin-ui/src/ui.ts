@@ -389,15 +389,18 @@ export function useTicker(ms: number): number {
   return now;
 }
 
-export function useElementWidth(): [{ current: HTMLElement | null }, number] {
+export function useElementSize(): [{ current: HTMLElement | null }, number, number] {
   const ref = useRef<HTMLElement | null>(null);
-  const [width, setWidth] = useState(0);
+  const [size, setSize] = useState({ width: 0, height: 0 });
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
-    const observer = new ResizeObserver((entries) => setWidth(entries[0]?.contentRect.width ?? 0));
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      setSize({ width: box?.width ?? 0, height: box?.height ?? 0 });
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  return [ref, width];
+  return [ref, size.width, size.height];
 }

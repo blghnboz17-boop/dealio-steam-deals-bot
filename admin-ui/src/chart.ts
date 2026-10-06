@@ -1,5 +1,5 @@
 import { html, useMemo, useState, type VNode } from './vendor/preact-htm.js';
-import { useElementWidth, type Tone } from './ui.js';
+import { useElementSize, type Tone } from './ui.js';
 import type { DayCount } from './types.js';
 
 const dayFormat = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -83,6 +83,11 @@ function ChartTable(props: { data: readonly DayCount[]; unit: string; level: boo
   </details>`;
 }
 
+/** A filling chart takes its area's measured height (the SVG is absolutely placed, so it never props the area up). */
+function chartHeight(props: { readonly height?: number; readonly fill?: boolean }, areaHeight: number): number | undefined {
+  return props.fill ? Math.max(props.height ?? 220, Math.floor(areaHeight)) : props.height;
+}
+
 interface Frame {
   readonly width: number;
   readonly height: number;
@@ -133,11 +138,15 @@ function Caption(props: { data: readonly DayCount[]; days: number; unit: string;
 }
 
 /** Daily counts of discrete events: one hue, hover dims the rest and shows a tooltip, table view below. */
-export function DailyColumns(props: { rows: readonly DayCount[]; days: number; unit: string; total?: boolean; caption?: boolean; height?: number }): VNode {
+export function DailyColumns(props: {
+  rows: readonly DayCount[]; days: number; unit: string; total?: boolean; caption?: boolean; height?: number;
+  /** Grow to the height the card gives the chart; `height` is then the minimum. */
+  fill?: boolean;
+}): VNode {
   const data = useMemo(() => fillDays(props.rows, props.days), [props.rows, props.days]);
-  const [ref, width] = useElementWidth();
+  const [ref, width, areaHeight] = useElementSize();
   const [hover, setHover] = useState<number | null>(null);
-  const f = frame(width, data, props.height);
+  const f = frame(width, data, chartHeight(props, areaHeight));
   const slot = data.length > 0 ? f.innerWidth / data.length : 0;
   const barWidth = Math.max(1, Math.min(22, slot * 0.68));
   const total = data.reduce((sum, row) => sum + row.count, 0);
@@ -145,7 +154,8 @@ export function DailyColumns(props: { rows: readonly DayCount[]; days: number; u
   return html`
     <figure class="chart">
       ${props.caption === false ? null : html`<${Caption} data=${data} days=${props.days} unit=${props.unit} total=${props.total !== false} />`}
-      <div class="chart-area" ref=${ref} onMouseLeave=${() => setHover(null)}>
+      <div class=${`chart-area ${props.fill ? 'chart-fill' : ''}`} ref=${ref} onMouseLeave=${() => setHover(null)}
+        style=${props.fill ? `min-height:${props.height ?? 220}px` : ''}>
         ${width > 0 ? html`
           <svg width=${width} height=${f.height} role="img" aria-label=${`Günlük ${props.unit}, son ${props.days} gün, toplam ${total}`}>
             <g transform=${`translate(${f.margin.left},${f.margin.top})`}>
@@ -171,13 +181,13 @@ export function DailyColumns(props: { rows: readonly DayCount[]; days: number; u
 
 /** A level or rate over time: smooth line with a soft fill, crosshair and tooltip, table view below. */
 export function AreaChart(props: {
-  rows: readonly DayCount[]; days: number; unit: string; total?: boolean; level?: boolean; caption?: boolean; height?: number;
+  rows: readonly DayCount[]; days: number; unit: string; total?: boolean; level?: boolean; caption?: boolean; height?: number; fill?: boolean;
 }): VNode {
   const data = useMemo(() => props.level ? props.rows.slice(-props.days) : fillDays(props.rows, props.days), [props.rows, props.days, props.level]);
-  const [ref, width] = useElementWidth();
+  const [ref, width, areaHeight] = useElementSize();
   const [hover, setHover] = useState<number | null>(null);
   const [gradient] = useState(() => `area-${(gradientIds += 1)}`);
-  const f = frame(width, data, props.height);
+  const f = frame(width, data, chartHeight(props, areaHeight));
   const step = data.length > 1 ? f.innerWidth / (data.length - 1) : 0;
   const points = data.map((row, index): [number, number] => [index * step, f.innerHeight - (row.count / f.max) * f.innerHeight]);
   const line = smoothPath(points);
@@ -191,7 +201,8 @@ export function AreaChart(props: {
   return html`
     <figure class="chart">
       ${props.caption === false ? null : html`<${Caption} data=${data} days=${props.days} unit=${props.unit} total=${props.total !== false} />`}
-      <div class="chart-area" ref=${ref} onMouseLeave=${() => setHover(null)}>
+      <div class=${`chart-area ${props.fill ? 'chart-fill' : ''}`} ref=${ref} onMouseLeave=${() => setHover(null)}
+        style=${props.fill ? `min-height:${props.height ?? 220}px` : ''}>
         ${width > 0 ? html`
           <svg width=${width} height=${f.height} role="img" onMouseMove=${onMove}
             aria-label=${`Günlük ${props.unit}, son ${props.days} gün`}>

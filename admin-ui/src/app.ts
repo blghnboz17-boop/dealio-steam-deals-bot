@@ -15,6 +15,7 @@ import { AuditPage } from './pages/audit.js';
 import { GuildDetailPage } from './pages/guilds.js';
 import { UsagePage } from './pages/usage.js';
 import { useTheme } from './theme.js';
+import { SearchPalette } from './search.js';
 
 interface SessionResponse {
   readonly authenticated: boolean;
@@ -130,7 +131,18 @@ function Shell(props: { onSignOut: () => void }): VNode {
   const path = usePath();
   const section = '/' + (path.split('/')[1] ?? '');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   useEffect(() => setMenuOpen(false), [path]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen((open) => !open);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (event: KeyboardEvent): void => {
@@ -171,12 +183,15 @@ function Shell(props: { onSignOut: () => void }): VNode {
           <button class="btn btn-icon menu-toggle" aria-label="Menü" aria-expanded=${menuOpen} aria-controls="sidebar"
             onClick=${() => setMenuOpen(true)}>${Icon({ name: 'menu', size: 18 })}</button>
           <${Crumbs} path=${path} section=${section} />
+          <button class="search-trigger" onClick=${() => setSearchOpen(true)} aria-label="Ara (Ctrl+K)">
+            ${Icon({ name: 'search' })}<span>Kullanıcı, sunucu veya ID ara…</span><kbd>Ctrl K</kbd></button>
           <div class="topbar-actions">
             <${ThemeToggle} />
           </div>
         </header>
         <main class="content"><${Route} key=${path} path=${path} /></main>
       </div>
+      ${searchOpen ? html`<${SearchPalette} pages=${sections} onClose=${() => setSearchOpen(false)} />` : null}
       <${Toasts} />
     </div>`;
 }

@@ -48,12 +48,13 @@ const seriesNotes: Readonly<Record<Series, string>> = {
 function ActivityCard(props: { charts: Overview['charts'] }): VNode {
   const [series, setSeries] = useState<Series>('alerts');
   const { charts } = props;
-  const chart = series === 'alerts' ? html`<${DailyColumns} key="alerts" rows=${charts.alerts} days=${30} unit="uyarı" height=${300} />`
-    : series === 'active' ? html`<${AreaChart} key="active" rows=${charts.activeUsers} days=${30} unit="kişi-gün" height=${300} />`
-      : series === 'signups' ? html`<${DailyColumns} key="signups" rows=${charts.signups} days=${90} unit="kayıt" height=${300} />`
-        : html`<${AreaChart} key="guilds" rows=${carryForward(charts.guilds, 90)} days=${90} unit="sunucu" level total=${false} height=${300} />`;
+  const chart = series === 'alerts' ? html`<${DailyColumns} key="alerts" rows=${charts.alerts} days=${30} unit="uyarı" height=${280} fill />`
+    : series === 'active' ? html`<${AreaChart} key="active" rows=${charts.activeUsers} days=${30} unit="kişi-gün" height=${280} fill />`
+      : series === 'signups' ? html`<${DailyColumns} key="signups" rows=${charts.signups} days=${90} unit="kayıt" height=${280} fill />`
+        : html`<${AreaChart} key="guilds" rows=${carryForward(charts.guilds, 90)} days=${90} unit="sunucu" level total=${false} height=${280} fill />`;
   return Card({
     title: 'Etkinlik',
+    class: 'card-fill',
     subtitle: seriesNotes[series],
     actions: html`<div class="segmented" role="tablist" aria-label="Seri">${seriesTabs.map(([key, label]) => html`
       <button role="tab" aria-selected=${series === key} class=${`tab ${series === key ? 'active' : ''}`}
