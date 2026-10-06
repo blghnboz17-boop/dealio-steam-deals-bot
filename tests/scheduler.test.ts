@@ -8,6 +8,7 @@ import {
   type SchedulerNotificationService,
   WishlistScheduler,
 } from '../src/application/scheduler.js';
+import { nextSteamPriceChange } from '../src/domain/steam-price-schedule.js';
 import type { UserConfig } from '../src/domain/user-config.js';
 import { createDatabase } from '../src/persistence/database.js';
 import { CheckStateRepository } from '../src/persistence/check-state-repository.js';
@@ -371,6 +372,88 @@ describe('WishlistScheduler', () => {
       await new Promise<void>((resolve) => setImmediate(resolve));
       expect(checkService.check).toHaveBeenCalledWith('user-a', 'automatic');
       expect(clock.clock.setTimeout).toHaveBeenLastCalledWith(expect.any(Function), 30 * 60_000);
+    } finally {
+      await scheduler.stop();
+    }
+  });
+
+  it.each([
+    // Steam changes prices at 17:00 UTC; the half-hour interval would only reach 17:22.
+    ['2026-10-07T16:52:00.000Z', '2026-10-07T17:02:00.000Z', 10],
+    // The change is further away than the interval, which stays in charge.
+    ['2026-10-07T15:00:00.000Z', '2026-10-07T15:30:00.000Z', 30],
+    // Just past the aligned scan, the next one is the regular interval.
+    ['2026-10-07T17:02:30.000Z', '2026-10-07T17:32:30.000Z', 30],
+  ])('after a scan ending %s schedules the next one at %s', async (completedAt, expected, minutes) => {
+    const scheduleRepository = createScheduleRepository();
+    const clock = createClock();
+    const scheduler = new WishlistScheduler({
+      intervalHours: 0.5,
+      userConfigRepository: { findEnabled: () => [user('user-a')] },
+      checkService: { check: vi.fn().mockResolvedValue(successResult()) },
+      notificationService: createNotificationService(),
+      scheduleRepository,
+      clock: clock.clock,
+      logger: createLogger(),
+      now: () => new Date(completedAt),
+      nextPriceChange: nextSteamPriceChange,
+    });
+
+    try {
+      scheduler.start();
+      await vi.waitFor(() => expect(scheduleRepository.setNextScheduledAt).toHaveBeenLastCalledWith(expected));
+      expect(clock.clock.setTimeout).toHaveBeenLastCalledWith(expect.any(Function), minutes * 60_000);
+    } finally {
+      await scheduler.stop();
+    }
+  });
+
+  it('pulls a saved later target forward to the price change after a restart', async () => {
+    const scheduleRepository = createScheduleRepository('2026-10-07T17:20:00.000Z');
+    const clock = createClock();
+    const checkService = { check: vi.fn().mockResolvedValue(successResult()) };
+    const scheduler = new WishlistScheduler({
+      intervalHours: 0.5,
+      userConfigRepository: { findEnabled: () => [user('user-a')] },
+      checkService,
+      notificationService: createNotificationService(),
+      scheduleRepository,
+      clock: clock.clock,
+      logger: createLogger(),
+      now: () => new Date('2026-10-07T16:55:00.000Z'),
+      nextPriceChange: nextSteamPriceChange,
+    });
+
+    try {
+      scheduler.start();
+      expect(checkService.check).not.toHaveBeenCalled();
+      expect(scheduleRepository.setNextScheduledAt).toHaveBeenCalledWith('2026-10-07T17:02:00.000Z');
+      expect(clock.clock.setTimeout).toHaveBeenCalledWith(expect.any(Function), 7 * 60_000);
+    } finally {
+      await scheduler.stop();
+    }
+  });
+
+  it('keeps the regular interval when the price change cannot be computed', async () => {
+    const scheduleRepository = createScheduleRepository();
+    const logger = createLogger();
+    const scheduler = new WishlistScheduler({
+      intervalHours: 0.5,
+      userConfigRepository: { findEnabled: () => [user('user-a')] },
+      checkService: { check: vi.fn().mockResolvedValue(successResult()) },
+      notificationService: createNotificationService(),
+      scheduleRepository,
+      clock: createClock().clock,
+      logger,
+      now: () => new Date('2026-10-07T16:52:00.000Z'),
+      nextPriceChange: () => { throw new Error('no time zone data'); },
+    });
+
+    try {
+      scheduler.start();
+      await vi.waitFor(() => expect(scheduleRepository.setNextScheduledAt)
+        .toHaveBeenLastCalledWith('2026-10-07T17:22:00.000Z'));
+      expect(logger.error).toHaveBeenCalledWith('Could not compute the next Steam price change.');
     } finally {
       await scheduler.stop();
     }

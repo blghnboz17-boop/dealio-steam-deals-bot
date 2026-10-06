@@ -1,7 +1,7 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type MessageComponentInteraction } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessagePayload, type InteractionUpdateOptions, type MessageComponentInteraction } from 'discord.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import type { Language } from '../../domain/user-config.js';
-import { measureDiscordOperation } from '../interaction-timing.js';
+import { ClickResponse } from './click-response.js';
 import { tabNames } from './design.js';
 
 /** The four sections of the single Dealio panel. */
@@ -47,9 +47,10 @@ export function parseTabAction(action: string): DealioTab | null {
 }
 
 /**
- * Hands the panel's message to another screen. The click is acknowledged at
- * once; the current session stops ('handoff') and finishes its queued edits
- * before the target renders, so an old edit cannot overwrite the new screen.
+ * Hands the panel's message to another screen. The current session stops
+ * ('handoff') and finishes its queued edits before the target renders, so an
+ * old edit cannot overwrite the new screen. The target's first screen is the
+ * click's answer (one Discord call); a slow target gets the click deferred in time.
  */
 export function handOffPanel(options: {
   readonly component: MessageComponentInteraction;
@@ -58,11 +59,42 @@ export function handOffPanel(options: {
   readonly stop: () => void;
   readonly settle: () => Promise<void>;
 }): void {
-  const acknowledgement = measureDiscordOperation(options.component, 'panel.button-ack', () => options.component.deferUpdate());
+  const click = new ClickResponse(options.component, 'panel');
+  answerWithFirstEdit(options.component, click);
   options.stop();
   void (async () => {
-    await acknowledgement;
     await options.settle();
     await options.navigate(options.target, options.component);
-  })().catch((error: unknown) => safeLogger.error('Dealio panel navigation failed', error));
+    await click.defer();
+  })().catch(async (error: unknown) => {
+    await click.defer().catch(() => undefined);
+    safeLogger.error('Dealio panel navigation failed', error);
+  });
+}
+
+/**
+ * Target screens treat the component as an acknowledged interaction and edit its
+ * reply. The first such edit becomes the click's answer; any other reply call
+ * first acknowledges the click, as the target expects.
+ */
+function answerWithFirstEdit(component: MessageComponentInteraction, click: ClickResponse): void {
+  if (typeof component.editReply === 'function') {
+    const editReply = component.editReply.bind(component);
+    component.editReply = (async (reply: Parameters<typeof editReply>[0]) => {
+      if (typeof reply !== 'object' || reply instanceof MessagePayload || 'message' in reply) {
+        await click.defer();
+        return editReply(reply);
+      }
+      return click.edit(reply as InteractionUpdateOptions, () => editReply(reply));
+    }) as typeof component.editReply;
+  }
+  for (const method of ['followUp', 'fetchReply', 'deleteReply'] as const) {
+    const original = component[method];
+    if (typeof original !== 'function') continue;
+    const bound = (original as (...args: unknown[]) => Promise<unknown>).bind(component);
+    (component as unknown as Record<string, unknown>)[method] = async (...args: unknown[]) => {
+      await click.defer();
+      return bound(...args);
+    };
+  }
 }

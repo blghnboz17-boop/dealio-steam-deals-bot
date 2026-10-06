@@ -1,6 +1,6 @@
 import { safeLogger } from '../application/safe-logger.js';
 
-type DiscordOperation = `${string}.${'ack' | 'button-ack' | 'modal' | 'modal-submit-ack' | 'render' | 'load' | 'open'}`;
+type DiscordOperation = `${string}.${'ack' | 'button-ack' | 'button-update' | 'modal' | 'modal-submit-ack' | 'render' | 'load' | 'open'}`;
 
 export async function measureDiscordOperation<T>(
   interaction: { readonly createdTimestamp?: number },
@@ -25,7 +25,8 @@ export async function measureDiscordOperation<T>(
     const interactionAgeMs = interaction.createdTimestamp === undefined
       ? undefined : Math.max(0, finished - interaction.createdTimestamp);
     const phase = operation.slice(operation.lastIndexOf('.') + 1);
-    const acknowledgement = ['ack', 'button-ack', 'modal', 'modal-submit-ack'].includes(phase);
+    // A button-update is the click's acknowledgement and its panel edit in one call.
+    const acknowledgement = ['ack', 'button-ack', 'button-update', 'modal', 'modal-submit-ack'].includes(phase);
     const lateAcknowledgement = acknowledgement && (interactionAgeMs ?? 0) >= 2000;
     if (acknowledgement) {
       safeLogger.log('[discord-metric]', JSON.stringify({

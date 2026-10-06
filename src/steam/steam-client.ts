@@ -4,6 +4,7 @@ import {
   type WishlistItem,
 } from '../domain/steam.js';
 import { isLanguage, type Language } from '../domain/user-config.js';
+import { nextSteamPriceChange } from '../domain/steam-price-schedule.js';
 
 /** Steam Store's own name for each language, so reviews and release notes come back in it. */
 const steamLanguage: Readonly<Record<Language, string>> = {
@@ -147,6 +148,8 @@ interface BatchCache<V> {
 interface BatchSource<V> {
   readonly cache: BatchCache<V>;
   readonly ttlMs: number;
+  /** An instant after which a value fetched now may be wrong, whatever the TTL says. */
+  readonly validUntil?: (fetchedAtMs: number) => number;
   readonly key: (appId: number) => string;
   readonly fetch: (appIds: readonly number[]) => Promise<Map<number, V | SteamWishlistError>>;
   readonly cacheable: (value: V) => boolean;
@@ -292,6 +295,8 @@ export class SteamClient {
     return {
       cache: this.priceCache,
       ttlMs: this.cacheTtlMs,
+      // A price read just before Steam's daily change must not hide a sale that starts at it.
+      validUntil: (fetchedAtMs) => nextSteamPriceChange(new Date(fetchedAtMs)).getTime(),
       key: (appId) => `${storeCountryCode}:${appId}`,
       // Unpriced/unavailable products are not reusable successful prices.
       cacheable: (price) => price !== null,
@@ -409,8 +414,9 @@ export class SteamClient {
       return new Map(appIds.map((appId) => [appId, { error }]));
     }
 
-    const observedAt = new Date(this.now()).toISOString();
-    const expiresAt = this.now() + source.ttlMs;
+    const fetchedAtMs = this.now();
+    const observedAt = new Date(fetchedAtMs).toISOString();
+    const expiresAt = Math.min(fetchedAtMs + source.ttlMs, source.validUntil?.(fetchedAtMs) ?? Number.POSITIVE_INFINITY);
     const lookups = new Map<number, Lookup<V>>();
     for (const appId of appIds) {
       const value = parsed.get(appId)!;

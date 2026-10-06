@@ -103,7 +103,7 @@ Dealio şu an küçük bir grupla deneniyor. Katılmak istersen [beta sayfasınd
 
 ## 🔔 Bildirimler ne zaman gelir?
 
-Dealio, her tarama bittikten **30 dakika sonra** yeniden kontrol eder. Kuralına uyan bir fiyat değişimi olduğunda, seçtiğin bildirim zamanına göre DM gönderir. Steam veya Discord’da sorun varsa gecikme olabilir.
+Dealio, her tarama bittikten **30 dakika sonra** ve Steam'in fiyatları her gün değiştirdiği Pasifik saatiyle 10:00'dan (Türkiye'de 20:00, kış saatinde 21:00) hemen sonra yeniden kontrol eder; indirimlerin çoğu o anda başlar. Kuralına uyan bir fiyat değişimi olduğunda, seçtiğin bildirim zamanına göre DM gönderir. Steam veya Discord’da sorun varsa gecikme olabilir.
 
 İlk kurulum mevcut indirimlerin bir özetini gönderebilir; hepsi için ayrı yeni-indirim bildirimi oluşturmaz. Bir oyun kuralına zaten uyarken kural kaydetmek ya da genel indirim oranını değiştirmek de DM göndermez; o indirim belirgin şekilde iyileşirse (en az 10 puan daha fazla indirim ya da tutturulmuş hedefte %10 daha düşük fiyat) haber verir. Fiyatlar seçtiğin Steam mağazasının para birimindedir; satın alırken son fiyatı Steam’de kontrol et.
 
@@ -225,7 +225,7 @@ Dealio Steam wishlist’lerine odaklanır. Ödeme sistemi, kullanıcılara açı
 
 <br>
 
-**Kontroller 30 dakikalık düzende yapılır; Steam’den anlık olay akışı alınmaz.** Bir sonraki otomatik tarama, önceki tarama bittikten 30 dakika sonrasına planlanır. Steam veya Discord kesintileri gecikme yaratabilir.
+**Kontroller 30 dakikalık düzende yapılır; Steam’den anlık olay akışı alınmaz.** Bir sonraki otomatik tarama, önceki tarama bittikten 30 dakika sonrasına; Steam'in Pasifik saatiyle 10:00'daki fiyat değişimi daha önce geliyorsa onun 2 dakika sonrasına planlanır. Steam veya Discord kesintileri gecikme yaratabilir.
 
 | Adım | Ne olur? |
 | :--- | :--- |

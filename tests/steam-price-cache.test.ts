@@ -44,3 +44,26 @@ it('keeps game metadata cached for longer than prices', async () => {
   expect(f.count('appdetails')).toBe(2);
   expect(f.count('GetItems')).toBe(1);
 });
+
+it('never serves a price cached before Steam\'s daily price change after it', async () => {
+  let now = Date.parse('2026-10-07T16:58:00Z');
+  let discount = 0;
+  const fetch = routeSteam({
+    wishlist: () => wishlistResponse([10]),
+    prices: () => jsonResponse({ '10': priceOverview('USD', 1000, 1000 - discount * 10, discount) }),
+  });
+  const client = new SteamClient({ fetchImpl: fetch, now: () => now, maxRetries: 0 });
+  const prices = () => fetch.mock.calls.filter(call => isRoute(call, 'appdetails')).length;
+
+  expect((await client.getWishlist('76561198000000000', 'TR', 'en'))[0].onSale).toBe(false);
+  now = Date.parse('2026-10-07T16:59:30Z');
+  await client.getWishlist('76561198000000000', 'TR', 'en');
+  expect(prices()).toBe(1);
+
+  // 10:00 Pacific: the sale starts well inside the five-minute TTL of the cached price.
+  discount = 50;
+  now = Date.parse('2026-10-07T17:00:30Z');
+  const afterChange = await client.getWishlist('76561198000000000', 'TR', 'en');
+  expect(prices()).toBe(2);
+  expect(afterChange[0]).toMatchObject({ onSale: true, price: { discountPercent: 50 } });
+});

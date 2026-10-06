@@ -51,7 +51,15 @@ export interface SchedulerOptions {
   readonly now?: () => Date;
   readonly logger?: SchedulerLogger;
   readonly maxUserConcurrency?: number;
+  /**
+   * When prices change next (Steam: 10:00 Pacific). A scan then runs shortly after
+   * it instead of up to a full interval later; the interval resumes from there.
+   */
+  readonly nextPriceChange?: (now: Date) => Date;
 }
+
+/** Steam's API can lag its own price change by a moment. */
+const priceChangeScanDelayMs = 2 * 60 * 1000;
 
 export interface SchedulerRunSummary {
   readonly userCount: number;
@@ -149,7 +157,7 @@ export class WishlistScheduler {
       ? Number.NaN
       : new Date(persistedTarget).getTime();
     if (Number.isFinite(persistedMs) && persistedMs > nowMs) {
-      const targetMs = Math.min(persistedMs, nowMs + this.intervalMs);
+      const targetMs = Math.min(persistedMs, this.nextTarget(nowMs));
       if (!this.persistNextRun(targetMs)) {
         this.retryPersistNextRun(targetMs);
         return;
@@ -336,12 +344,32 @@ export class WishlistScheduler {
       return;
     }
 
-    const targetMs = this.now().getTime() + this.intervalMs;
+    const targetMs = this.nextTarget(this.now().getTime());
     if (this.persistNextRun(targetMs)) {
       this.armTimer(targetMs);
     } else {
       this.retryPersistNextRun(targetMs);
     }
+  }
+
+  /** One interval from now, or just after the next price change when that comes first. */
+  private nextTarget(nowMs: number): number {
+    const intervalTargetMs = nowMs + this.intervalMs;
+    if (!this.options.nextPriceChange) {
+      return intervalTargetMs;
+    }
+    let priceChangeMs: number;
+    try {
+      priceChangeMs = this.options.nextPriceChange(new Date(nowMs)).getTime() + priceChangeScanDelayMs;
+    } catch (_error: unknown) {
+      this.logger.error('Could not compute the next Steam price change.');
+      return intervalTargetMs;
+    }
+    if (!Number.isFinite(priceChangeMs) || priceChangeMs <= nowMs || priceChangeMs >= intervalTargetMs) {
+      return intervalTargetMs;
+    }
+    this.logger.info(`Next scan follows Steam's price change at ${new Date(priceChangeMs).toISOString()}.`);
+    return priceChangeMs;
   }
 
   private persistNextRun(targetMs: number): boolean {

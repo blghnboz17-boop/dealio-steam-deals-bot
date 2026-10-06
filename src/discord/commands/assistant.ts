@@ -1,5 +1,5 @@
 
-import { ChatInputCommandInteraction, LabelBuilder, MessageFlags, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { ChatInputCommandInteraction, LabelBuilder, MessageFlags, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle, type InteractionEditReplyOptions, type InteractionUpdateOptions } from 'discord.js';
 import type { AssistantService } from '../../application/assistant-service.js';
 import type { WishlistViewService } from '../../application/wishlist-view-service.js';
 import { formatMinorPrice } from '../notification-messages.js';
@@ -93,7 +93,8 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
     });
   };
   const render=async(disabled=false)=>{
-    await editPanel({flags:dealioV2Flags,components:[buildAssistantView(data(),view,interaction.id,disabled)]});
+    const panel:InteractionEditReplyOptions&InteractionUpdateOptions={flags:dealioV2Flags,components:[buildAssistantView(data(),view,interaction.id,disabled)]};
+    await operations.edit(panel,()=>editPanel(panel));
   };
   // Register ownership before exposing controls.
   const close=dealioUiSessions.open(interaction.id,user,['assistant'],dealioUiSessionTimeoutMs);
@@ -161,7 +162,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       if((action==='target'||action==='percent')&&!selected){void acknowledge().catch(()=>undefined);return;}
       const zone=effectiveTimezone(data());
       if((action==='quiet'||action==='digest')&&!zone){
-        void operations.enqueue(acknowledge(),async()=>{view.notice=chooseTimezoneFirst;await render();});return;
+        void operations.enqueueClick(component,'assistant',async()=>{view.notice=chooseTimezoneFirst;await render();});return;
       }
       const id='assistant-modal:'+interaction.id+':'+(++sequence);
       const modal=new ModalBuilder().setCustomId(id).setTitle(t(
@@ -226,7 +227,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       })().catch(error=>safeLogger.error('Assistant modal failed',error));
       modalTasks.add(task);void task.finally(()=>modalTasks.delete(task));return;
     }
-    void operations.enqueue(acknowledge(),async()=>{
+    void operations.enqueueClick(component,'assistant',async()=>{
       view.notice=undefined;
       if(action==='retry'){
         await service.retryDm(user,config.configurationId,config.configVersion);
