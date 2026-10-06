@@ -73,7 +73,7 @@ function Login(props: { onSignedIn: (csrf: string) => void }): VNode {
       <span class="login-theme"><${ThemeToggle} /></span>
       <form class="card login-card" onSubmit=${submit}>
         <div class="login-head">
-          <span class="mark mark-lg">d</span>
+          <img class="mark mark-lg" src="/logo.png" alt="Dealio" width="64" height="64" />
           <div>
             <h1>Dealio Yönetim</h1>
             <p class="muted">Sunucudaki <code>DEALIO_ADMIN_TOKEN</code> değeriyle giriş yap.</p>
@@ -143,7 +143,7 @@ function Shell(props: { onSignOut: () => void }): VNode {
     <div class="shell">
       <aside class=${`sidebar ${menuOpen ? 'open' : ''}`} id="sidebar">
         <div class="sidebar-top">
-          <a class="brand" href="#/"><span class="mark">d</span>
+          <a class="brand" href="#/"><img class="mark" src="/logo.png" alt="" width="34" height="34" />
             <span class="brand-text"><strong>Dealio</strong><small>Yönetim paneli</small></span></a>
           <button class="btn btn-icon btn-ghost menu-toggle" aria-label="Menüyü kapat" onClick=${() => setMenuOpen(false)}>
             ${Icon({ name: 'x', size: 18 })}</button>
