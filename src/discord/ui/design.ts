@@ -197,9 +197,12 @@ export const steamAppLabel: Localized = {
   fr: 'Ouvrir dans l’app Steam',
 };
 
-/** "[🖥️ Steam uygulamasında aç](…)" for inline use in alert text. */
+/**
+ * "🖥️ [Steam uygulamasında aç](…)" for inline use in alert text. The emoji stays
+ * outside the brackets: Discord shows a masked link with an emoji label as raw text.
+ */
 export function steamAppLink(appId: number, language: Language): string {
-  return `[🖥️ ${steamAppLabel[language]}](${steamAppUrl(appId)})`;
+  return `🖥️ [${steamAppLabel[language]}](${steamAppUrl(appId)})`;
 }
 
 /** "12 Ekim 2026", "Ekim 2026", "2027 Ç4", "2027", or Steam's own text, as precise as Steam states it. */

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseStoreFacts, parseStoreItemsResponse } from '../src/steam/wishlist-parser.js';
 import { buildSaleNotificationPanel } from '../src/discord/notification-components-v2.js';
 import { componentsV2TextLength } from '../src/discord/ui/components-v2.js';
-import { platformText, priceLine, reviewLine, saleEndLine, steamAppUrl } from '../src/discord/ui/design.js';
+import { platformText, priceLine, reviewLine, saleEndLine, steamAppLink, steamAppUrl } from '../src/discord/ui/design.js';
 import type { SaleNotification } from '../src/application/notification-service.js';
 
 const steamItem = {
@@ -41,6 +41,8 @@ describe('Steam store facts', () => {
     expect(saleEndLine(facts, 'tr', 0)).toBe('⏳ İndirim <t:1791478800:R> bitiyor');
     expect(saleEndLine(facts, 'en', 1791478800 * 1000 + 1)).toBeNull();
     expect(steamAppUrl(620)).toBe('https://blghnboz17-boop.github.io/dealio-public-pages/open.html?app=620');
+    // Discord shows a masked link whose label holds an emoji as raw text, so the emoji stays outside.
+    expect(steamAppLink(620, 'en')).toBe('🖥️ [Open in the Steam app](https://blghnboz17-boop.github.io/dealio-public-pages/open.html?app=620)');
   });
 });
 

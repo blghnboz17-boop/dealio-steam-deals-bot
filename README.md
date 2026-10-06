@@ -10,59 +10,76 @@
 </p>
 
 <p align="center">
+  <strong>English</strong> · <a href="README.tr.md">Türkçe</a>
+</p>
+
+<p align="center">
   <a href="https://blghnboz17-boop.github.io/dealio-public-pages/index-en.html"><img src="https://img.shields.io/badge/Join_the_beta-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Join the beta"></a>
-  <a href="#commands"><img src="https://img.shields.io/badge/Explore_commands-1B2838?style=for-the-badge&amp;logo=steam&amp;logoColor=white" alt="Explore commands"></a>
-  <a href="#latest-updates"><img src="https://img.shields.io/badge/Latest_updates-8B5CF6?style=for-the-badge" alt="Latest updates"></a>
+  <a href="#a-look-inside"><img src="https://img.shields.io/badge/See_it_in_Discord-1B2838?style=for-the-badge&amp;logo=steam&amp;logoColor=white" alt="See it in Discord"></a>
+  <a href="#latest-updates"><img src="https://img.shields.io/badge/What%E2%80%99s_new-8B5CF6?style=for-the-badge" alt="What's new"></a>
 </p>
 
 <p align="center">
-  <a href="#commands"><img src="https://img.shields.io/badge/Steam-wishlist_tracking-171D25?style=flat-square&amp;logo=steam&amp;logoColor=white" alt="Steam-wishlist tracking"></a>
-  <a href="README.tr.md"><img src="https://img.shields.io/badge/T%C3%BCrk%C3%A7e-English-2980B9?style=flat-square" alt="Türkçe-English"></a>
-  <a href="#start-in-discord"><img src="https://img.shields.io/badge/Setup-no_Steam_password-238636?style=flat-square" alt="Setup-no Steam password"></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/tag/v0.1.0-beta.1"><img src="https://img.shields.io/badge/Beta-v0.1.0--beta.1-8B5CF6?style=flat-square" alt="Limited beta v0.1.0-beta.1"></a>
-  <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-View_checks-238636?style=flat-square&amp;logo=github" alt="View GitHub checks"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2980B9?style=flat-square" alt="MIT"></a>
+  <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/latest"><img src="https://img.shields.io/badge/Release-v0.2.0-8B5CF6?style=flat-square" alt="Release v0.2.0"></a>
+  <a href="#whats-inside"><img src="https://img.shields.io/badge/Languages-TR_%C2%B7_EN_%C2%B7_DE_%C2%B7_FR-2980B9?style=flat-square" alt="Languages: Turkish, English, German, French"></a>
+  <a href="#start-in-discord"><img src="https://img.shields.io/badge/Setup-no_Steam_password-238636?style=flat-square" alt="Setup: no Steam password"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2980B9?style=flat-square" alt="MIT license"></a>
 </p>
 
 ---
 
 ## 🎮 Less checking. More playing.
 
-There's a game on your Steam wishlist, but the price isn't quite right. Tell Dealio what you'd like to pay. It checks Steam at regular intervals and sends you a Discord DM when your rule is met.
+There's a game on your Steam wishlist, but the price isn't quite right. Tell Dealio what you'd like to pay. It checks Steam at regular intervals and sends you a Discord DM when your rule is met, with everything you need to decide on the spot.
 
 Set a different target for each game, or use one discount threshold across your list. Choose quiet hours if you don't want late-night notifications. To browse your games or change a setting, just open `/dealio`.
 
 | 🎯 Your price | 🔕 Your schedule | 📊 Your context |
 | :--- | :--- | :--- |
-| Set a target price or a discount threshold for each game. Mute the games you want to skip. | Get alerts when detected, hold them during quiet hours, or choose a daily digest. | See Steam's regional currency, recent observed prices, and the reason behind an alert. |
+| Set a target price or a discount threshold for each game, or let Dealio wait for the historical low. Mute the games you want to skip. | Get alerts when detected, hold them during quiet hours in your time zone, or choose a daily digest. | See the historical low, Steam reviews, Steam Deck status and when the sale ends, right in the alert. |
+
+<a name="a-look-inside"></a>
 
 ## 👀 A look inside Discord
 
+<p align="center">
+  <a href="docs/assets/screenshots/sale-alert-dm.png"><img src="docs/assets/screenshots/sale-alert-dm.png" alt="A Dealio sale alert DM for Cortex Command: 80% off, the lowest price since February 2024, savings, sale end time, Very Positive reviews, Steam Deck status and platforms" width="760"></a><br>
+  <sub><strong>📬 A sale alert in your DMs</strong> · price, savings, historical low, reviews, Steam Deck and when the sale ends</sub>
+</p>
+
 <table>
   <tr>
-    <td width="50%" valign="top"><strong>🏠 Dealio · your home panel</strong><br><br><a href="docs/assets/screenshots/dealio-home-desktop.png"><img src="docs/assets/screenshots/dealio-home-desktop.png" alt="Dealio home panel with Black Flag artwork, a matching deal, and wishlist, schedule and history controls" width="380"></a></td>
-    <td width="50%" valign="top"><strong>🎮 Wishlist · games and price rules</strong><br><br><a href="docs/assets/screenshots/wishlist-desktop.png"><img src="docs/assets/screenshots/wishlist-desktop.png" alt="Dealio desktop wishlist with games, prices and alert controls" width="300"></a><br><br><strong>📬 A sale alert in your DMs</strong><br><br><a href="docs/assets/screenshots/sale-dm-example.png"><img src="docs/assets/screenshots/sale-dm-example.png" alt="An earlier Outbound sale DM showing price, discount and savings" width="380"></a></td>
+    <td width="33%" valign="top" align="center"><strong>🏠 Home</strong><br><sub>Your best matching deal and a quick status</sub><br><br><a href="docs/assets/screenshots/home-panel.png"><img src="docs/assets/screenshots/home-panel.png" alt="Dealio Home tab: tracking status, a matching deal with game artwork, wishlist counts and the last and next check" width="260"></a></td>
+    <td width="33%" valign="top" align="center"><strong>🎮 Wishlist</strong><br><sub>Matching deals first, then the biggest discounts</sub><br><br><a href="docs/assets/screenshots/wishlist-panel.png"><img src="docs/assets/screenshots/wishlist-panel.png" alt="Dealio Wishlist tab: games with prices, discounts and rule status, search, filters and pages" width="260"></a></td>
+    <td width="33%" valign="top" align="center"><strong>🎯 Game detail</strong><br><sub>Your rule, price history and a one-tap lowest-price target</sub><br><br><a href="docs/assets/screenshots/game-detail.png"><img src="docs/assets/screenshots/game-detail.png" alt="Dealio game detail for Prey: price, sale end, reviews, Steam Deck Verified, rule buttons, the historical low and recent price changes" width="260"></a></td>
   </tr>
 </table>
 
-<sub>Real Discord screenshots shared by the user, with English UI. The DM is an example from 22 September 2026; prices and some interface details may differ from the current version.</sub>
+<sub>Real Discord screenshots from 6 October 2026, with the English UI and the Türkiye Store. The DM shown is a test alert, which uses the same layout as a real one. Prices come from Steam and change over time.</sub>
+
+<a name="whats-inside"></a>
 
 ### ✨ What's inside?
 
-- 🏠 **One place to start.** Game artwork, matching deals, notification settings, and history.
-- 🎮 **A list you can browse.** Search, filter, move through three-game pages, or open a game's details.
-- 🎯 **A choice for each game.** Use your default discount threshold, set a different percentage, or enter a target price. Mute games you want to skip.
-- 📬 **A record of your alerts.** See pending and sent DMs, and try a test message if delivery isn't working. A delivery record doesn't mean the message was read.
-- 📊 **Prices over time.** Alerts and game details show Steam's historical low for your Store region (from IsThereAnyDeal, same currency only), and the game detail lists recent price changes. Dealio keeps its own price observations for 90 days.
-- 👤 **Switch accounts without starting over.** Change your Steam account from ⚙️ Settings with the same profile form as setup; your default discount, alert timing and language stay.
-- 🌍 **Turkish, English, German and French.** Every language covers setup, menus, and notifications, written in a friendly first-person voice and using Steam’s own words for the wishlist in each language. German and French are new and have not had real-user trials yet.
+- 🏠 **One panel, four tabs.** 🏠 Home, 🎮 Wishlist, 🔔 Alerts and ⚙️ Settings switch in place inside a single `/dealio` message.
+- 🎮 **A list you can browse.** Matching deals come first, then the biggest discounts. Search, filter, move through three-game pages, or open any game.
+- 🎯 **A choice for each game.** Use your default discount threshold, set a different percentage, enter a target price, or tap **Alert me at the lowest** to aim for the historical low. Mute games you want to skip.
+- 📈 **Prices over time.** Alerts and game details show Steam's historical low for your Store region (from IsThereAnyDeal, same currency only, never converted), and the game detail lists recent price changes.
+- ⭐ **Steam's own context.** Review score, Steam Deck compatibility, platforms and the time a sale ends, whenever Steam states them. A 100% discount is shown as a free game to keep.
+- 🗓️ **Honest about every game.** Unreleased games show 🗓️ *coming soon* with their release date; games not sold in your region (🚫) or removed from Steam (🗑️) are labelled as such, never as failed checks.
+- 🖥️ **Straight to the store.** Open a game on the Steam website, or directly in the Steam app.
+- 🔔 **Alerts on your schedule.** On detection, with quiet hours, or as a daily digest. Waiting alerts are re-checked before they're sent.
+- 📬 **A record of your alerts.** See pending and sent DMs, and send a test message if delivery isn't working.
+- 👤 **Switch accounts without starting over.** Change your Steam account from ⚙️ Settings; your default discount, alert timing and language stay.
+- 🌍 **Turkish, English, German and French.** Setup, panels and notifications in all four, using Steam's own words for the wishlist in each language. German and French are new and haven't had real-user trials yet.
 
 <a name="latest-updates"></a>
 
 ## ✨ Latest updates
+
+> **6 October 2026 · v0.2.0: one panel, richer alerts**
+>
+> Everything now lives in one `/dealio` panel with Home, Wishlist, Alerts and Settings tabs. Sale alerts and game details show Steam's review score, Steam Deck status, platforms and when the sale ends, next to the historical low. You can set a target at the lowest price in one tap, open a game straight in the Steam app, and see upcoming games with their release date. Setup now starts with a language choice and shows your Steam name and avatar before you confirm. [Read the v0.2.0 notes →](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/tag/v0.2.0)
 
 > **4 October 2026 · Account switch and steadier alerts**
 >
@@ -71,9 +88,6 @@ Set a different target for each game, or use one discount threshold across your 
 > **30 September 2026 · Limited beta, first users**
 >
 > Three desktop users completed setup with the Türkiye store and Turkish menus. They reported no problems with the commands they tried. We're now watching how notifications hold up in everyday use.
-
-This release brings together the notification reliability work and beta preparations. [Read the v0.1.0-beta.1 notes →](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/tag/v0.1.0-beta.1)
-
 
 <a name="start-in-discord"></a>
 
@@ -111,11 +125,20 @@ Panels are private and bound to the person who opened them. After a timeout or b
 
 ## 🧪 Beta status
 
-Three users reported successful Turkish desktop setup and command trials. We're now working through at least seven days of real-world use. English, mobile, and longer-running delivery checks remain on the list before the general invite opens.
+Dealio runs on a single server as a **limited beta**. Three users reported successful Turkish desktop setup and command trials; general-release acceptance is still pending.
+
+- [x] First Turkish desktop setup and command trials
+- [x] Encrypted offsite backup, restore, and independent alarm exercises
+- [x] Published help, privacy, and terms pages
+- [ ] At least seven days of real-world use
+- [ ] Real sale alerts, scheduled delivery, and duplicate checks
+- [ ] English, German, French and mobile trials, and a consented data-deletion trial
+
+[Roadmap and acceptance notes, TR →](docs/phase4-beta.tr.md)
 
 ## 🔒 Privacy & control
 
-Dealio stores your account identifiers, preferences, game rules, observed wishlist prices, and delivery records. It does not collect ordinary Discord message content or Steam credentials.
+Dealio stores your account identifiers, preferences, game rules, observed wishlist prices, and delivery records. It also keeps usage records (which command or button was used, never what you typed) for 90 days. It does not collect ordinary Discord message content or Steam credentials.
 
 Notification history displays the last **30 days**; price observations are retained for **90 days**. Active deliveries and ongoing-offer deduplication records may be kept longer. `/delete-data` removes active account records. Existing backup copies are not rewritten, but a separate deletion record (a one-way hash of your Discord ID, kept for 35 days) makes sure a restore from backup can't bring your data back.
 
@@ -158,9 +181,16 @@ Saving a rule establishes its starting state. An already-matching offer is visib
 </details>
 
 <details>
+<summary><strong>Some games show “coming soon” or “not sold”. Is something wrong?</strong></summary>
+
+No. A game that hasn't been released has no price yet, so Dealio shows its release date instead and starts watching the price once it's out. Some games aren't sold in every Store region, and some have been removed from Steam; Dealio labels those too. None of them count as a failed check or an unknown price.
+
+</details>
+
+<details>
 <summary><strong>How do I switch to another Steam account?</strong></summary>
 
-Open `/dealio` → ⚙️ Settings → **Change Steam account**. The same profile form as setup opens; Dealio shows the new account and switches only after you confirm. Your default discount, alert timing and language stay. Rules, targets and waiting alerts for the old account's games don't carry over, and games already on sale in the new list don't trigger alerts. You no longer need `/delete-data` for this.
+Open `/dealio` → ⚙️ Settings → **Change Steam account**. The same profile form as setup opens; Dealio shows the new account and switches only after you confirm. Your default discount, alert timing and language stay. Rules, targets and waiting alerts for the old account's games don't carry over, and games already on sale in the new list don't trigger alerts. You don't need `/delete-data` for this.
 
 </details>
 
@@ -180,19 +210,20 @@ Dealio records the alerts it sends and skips routine repeats for the same offer.
 
 ## 🛠️ Build & operate
 
-TypeScript · discord.js Components V2 · SQLite · Azure VM
+TypeScript · discord.js Components V2 · `node:sqlite` · IsThereAnyDeal API · Azure VM
 
 - [Development guide](docs/development.md) — isolated setup, environment, and checks
 - [Architecture](docs/architecture.md) — pricing, rules, delivery, and persistence
 - [Current operations setup, TR](deploy/FREE-OPERATIONS.tr.md) — free backups, alerts, and recovery
+- [Admin panel, TR](docs/admin-panel.tr.md) — the owner's private web panel, reached only over an SSH tunnel
 - [CI runs](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml) — current verification
 
-The first release stays focused on Steam wishlists. Payments, a separate web dashboard, other stores, and estimated currency conversion are outside its scope.
+Dealio stays focused on Steam wishlists. Payments, a user-facing web dashboard, other stores, and estimated currency conversion are outside its scope.
 
 <details>
-<summary><strong>Technical details and beta checklist</strong></summary>
+<summary><strong>🔔 How alerts work, step by step</strong></summary>
 
-## 🔔 How alerts work
+<br>
 
 **Checks run on a 30-minute schedule, not a live Steam event feed.** The next automatic scan is scheduled 30 minutes after the previous scan completes. Steam or Discord outages can add delay.
 
@@ -205,27 +236,13 @@ The first release stays focused on Steam wishlists. Payments, a separate web das
 
 Setup establishes a baseline and can send a separate wishlist summary. It does **not** send a new-sale alert for every existing discount. Likewise, saving a target that the current price already meets does not create an initial alert.
 
-Prices stay in Steam's reported currency, with no estimated exchange-rate conversion. Target prices are currency-bound; a region/currency change may require a new target. Always confirm the checkout price on Steam.
-
-## 🧪 Beta status
-
-The bot runs on the existing Azure VM. **Real-user testing is underway; general-release acceptance is still pending.**
-
-- [x] First Turkish desktop setup and command trials
-- [x] Encrypted offsite backup, restore, and independent alarm exercises
-- [x] Published help, privacy, and terms pages
-- [ ] At least seven days of real-world use
-- [ ] Real sale alerts, scheduled delivery, and duplicate checks
-- [ ] English, mobile, and consented data-deletion trials
-
-[Roadmap and acceptance notes, TR →](docs/phase4-beta.tr.md)
-
+Prices stay in Steam's reported currency, with no estimated exchange-rate conversion. Target prices are currency-bound; a region/currency change may require a new target. Historical lows come from IsThereAnyDeal; if that service is unavailable, the line is simply left out and the alert is never delayed. Always confirm the checkout price on Steam.
 
 </details>
 
 ---
 
 <p align="center">
-  Made by <a href="https://github.com/blghnboz17-boop">Bilgehan</a>. Still growing. 💙 · <a href="LICENSE">MIT license</a> · Source repository is private.<br>
-  <sub>Dealio is an independent project, not affiliated with Valve or Discord.</sub>
+  Made by <a href="https://github.com/blghnboz17-boop">Bilgehan</a>. Still growing. 💙 · <a href="LICENSE">MIT license</a><br>
+  <sub>Dealio is an independent project, not affiliated with Valve, Discord or IsThereAnyDeal.</sub>
 </p>
