@@ -50,6 +50,8 @@ Yerel geliştirmede (`.env.test` ile) tünel gerekmez; doğrudan
 
 ## Ekranlar
 
+Veri sayfaları sekme açıkken 30 saniyede bir kendini sessizce yeniler (başlıkta “● Canlı · … önce”); sekme arka plandaysa bekler, öne gelince hemen yenilenir. Loglar anlık akar, gönderimdeki duyurular 3 saniyede bir güncellenir.
+
 | Sayfa | İçerik |
 |---|---|
 | Genel bakış | Sunucu/kullanıcı/aktif kullanıcı sayıları, kapasite, uyarı kuyruğu, günlük kayıt, uyarı, aktif kullanıcı ve sunucu grafikleri, dağılımlar |

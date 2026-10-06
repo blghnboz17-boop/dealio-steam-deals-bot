@@ -5,7 +5,9 @@ import {
   checkStatusNames, compact, country, duration, flag, bytes, languageNames, notificationModeNames, num, relative,
 } from '../format.js';
 import type { Overview } from '../types.js';
-import { Badge, BarList, Card, ErrorBox, Facts, Loading, Page, Stat, useAsync, useTicker } from '../ui.js';
+import {
+  Badge, BarList, Card, ErrorBox, Facts, Loading, Page, Stat, useAsync, useTicker, RefreshButton, live,
+} from '../ui.js';
 
 export function SchedulerFacts(props: { scheduler: Overview['scheduler'] }): VNode {
   const { scheduler } = props;
@@ -36,10 +38,10 @@ function GuildHistory(props: { rows: Overview['charts']['guilds'] }): VNode {
 }
 
 export function OverviewPage(): VNode {
-  const state = useAsync(() => api.get<Overview>('/api/overview'), []);
+  const state = useAsync(() => api.get<Overview>('/api/overview'), [], live);
   useTicker(30_000);
   const data = state.data;
-  const actions = html`<button class="btn" onClick=${state.reload} disabled=${state.loading}>Yenile</button>`;
+  const actions = html`<${RefreshButton} state=${state} />`;
   if (!data) {
     return Page({ title: 'Genel bakış', actions,
       children: state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading() });
@@ -48,7 +50,6 @@ export function OverviewPage(): VNode {
   const app = data.application;
   return Page({
     title: 'Genel bakış',
-    subtitle: `Güncellendi: ${relative(data.generatedAt)}`,
     actions,
     children: html`
       ${state.error ? ErrorBox({ message: state.error, retry: state.reload }) : null}

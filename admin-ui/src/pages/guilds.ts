@@ -4,7 +4,9 @@ import { ConfirmDialog, useAction } from '../actions.js';
 import { compact, dateTime, day, displayName, num, relative } from '../format.js';
 import { navigate } from '../router.js';
 import type { Guild, GuildBlock, GuildDetail, GuildEvent, GuildsResponse } from '../types.js';
-import { Avatar, Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, Stat, useAsync, type Column } from '../ui.js';
+import {
+  Avatar, Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, Stat, useAsync, type Column, RefreshButton, live,
+} from '../ui.js';
 import { AuditTable } from './audit.js';
 import { UserCell } from './users.js';
 
@@ -35,7 +37,7 @@ const eventColumns: Column<GuildEvent>[] = [
 type Tab = 'active' | 'events' | 'departed' | 'blocked';
 
 export function GuildsPage(): VNode {
-  const state = useAsync(() => api.get<GuildsResponse>('/api/guilds'), []);
+  const state = useAsync(() => api.get<GuildsResponse>('/api/guilds'), [], live);
   const [tab, setTab] = useState<Tab>('active');
   const { busy, run } = useAction();
   const data = state.data;
@@ -85,7 +87,7 @@ export function GuildsPage(): VNode {
   return Page({
     title: 'Sunucular',
     subtitle: 'Botun ekli olduğu sunucular (Discord’dan canlı). Üye listesi için ayrıcalıklı izin istenmez; yalnız sayı görünür.',
-    actions: html`<button class="btn" onClick=${state.reload} disabled=${state.loading}>Yenile</button>`,
+    actions: html`<${RefreshButton} state=${state} />`,
     children: !data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`
@@ -117,7 +119,7 @@ export function GuildsPage(): VNode {
 }
 
 export function GuildDetailPage(props: { id: string }): VNode {
-  const state = useAsync(() => api.get<GuildDetail>(`/api/guilds/${props.id}`), [props.id]);
+  const state = useAsync(() => api.get<GuildDetail>(`/api/guilds/${props.id}`), [props.id], live);
   const [open, setOpen] = useState<null | 'leave' | 'block'>(null);
   const { busy, run } = useAction();
   const data = state.data;
@@ -131,7 +133,7 @@ export function GuildDetailPage(props: { id: string }): VNode {
   return Page({
     title: data?.name ?? 'Sunucu',
     subtitle: guild ? `${num(guild.memberCount)} üye · bot ${relative(guild.joinedAt)} eklendi` : data ? 'Bot artık bu sunucuda değil' : undefined,
-    actions: html`<a class="btn" href="#/guilds">← Sunucular</a>`,
+    actions: html`<a class="btn" href="#/guilds">← Sunucular</a><${RefreshButton} state=${state} />`,
     children: !data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`

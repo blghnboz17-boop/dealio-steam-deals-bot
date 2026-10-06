@@ -2,7 +2,9 @@ import { html, type VNode } from '../vendor/preact-htm.js';
 import { api } from '../api.js';
 import { dateTime, relative } from '../format.js';
 import type { AuditEntry } from '../types.js';
-import { Badge, DataTable, ErrorBox, Loading, Page, useAsync, type Column } from '../ui.js';
+import {
+  Badge, DataTable, ErrorBox, Loading, Page, useAsync, type Column, RefreshButton, live,
+} from '../ui.js';
 
 export const auditActionNames: Readonly<Record<string, string>> = {
   'user.pause': 'İzleme durduruldu',
@@ -56,11 +58,11 @@ export function AuditTable(props: { entries: AuditEntry[]; csvName?: string }): 
 }
 
 export function AuditPage(): VNode {
-  const state = useAsync(() => api.get<{ entries: AuditEntry[] }>('/api/audit'), []);
+  const state = useAsync(() => api.get<{ entries: AuditEntry[] }>('/api/audit'), [], live);
   return Page({
     title: 'Denetim kaydı',
     subtitle: 'Bu panelden yapılan her işlem (başarılı ya da değil) bir yıl saklanır.',
-    actions: html`<button class="btn" onClick=${state.reload} disabled=${state.loading}>Yenile</button>`,
+    actions: html`<${RefreshButton} state=${state} />`,
     children: !state.data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`<div class="card card-flush"><${AuditTable} entries=${state.data.entries} csvName="dealio-denetim" /></div>`,

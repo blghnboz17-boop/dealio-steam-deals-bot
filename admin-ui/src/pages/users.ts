@@ -6,7 +6,9 @@ import {
 import { useProfiles } from '../profiles.js';
 import { navigate } from '../router.js';
 import type { Profile, UserRow } from '../types.js';
-import { Avatar, Badge, DataTable, ErrorBox, Loading, Page, useAsync, type Column, type Tone } from '../ui.js';
+import {
+  Avatar, Badge, DataTable, ErrorBox, Loading, Page, useAsync, type Column, type Tone, RefreshButton, live,
+} from '../ui.js';
 
 export function userStatus(row: { enabled: boolean; dmDeliveryBlockedAt: string | null; blocked?: boolean }): { tone: Tone; label: string } {
   if (row.blocked) return { tone: 'bad', label: 'Engellendi' };
@@ -33,7 +35,7 @@ export function UserCell(props: { id: string; profile: Profile | null | undefine
 type StatusFilter = 'all' | 'active' | 'paused' | 'blocked' | 'banned';
 
 export function UsersPage(): VNode {
-  const state = useAsync(() => api.get<{ users: UserRow[] }>('/api/users'), []);
+  const state = useAsync(() => api.get<{ users: UserRow[] }>('/api/users'), [], live);
   const users = state.data?.users ?? [];
   const profiles = useProfiles(users.map((user) => user.discordUserId));
   const [status, setStatus] = useState<StatusFilter>('all');
@@ -119,7 +121,7 @@ export function UsersPage(): VNode {
   return Page({
     title: 'Kullanıcılar',
     subtitle: state.data ? `${num(users.length)} kayıtlı kullanıcı` : undefined,
-    actions: html`<button class="btn" onClick=${state.reload} disabled=${state.loading}>Yenile</button>`,
+    actions: html`<${RefreshButton} state=${state} />`,
     children: !state.data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`<div class="card card-flush"><${DataTable}

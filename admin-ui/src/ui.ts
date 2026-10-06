@@ -5,22 +5,43 @@ export interface AsyncState<T> {
   readonly data: T | null;
   readonly error: string | null;
   readonly loading: boolean;
+  /** When the data last arrived (ms since epoch). */
+  readonly updatedAt: number | null;
+  /** Whether the page refreshes itself. */
+  readonly live: boolean;
   readonly reload: () => void;
+  /** Reloads without showing progress (for polling). */
+  readonly refresh: () => void;
 }
 
-/** Loads on mount and when `deps` change; keeps the previous data while reloading. */
-export function useAsync<T>(loader: () => Promise<T>, deps: readonly unknown[]): AsyncState<T> {
+/** Live pages refresh every 30 seconds while their browser tab is visible. */
+export const live = { refreshMs: 30_000 } as const;
+
+/**
+ * Loads on mount and when `deps` change; keeps the previous data while reloading.
+ * With `refreshMs`, reloads quietly on that interval while the tab is visible, and
+ * at once when a hidden tab comes back with stale data.
+ */
+export function useAsync<T>(loader: () => Promise<T>, deps: readonly unknown[],
+  options: { readonly refreshMs?: number } = {}): AsyncState<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [generation, setGeneration] = useState(0);
+  const quiet = useRef(false);
+  const lastLoad = useRef(0);
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    // Automatic refreshes keep the page as it is; only explicit loads show progress.
+    if (!quiet.current) setLoading(true);
+    quiet.current = false;
+    lastLoad.current = Date.now();
     loader().then((value) => {
       if (!active) return;
       setData(value);
       setError(null);
+      setUpdatedAt(Date.now());
     }, (reason: unknown) => {
       if (!active) return;
       setError(reason instanceof ApiError || reason instanceof Error ? reason.message : 'Bilinmeyen hata');
@@ -30,7 +51,39 @@ export function useAsync<T>(loader: () => Promise<T>, deps: readonly unknown[]):
     return () => { active = false; };
   }, [...deps, generation]);
   const reload = useCallback(() => setGeneration((value) => value + 1), []);
-  return { data, error, loading, reload };
+  const refresh = useCallback(() => {
+    quiet.current = true;
+    setGeneration((value) => value + 1);
+  }, []);
+  const refreshMs = options.refreshMs;
+  useEffect(() => {
+    if (!refreshMs) return;
+    const tick = (): void => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastLoad.current < refreshMs - 1_000) return;
+      refresh();
+    };
+    const timer = setInterval(tick, refreshMs);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [refreshMs]);
+  return { data, error, loading, updatedAt, live: Boolean(refreshMs), reload, refresh };
+}
+
+/** "● Canlı · 12 sn önce" and a manual refresh button, for a page's header. */
+export function RefreshButton(props: { state: AsyncState<unknown> }): VNode {
+  useTicker(5_000);
+  const { state } = props;
+  const age = state.updatedAt === null ? null : Math.max(0, Math.round((Date.now() - state.updatedAt) / 1000));
+  const ageText = age === null ? '' : age < 5 ? 'şimdi' : age < 60 ? `${age} sn önce` : `${Math.floor(age / 60)} dk önce`;
+  return html`<span class="refresh">
+    ${state.live ? html`<span class=${`live ${state.error ? 'live-lost' : 'live-live'}`}
+      title="Bu sayfa 30 saniyede bir kendini yeniler (sekme açıkken).">
+      <span aria-hidden="true">●</span> ${state.error ? 'Güncellenemedi' : 'Canlı'}${ageText ? ` · ${ageText}` : ''}</span>` : null}
+    <button class="btn" onClick=${state.reload} disabled=${state.loading}>${state.loading ? 'Yenileniyor…' : 'Yenile'}</button>
+  </span>`;
 }
 
 export function Page(props: { title: string; subtitle?: Child; actions?: Child; children?: Child }): VNode {
