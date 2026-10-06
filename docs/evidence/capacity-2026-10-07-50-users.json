@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-06T21:11:20.237Z",
+  "node": "v24.19.0",
+  "platform": "win32",
+  "sourceSha256": "a110b63814af3dd807da2a172879a4bc56db083f027b66e480ac6fc8d9ad4757",
+  "sourceHashScope": "sorted src/**/*.ts, tests/helpers/reliability-fixture.ts, scripts/capacity-check.ts; path + NUL + bytes + NUL",
+  "profile": {
+    "users": 50,
+    "gamesPerUser": 500,
+    "sharedGameCatalog": true,
+    "syntheticTransports": true,
+    "fileSqlite": true,
+    "productionDeliveryRevalidation": true
+  },
+  "phases": [
+    {
+      "phase": "baseline",
+      "elapsedMs": 387,
+      "rssMiB": 154
+    },
+    {
+      "phase": "sale",
+      "elapsedMs": 827,
+      "rssMiB": 196
+    },
+    {
+      "phase": "delivery",
+      "elapsedMs": 20279,
+      "rssMiB": 277
+    },
+    {
+      "phase": "same-sale",
+      "elapsedMs": 503,
+      "rssMiB": 275
+    }
+  ],
+  "totalMs": 22087,
+  "sampledPeakRssMiB": 280,
+  "eventLoopDelayP99Ms": 25,
+  "eventLoopDelayMaxMs": 61,
+  "steam": {
+    "peakConcurrency": 3,
+    "wishlistRequests": 200,
+    "metadataRequests": 5,
+    "priceRequests": 15
+  },
+  "notifications": {
+    "candidates": 25000,
+    "sent": 25000,
+    "messages": 2500,
+    "lost": 0,
+    "duplicateMessages": 0
+  },
+  "caveats": [
+    "Synthetic shared catalog; not a live API or VM SLA.",
+    "Memory is sampled process RSS, not whole-host usage.",
+    "Long ambiguous delivery can duplicate after Discord nonce expiry; see resilience tests."
+  ]
+}

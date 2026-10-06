@@ -5,6 +5,7 @@ import {
   NotificationService,
   type NotificationSender,
 } from '../src/application/notification-service.js';
+import { partitionNotificationBatches } from '../src/discord/notification-sender.js';
 import { createDatabase } from '../src/persistence/database.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
@@ -123,6 +124,30 @@ describe('NotificationService', () => {
       expect(delivered.notifications[0]).toMatchObject({ ...services.candidate, headerImageUrl });
       await expect(services.service.deliverPending('discord-user')).resolves.toMatchObject({ sentCount: 0 });
       expect(sender.send).toHaveBeenCalledOnce();
+    } finally { services.database.close(); }
+  });
+
+  it('plans a long queue in small windows yet sends the same DMs as one full partition', async () => {
+    // Uneven game sizes, so DMs close before ten games and windows split mid-DM.
+    const weight = (appId: number) => appId % 4 + 1;
+    const fits = (batch: readonly NotificationCandidate[]) =>
+      batch.reduce((total, item) => total + weight(item.appId), 0) <= 13;
+    const send = vi.fn().mockResolvedValue(undefined);
+    const sender = {
+      plan: vi.fn((notifications: readonly NotificationCandidate[]) => partitionNotificationBatches(notifications, fits)),
+      send,
+    };
+    const services = createService('en', sender);
+    try {
+      const candidates = [services.candidate];
+      for (let appId = 11; appId <= 57; appId += 1) candidates.push(addCandidate(services, appId));
+
+      await expect(services.service.deliverPending('discord-user')).resolves.toMatchObject({ sentCount: 48, failedCount: 0 });
+
+      const sent = send.mock.calls.map(([batch]) => batch.notifications.map((item: NotificationCandidate) => item.appId));
+      expect(sent).toEqual(partitionNotificationBatches(candidates, fits)
+        .map((batch) => batch.notifications.map((item) => item.appId)));
+      expect(Math.max(...sender.plan.mock.calls.map(([notifications]) => notifications.length))).toBeLessThanOrEqual(30);
     } finally { services.database.close(); }
   });
 

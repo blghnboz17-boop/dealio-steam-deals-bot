@@ -5,9 +5,12 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { reliabilityFixture } from '../tests/helpers/reliability-fixture.js';
 import { steamBatchSize } from '../src/steam/steam-client.js';
+import { maximumGamesPerMessage } from '../src/discord/notification-sender.js';
 
 // This is a controlled local profile, never a live Steam/Discord load generator.
-const userCount = 50;
+// CAPACITY_USERS=200 checks the full sign-up cap; the recorded evidence uses 50.
+const userCount = Number(process.env.CAPACITY_USERS ?? 50);
+assert.ok(Number.isSafeInteger(userCount) && userCount > 0, 'CAPACITY_USERS must be a positive integer');
 const gamesPerUser = 500;
 const sourcePaths = [
   ...readdirSync('src', { recursive: true, encoding: 'utf8' }).filter(path => path.endsWith('.ts')).map(path => `src/${path.replaceAll('\\', '/')}`),
@@ -68,7 +71,7 @@ try {
   } finally { console.log = originalLog; }
   phases.push({ phase: 'delivery', elapsedMs: Math.round(performance.now() - deliveryStarted), rssMiB: Math.round(process.memoryUsage().rss / 1048576) });
   const deliveredMessages = f.discordTransport.accepted.length;
-  assert.equal(deliveredMessages, userCount * Math.ceil(gamesPerUser / 5));
+  assert.equal(deliveredMessages, userCount * Math.ceil(gamesPerUser / maximumGamesPerMessage));
   assert.equal(new Set(f.discordTransport.accepted.map(message => message.nonce)).size, deliveredMessages);
   await scan('same-sale', 0);
   for (const user of users) assert.equal((await f.services.notifications.deliverPending(user)).sentCount, 0);

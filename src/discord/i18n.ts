@@ -24,10 +24,16 @@ export function languageChoice(language: Language): string {
   return `${languageFlags[language]} ${languageNames[language]}`;
 }
 
+const percentFormats = new Map<Language, Intl.NumberFormat>();
+
 /** "%30", "30%", "30 %": the percent sign where each language puts it. */
 export function percentText(value: number, language: Language): string {
-  return new Intl.NumberFormat(languageLocale[language], { style: 'percent', maximumFractionDigits: 0 })
-    .format(value / 100);
+  let format = percentFormats.get(language);
+  if (!format) {
+    format = new Intl.NumberFormat(languageLocale[language], { style: 'percent', maximumFractionDigits: 0 });
+    percentFormats.set(language, format);
+  }
+  return format.format(value / 100);
 }
 
 /** Picks one language's text: `t(language)({ tr: '…', en: '…', de: '…', fr: '…' })`. */

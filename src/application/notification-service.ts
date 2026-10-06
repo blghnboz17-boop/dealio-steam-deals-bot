@@ -1,3 +1,4 @@
+import { setImmediate as nextEventLoopTurn } from 'node:timers/promises';
 import { redactSecrets, safeLogger } from './safe-logger.js';
 import { deliveryAllowed } from '../domain/notification-preference.js';
 import type { HistoricalLow } from '../domain/price-history.js';
@@ -88,6 +89,8 @@ const defaultSendingTimeoutMs = 15 * 60 * 1000;
 const defaultMaxAttempts = 5;
 const defaultRetryBaseDelayMs = 5 * 60 * 1000;
 const defaultMaxRetryDelayMs = 24 * 60 * 60 * 1000;
+/** Two DMs' worth of games: enough that only the carried last DM is ever re-planned. */
+const planningWindowSize = 20;
 
 export class NotificationService {
   private readonly sendingTimeoutMs: number;
@@ -218,14 +221,14 @@ export class NotificationService {
       }
     }
 
-    const plannedBatches: NotificationBatch<NotificationCandidate>[] = [];
+    const candidateGroups: NotificationCandidate[][] = [];
     if (!cancelled && !this.lifecycleSignal?.aborted) {
       let currentAttemptCount: number | undefined;
       let currentCandidates: NotificationCandidate[] = [];
 
       const flushCandidates = (): void => {
         if (currentCandidates.length > 0) {
-          plannedBatches.push(...this.sender.plan(currentCandidates, config.language));
+          candidateGroups.push(currentCandidates);
           currentCandidates = [];
         }
       };
@@ -251,27 +254,31 @@ export class NotificationService {
       flushCandidates();
     }
 
-    for (const plannedBatch of plannedBatches) {
-      if (this.lifecycleSignal?.aborted) {
-        break;
-      }
+    delivery: for (const group of candidateGroups) {
+      for (const plannedBatch of this.planInWindows(group, config.language)) {
+        if (this.lifecycleSignal?.aborted) {
+          break delivery;
+        }
 
-      const batch = this.wishlistStateRepository.createAndClaimNotificationBatch(
-        config,
-        config.language,
-        plannedBatch.notifications,
-        this.now().toISOString(),
-      );
-      if (!batch) {
-        continue;
-      }
+        const batch = this.wishlistStateRepository.createAndClaimNotificationBatch(
+          config,
+          config.language,
+          plannedBatch.notifications,
+          this.now().toISOString(),
+        );
+        if (!batch) {
+          continue;
+        }
 
-      const outcome = await this.deliverClaimedBatch(batch);
-      sentCount += outcome.sentCount;
-      failedCount += outcome.failedCount;
-      cancelled = outcome.cancelled;
-      if (cancelled) {
-        break;
+        const outcome = await this.deliverClaimedBatch(batch);
+        sentCount += outcome.sentCount;
+        failedCount += outcome.failedCount;
+        cancelled = outcome.cancelled;
+        if (cancelled) {
+          break delivery;
+        }
+        // Commands and other users' work get a turn between DMs of a long queue.
+        await nextEventLoopTurn();
       }
     }
 
@@ -286,6 +293,29 @@ export class NotificationService {
       sentCount,
       failedCount,
     };
+  }
+
+  /**
+   * Plans DMs a few candidates at a time, so a long queue (a big Steam sale)
+   * never blocks the event loop for one large partition. Only a window's last
+   * DM can still take more games, so it is carried into the next window; the
+   * DMs are the same as planning every candidate at once.
+   */
+  private *planInWindows(
+    candidates: readonly NotificationCandidate[],
+    language: Language,
+  ): Generator<NotificationBatch<NotificationCandidate>> {
+    let carried: readonly NotificationCandidate[] = [];
+    for (let start = 0; start < candidates.length; start += planningWindowSize) {
+      const end = start + planningWindowSize;
+      const batches = this.sender.plan([...carried, ...candidates.slice(start, end)], language);
+      if (end >= candidates.length) {
+        yield* batches;
+        return;
+      }
+      carried = batches.at(-1)?.notifications ?? [];
+      yield* batches.slice(0, -1);
+    }
   }
 
   private withArtwork(batch: DurableNotificationBatch): DurableNotificationBatch {
