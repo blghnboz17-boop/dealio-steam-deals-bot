@@ -71,6 +71,30 @@ WSL'deki yerel `.env` değişikliği sunucuya kendiliğinden aktarılmaz.
 paylaşılmadığı için yeni panel bile yanlışlıkla süresi dolmuş görünebilir.
 Veritabanı kilidi yalnızca aynı makine/veritabanını korur, ayrı sunucuları korumaz.
 
+### Bellek ayarları (7 Ekim 2026'da uygulandı)
+
+VM'de yaklaşık 841 MB kullanılabilir RAM var. Bot belleği tükenirse çekirdek bir
+süreci kapatır; bu ayarlar o anın botu düşürmemesi içindir:
+
+- `/swapfile` (1 GB), `/etc/fstab` içinde kalıcı. `vm.swappiness=10`
+  (`/etc/sysctl.d/90-dealio-swap.conf`): swap yalnız son çaredir. `fstab`
+  yedeği: `/etc/fstab.bak-20261007`.
+- `/etc/systemd/system/dealio.service.d/memory.conf`: `OOMScoreAdjust=-500`.
+  Bellek tükenirse çekirdek önce diğer süreçleri kapatır.
+- Sunucuda işe yaramayan servisler kapatıldı: `fwupd` (maskelendi, `fwupd-refresh.timer`
+  kapalı), `multipathd` (tek disk, multipath aygıtı yok), `ModemManager`, `udisks2`.
+  Azure ajanı (`walinuxagent`), SSH ve `unattended-upgrades` açık kalır.
+
+Geri alma: `sudo swapoff /swapfile`, `fstab` satırını sil, `sudo rm /swapfile
+/etc/sysctl.d/90-dealio-swap.conf /etc/systemd/system/dealio.service.d/memory.conf`,
+`sudo systemctl unmask fwupd.service` ve
+`sudo systemctl enable --now multipathd.socket multipathd.service ModemManager.service udisks2.service`,
+ardından `sudo systemctl daemon-reload`.
+
+Kontrol: `free -m`, `swapon --show`, `cat /proc/$(systemctl show -p MainPID --value dealio)/oom_score_adj`
+(-500 olmalı). VM'de kalıcı başka araç çalıştırmak (ör. bir kod ajanı sunucusu) RAM'i
+doğrudan bottan alır.
+
 ## İsteğe bağlı yerel WSL servisi
 
 Üretim botu Azure'da çalışırken yerel servis kapalı ve devre dışı tutulur:
