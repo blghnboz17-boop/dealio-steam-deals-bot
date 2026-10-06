@@ -74,13 +74,11 @@ export class NotificationQueueRepository {
                  next_attempt_at = COALESCE(last_attempt_at, ?),
                  last_error = 'Delivery outcome unknown after process interruption; retrying at least once'
              WHERE status = 'sending'
-               AND EXISTS (
-                 SELECT 1 FROM notification_batch_item AS item
+               AND (notification.discord_user_id, notification.config_version,
+                    notification.app_id, notification.sale_episode_id) IN (
+                 SELECT item.discord_user_id, item.config_version, item.app_id, item.sale_episode_id
+                 FROM notification_batch_item AS item
                  WHERE item.batch_id = ?
-                   AND item.discord_user_id = notification.discord_user_id
-                   AND item.config_version = notification.config_version
-                   AND item.app_id = notification.app_id
-                   AND item.sale_episode_id = notification.sale_episode_id
                )`,
           )
           .run(staleBefore, batchId);
@@ -192,13 +190,11 @@ export class NotificationQueueRepository {
                  next_attempt_at = NULL,
                  last_error = 'Sale episode is no longer active'
              WHERE status = 'failed'
-               AND EXISTS (
-                 SELECT 1 FROM notification_batch_item AS item
+               AND (notification.discord_user_id, notification.config_version,
+                    notification.app_id, notification.sale_episode_id) IN (
+                 SELECT item.discord_user_id, item.config_version, item.app_id, item.sale_episode_id
+                 FROM notification_batch_item AS item
                  WHERE item.batch_id = ?
-                   AND item.discord_user_id = notification.discord_user_id
-                   AND item.config_version = notification.config_version
-                   AND item.app_id = notification.app_id
-                   AND item.sale_episode_id = notification.sale_episode_id
                )
                AND NOT EXISTS (
                  SELECT 1 FROM wishlist_item_state AS state
