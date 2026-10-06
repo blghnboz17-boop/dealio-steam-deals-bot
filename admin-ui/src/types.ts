@@ -150,6 +150,7 @@ export interface SnapshotItem {
 
 export interface NotificationRow {
   readonly appId: number;
+  readonly headerImageUrl?: string | null;
   readonly gameName: string;
   readonly status: string;
   readonly reason: string;
@@ -251,6 +252,8 @@ export interface GameRow {
   readonly maxDiscountPercent?: number | null;
   readonly muted?: number;
   readonly targets?: number;
+  /** Steam's stored artwork URL, when a wishlist read has seen the game. */
+  readonly headerImageUrl?: string | null;
 }
 
 export interface Games {

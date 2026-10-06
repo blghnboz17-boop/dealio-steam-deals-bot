@@ -43,6 +43,18 @@ describe('AdminRepository', () => {
     expect(users[1]).toMatchObject({ dmDeliveryErrorCode: '50007', wishlistCount: 0 });
   });
 
+  it('returns the stored Steam artwork per game, including hashed paths, and rejects other hosts', () => {
+    const hashed = 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/30/93fac97732b31fdb3dd1dcc14047eb7179eb0865/header.jpg?t=1790174294';
+    seedUser(database, { id: '100000000000000004', games: [
+      { appId: 30, name: 'Gamma', headerImageUrl: hashed },
+      { appId: 40, name: 'Delta', headerImageUrl: 'https://example.com/steam/apps/40/header.jpg' },
+    ] });
+    const artwork = repository.gameArtwork();
+    expect(artwork.get(30)).toBe(hashed);
+    expect(artwork.has(40)).toBe(false);
+    expect(artwork.has(10)).toBe(false);
+  });
+
   it('ignores state left from an older configuration generation', () => {
     database.prepare('UPDATE user_config SET config_version = 2 WHERE discord_user_id = ?').run('100000000000000002');
     expect(repository.users().find((user) => user.discordUserId === '100000000000000002'))

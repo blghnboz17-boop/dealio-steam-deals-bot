@@ -20,21 +20,33 @@ export function storeUrl(appId: number): string {
   return `https://store.steampowered.com/app/${appId}/`;
 }
 
+/** The small capsule at its classic path; newer games only have art under a hashed folder (see headerImageUrl). */
 export function capsuleUrl(appId: number): string {
   return `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_184x69.jpg`;
 }
 
-/** A capsule Steam does not serve becomes the empty tile instead of a broken-image icon. */
+/**
+ * Steam's stored artwork first, then the classic capsule path; art Steam does not
+ * serve at either becomes the empty tile instead of a broken-image icon.
+ */
 const emptyImage = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
-function hideBrokenImage(event: Event): void {
+function nextImage(event: Event): void {
   const image = event.currentTarget as HTMLImageElement;
-  if (image.src !== emptyImage) image.src = emptyImage;
+  const fallback = image.dataset.fallback;
+  if (fallback && image.src !== fallback) {
+    image.src = fallback;
+    delete image.dataset.fallback;
+  } else if (image.src !== emptyImage) {
+    image.src = emptyImage;
+  }
 }
 
-export function GameCell(props: { appId: number; name: string }): VNode {
+export function GameCell(props: { appId: number; name: string; imageUrl?: string | null }): VNode {
+  const capsule = capsuleUrl(props.appId);
   return html`<a class="game-cell" href=${storeUrl(props.appId)} target="_blank" rel="noreferrer noopener"
     onClick=${(event: Event) => event.stopPropagation()}>
-    <img src=${capsuleUrl(props.appId)} alt="" loading="lazy" width="92" height="35" onError=${hideBrokenImage} />
+    <img src=${props.imageUrl ?? capsule} data-fallback=${props.imageUrl ? capsule : undefined} alt="" loading="lazy"
+      width="92" height="35" onError=${nextImage} />
     <span>${props.name}</span></a>`;
 }
 
@@ -78,7 +90,7 @@ export function UserDetailPage(props: { id: string }): VNode {
   };
 
   const wishlistColumns: Column<SnapshotItem>[] = [
-    { key: 'game', label: 'Oyun', render: (item) => GameCell({ appId: item.appId, name: item.name }),
+    { key: 'game', label: 'Oyun', render: (item) => GameCell({ appId: item.appId, name: item.name, imageUrl: item.headerImageUrl }),
       sort: (item) => item.name.toLocaleLowerCase('tr-TR'), csv: (item) => item.name },
     { key: 'appId', label: 'App ID', render: (item) => html`<code>${item.appId}</code>`, sort: (item) => item.appId,
       csv: (item) => item.appId, hideOnMobile: true },
@@ -95,7 +107,7 @@ export function UserDetailPage(props: { id: string }): VNode {
   ];
 
   const notificationColumns: Column<NotificationRow>[] = [
-    { key: 'game', label: 'Oyun', render: (row) => GameCell({ appId: row.appId, name: row.gameName }),
+    { key: 'game', label: 'Oyun', render: (row) => GameCell({ appId: row.appId, name: row.gameName, imageUrl: row.headerImageUrl ?? null }),
       sort: (row) => row.gameName, csv: (row) => row.gameName },
     { key: 'status', label: 'Durum', render: (row) => Badge({ tone: notificationTone[row.status] ?? 'neutral',
       label: notificationStatusNames[row.status] ?? row.status, ...(row.lastError ? { title: row.lastError } : {}) }),
