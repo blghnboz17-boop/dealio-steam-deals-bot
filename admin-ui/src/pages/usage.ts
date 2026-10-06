@@ -3,7 +3,9 @@ import { api } from '../api.js';
 import { DailyColumns } from '../chart.js';
 import { num, relative } from '../format.js';
 import type { Usage, UsageCount } from '../types.js';
-import { BarList, Card, DataTable, ErrorBox, Loading, Page, useAsync, type Column } from '../ui.js';
+import {
+  BarList, Card, DataTable, ErrorBox, Loading, Page, useAsync, type Column, RefreshButton, live,
+} from '../ui.js';
 import { contextNames, installNames } from './user-detail.js';
 
 /** Friendly names for the most common actions; the raw action is kept beside them. */
@@ -47,7 +49,7 @@ const usageColumns = (label: string, name: (key: string) => string): Column<Usag
 
 export function UsagePage(): VNode {
   const [days, setDays] = useState(30);
-  const state = useAsync(() => api.get<Usage>(`/api/usage?days=${days}`), [days]);
+  const state = useAsync(() => api.get<Usage>(`/api/usage?days=${days}`), [days], live);
   const data = state.data;
   const prepared = data?.setup.find((row) => row.key === 'prepare-ok')?.users ?? 0;
   const completed = data?.setup.find((row) => row.key === 'confirm-ok')?.users ?? 0;
@@ -60,7 +62,7 @@ export function UsagePage(): VNode {
         onChange=${(event: Event) => setDays(Number((event.target as HTMLSelectElement).value))}>
         <option value="7">Son 7 gün</option><option value="30">Son 30 gün</option><option value="90">Son 90 gün</option>
       </select>
-      <button class="btn" onClick=${state.reload} disabled=${state.loading}>Yenile</button>`,
+      <${RefreshButton} state=${state} />`,
     children: !data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`

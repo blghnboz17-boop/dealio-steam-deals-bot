@@ -3,7 +3,9 @@ import { api } from '../api.js';
 import { useAction } from '../actions.js';
 import { bytes, dateTime, duration, num, relative } from '../format.js';
 import type { RuntimeSettings, SystemInfo } from '../types.js';
-import { Badge, Card, ErrorBox, Facts, Loading, Page, useAsync, useTicker } from '../ui.js';
+import {
+  Badge, Card, ErrorBox, Facts, Loading, Page, useAsync, useTicker, RefreshButton, live,
+} from '../ui.js';
 import { SchedulerFacts } from './overview.js';
 
 const phaseNames: Record<string, string> = {
@@ -61,7 +63,7 @@ function SettingsForm(props: { settings: RuntimeSettings; userCount: number | nu
 }
 
 export function SystemPage(): VNode {
-  const state = useAsync(() => api.get<SystemInfo>('/api/system'), []);
+  const state = useAsync(() => api.get<SystemInfo>('/api/system'), [], live);
   const { busy, run } = useAction();
   useTicker(15_000);
   const data = state.data;
@@ -72,7 +74,7 @@ export function SystemPage(): VNode {
         onClick=${() => run('scan', '/api/system/scan-now', {}, 'Tam tarama başladı').then(() => setTimeout(state.reload, 800))}>↻ Şimdi tara</button>
       <button class="btn" disabled=${busy !== null}
         onClick=${() => run('retry', '/api/system/retry-now', {}, 'Bekleyen bildirimler denendi').then(state.reload)}>✉ Bildirimleri şimdi dene</button>
-      <button class="btn" onClick=${state.reload} disabled=${state.loading}>Yenile</button>`,
+      <${RefreshButton} state=${state} />`,
     children: !data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`

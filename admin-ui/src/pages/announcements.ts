@@ -5,7 +5,7 @@ import { AnnouncementEditor, editorLanguages, filledLanguages, type Content } fr
 import { dateTime, displayName, languageNames, num, relative } from '../format.js';
 import type { Broadcast, BroadcastRecipient, RecipientStatus } from '../types.js';
 import {
-  Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, useAsync, type Column, type Tone,
+  Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, useAsync, type Column, type Tone, RefreshButton, live,
 } from '../ui.js';
 import { UserCell } from './users.js';
 
@@ -134,11 +134,11 @@ export function BroadcastControls(props: { broadcast: Broadcast; onChanged: () =
 }
 
 export function AnnouncementsPage(): VNode {
-  const state = useAsync(() => api.get<{ broadcasts: Broadcast[] }>('/api/broadcasts'), []);
+  const state = useAsync(() => api.get<{ broadcasts: Broadcast[] }>('/api/broadcasts'), [], live);
   const sending = state.data?.broadcasts.some((broadcast) => broadcast.status === 'sending') ?? false;
   useEffect(() => {
     if (!sending) return;
-    const timer = setInterval(state.reload, 3000);
+    const timer = setInterval(state.refresh, 3000);
     return () => clearInterval(timer);
   }, [sending]);
   const columns: Column<Broadcast>[] = [
@@ -155,6 +155,7 @@ export function AnnouncementsPage(): VNode {
   ];
   return Page({
     title: 'Duyurular',
+    actions: html`<${RefreshButton} state=${state} />`,
     subtitle: 'Kullanıcılara DM ile duyuru. Alıcılar Discord’a gönderilmeden önce kaydedilir; gönderim 1,5 saniyede bir mesaj hızındadır.',
     children: html`
       <${Composer} onSent=${state.reload} />
@@ -167,11 +168,11 @@ export function AnnouncementsPage(): VNode {
 }
 
 export function AnnouncementDetailPage(props: { id: string }): VNode {
-  const state = useAsync(() => api.get<{ broadcast: Broadcast; recipients: BroadcastRecipient[] }>(`/api/broadcasts/${props.id}`), [props.id]);
+  const state = useAsync(() => api.get<{ broadcast: Broadcast; recipients: BroadcastRecipient[] }>(`/api/broadcasts/${props.id}`), [props.id], live);
   const data = state.data;
   useEffect(() => {
     if (data?.broadcast.status !== 'sending') return;
-    const timer = setInterval(state.reload, 3000);
+    const timer = setInterval(state.refresh, 3000);
     return () => clearInterval(timer);
   }, [data?.broadcast.status]);
   const columns: Column<BroadcastRecipient>[] = [
@@ -187,7 +188,7 @@ export function AnnouncementDetailPage(props: { id: string }): VNode {
   ];
   return Page({
     title: data ? titleOf(data.broadcast) : 'Duyuru',
-    actions: html`<a class="btn" href="#/announcements">← Duyurular</a>`,
+    actions: html`<a class="btn" href="#/announcements">← Duyurular</a><${RefreshButton} state=${state} />`,
     children: !data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`

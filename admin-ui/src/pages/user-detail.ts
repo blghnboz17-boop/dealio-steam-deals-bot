@@ -6,7 +6,9 @@ import {
 } from '../format.js';
 import { rememberProfile } from '../profiles.js';
 import type { NotificationRow, SnapshotItem, UserDetail } from '../types.js';
-import { Avatar, Badge, Card, CopyText, DataTable, ErrorBox, Facts, Loading, Page, useAsync, type Column, type Tone } from '../ui.js';
+import {
+  Avatar, Badge, Card, CopyText, DataTable, ErrorBox, Facts, Loading, Page, useAsync, type Column, type Tone, RefreshButton, live,
+} from '../ui.js';
 import { checkBadge, userStatus } from './users.js';
 import { UserActions } from './user-actions.js';
 import { AuditTable } from './audit.js';
@@ -50,7 +52,7 @@ const notificationTone: Record<string, Tone> = {
 };
 
 export function UserDetailPage(props: { id: string }): VNode {
-  const state = useAsync(() => api.get<UserDetail>(`/api/users/${props.id}`), [props.id]);
+  const state = useAsync(() => api.get<UserDetail>(`/api/users/${props.id}`), [props.id], live);
   const data = state.data;
   if (!data) {
     return Page({ title: 'Kullanıcı', actions: html`<a class="btn" href="#/users">← Kullanıcılar</a>`,
@@ -110,7 +112,7 @@ export function UserDetailPage(props: { id: string }): VNode {
     title: name,
     subtitle: html`${profile ? `@${profile.username} · ` : ''}Katıldı ${day(config.createdAt)}`,
     actions: html`<a class="btn" href="#/users">← Kullanıcılar</a>
-      <button class="btn" onClick=${state.reload} disabled=${state.loading}>Yenile</button>`,
+      <${RefreshButton} state=${state} />`,
     children: html`
       <div class="profile-head card">
         ${Avatar({ src: profile?.avatarUrl ?? null, name, size: 64 })}
