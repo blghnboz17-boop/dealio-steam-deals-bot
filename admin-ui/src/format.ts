@@ -4,6 +4,7 @@ const compactFormat = new Intl.NumberFormat(locale, { notation: 'compact', maxim
 const dateTimeFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
 const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
 const relativeFormat = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+const relativeCount = new Intl.RelativeTimeFormat(locale, { numeric: 'always' });
 const regionNames = new Intl.DisplayNames([locale], { type: 'region' });
 
 export function num(value: number | null | undefined): string {
@@ -27,24 +28,50 @@ export function day(value: string | number | null | undefined): string {
   return Number.isNaN(date.getTime()) ? '—' : dateFormat.format(date);
 }
 
-const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
-  ['year', 365 * 86_400_000],
-  ['month', 30 * 86_400_000],
-  ['week', 7 * 86_400_000],
-  ['day', 86_400_000],
-  ['hour', 3_600_000],
-  ['minute', 60_000],
-];
+const dayMs = 86_400_000;
 
+/** The viewer's calendar day of a moment, as a day number. */
+function calendarDay(time: number): number {
+  const date = new Date(time);
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / dayMs;
+}
+
+/** Whole calendar months from `earlier` to `later` (a month counts once its day of month is reached). */
+function wholeMonths(earlier: number, later: number): number {
+  const from = new Date(earlier);
+  const to = new Date(later);
+  const months = (to.getFullYear() - from.getFullYear()) * 12 + to.getMonth() - from.getMonth();
+  return to.getDate() < from.getDate() ? months - 1 : months;
+}
+
+/**
+ * "5 dakika önce", "dün", "3 gün önce", "1 ay önce", "10 dakika sonra". Never rounds up:
+ * 46 days is "1 ay önce", not 2. Under a day it counts elapsed time; from a day on it
+ * counts calendar days in the viewer's timezone. The exact time belongs in a tooltip
+ * (see `When` in ui.ts).
+ */
 export function relative(value: string | number | null | undefined, now = Date.now()): string {
   if (value === null || value === undefined) return '—';
   const time = new Date(value).getTime();
   if (Number.isNaN(time)) return '—';
   const delta = time - now;
-  for (const [unit, size] of units) {
-    if (Math.abs(delta) >= size) return relativeFormat.format(Math.round(delta / size), unit);
-  }
-  return relativeFormat.format(Math.round(delta / 1000), 'second');
+  const sign = delta < 0 ? -1 : 1;
+  const elapsed = Math.abs(delta);
+  if (elapsed < 60_000) return relativeFormat.format(sign * Math.trunc(elapsed / 10_000) * 10, 'second');
+  if (elapsed < 3_600_000) return relativeCount.format(sign * Math.trunc(elapsed / 60_000), 'minute');
+  if (elapsed < dayMs) return relativeCount.format(sign * Math.trunc(elapsed / 3_600_000), 'hour');
+  const days = Math.max(1, Math.abs(calendarDay(time) - calendarDay(now)));
+  // Words only for one day ("dün", "yarın"); ICU's "evvelsi gün" reads dated.
+  if (days < 7) return (days === 1 ? relativeFormat : relativeCount).format(sign * days, 'day');
+  if (days < 30) return relativeCount.format(sign * Math.trunc(days / 7), 'week');
+  const months = Math.max(1, wholeMonths(Math.min(time, now), Math.max(time, now)));
+  if (months < 12) return relativeCount.format(sign * months, 'month');
+  return relativeCount.format(sign * Math.trunc(months / 12), 'year');
+}
+
+/** "Kullanım kaydı 6 Eki 2026’dan beri" style note for figures that come from usage tracking. */
+export function trackingNote(since: string | null | undefined): string {
+  return since ? `Kullanım kaydı ${day(since)} tarihinde başladı; öncesi için veri yok.` : 'Henüz kullanım kaydı yok.';
 }
 
 export function bytes(value: number): string {

@@ -2,12 +2,12 @@ import { html, useState, type VNode } from '../vendor/preact-htm.js';
 import { api } from '../api.js';
 import { AreaChart, carryForward, DailyColumns, Donut, fillDays, Sparkline } from '../chart.js';
 import {
-  checkStatusNames, compact, country, duration, flag, bytes, languageNames, notificationModeNames, num, relative,
+  checkStatusNames, compact, country, day, duration, flag, bytes, languageNames, notificationModeNames, num, relative,
 } from '../format.js';
 import { Icon } from '../icons.js';
 import type { Overview } from '../types.js';
 import {
-  Badge, BarList, Card, ErrorBox, Facts, Loading, Meter, Page, Stat, useAsync, useTicker, RefreshButton, live, periodTrend,
+  Badge, BarList, Card, ErrorBox, Facts, Loading, Meter, Page, Stat, When, useAsync, useTicker, RefreshButton, live, periodTrend,
   type Tone, type Trend,
 } from '../ui.js';
 
@@ -18,9 +18,9 @@ export function SchedulerFacts(props: { scheduler: Overview['scheduler'] }): VNo
     ['Durum', scheduler.running
       ? Badge({ tone: 'info', label: `Tarıyor (${relative(scheduler.runStartedAt)} başladı)` })
       : Badge({ tone: 'neutral', label: 'Beklemede' })],
-    ['Sonraki tarama', scheduler.nextScheduledAt ? relative(scheduler.nextScheduledAt) : '—'],
+    ['Sonraki tarama', When({ at: scheduler.nextScheduledAt })],
     ['Aralık', duration(scheduler.intervalMs)],
-    ['Son tarama', last ? `${relative(last.completedAt)} · ${duration(last.durationMs)}` : 'Bu açılıştan beri yok'],
+    ['Son tarama', last ? html`${When({ at: last.completedAt })} · ${duration(last.durationMs)}` : 'Bu açılıştan beri yok'],
     ['Son taramada', last
       ? `${num(last.completedCount)}/${num(last.userCount)} kullanıcı · ${num(last.checkedGames)} oyun · ${num(last.dmSent)} DM`
       : '—'],
@@ -98,6 +98,8 @@ export function OverviewPage(): VNode {
   const alerts = fillDays(charts.alerts, 30).map((row) => row.count);
   const queued = counts.queuePending + counts.queueRetry + counts.queueSending;
   const checkTotal = data.distributions.checkStatuses.reduce((sum, row) => sum + row.count, 0);
+  // Days of usage tracking available (interaction_event), counting today.
+  const trackedDays = data.telemetrySince ? Math.floor((Date.now() - new Date(data.telemetrySince).getTime()) / 86_400_000) + 1 : 0;
 
   return Page({
     title: 'Genel bakış',
@@ -115,7 +117,9 @@ export function OverviewPage(): VNode {
           sub: data.settings.signupsOpen ? `bu hafta · bugün +${num(counts.newUsers24h)}` : 'bu hafta · kayıtlar kapalı',
           spark: Sparkline({ values: growth, label: 'Son 60 günde kayıtlı kullanıcı' }) })}
         ${Stat({ label: 'Aktif kullanıcı (24 sa)', icon: 'activity', value: num(data.activity.active24h),
-          trend: periodTrend(active), sub: `7 günde ${num(data.activity.active7d)} · 30 günde ${num(data.activity.active30d)}`,
+          trend: trackedDays >= 14 ? periodTrend(active) : null,
+          sub: trackedDays >= 30 ? `7 günde ${num(data.activity.active7d)} · 30 günde ${num(data.activity.active30d)}`
+            : data.telemetrySince ? `kayıt ${day(data.telemetrySince)} tarihinden beri · 7 günde ${num(data.activity.active7d)}` : 'henüz kayıt yok',
           spark: Sparkline({ values: active, label: 'Son 30 günde günlük aktif kullanıcı' }) })}
         ${Stat({ label: 'Gönderilen uyarı (24 sa)', icon: 'bell', value: num(counts.alertsSent24h),
           trend: periodTrend(alerts), sub: `7 günde ${num(counts.alertsSent7d)} · toplam ${compact(counts.alertsSentTotal)}`,

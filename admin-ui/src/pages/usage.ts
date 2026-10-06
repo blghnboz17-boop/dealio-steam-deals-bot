@@ -1,10 +1,10 @@
 import { html, useState, type VNode } from '../vendor/preact-htm.js';
 import { api } from '../api.js';
 import { AreaChart } from '../chart.js';
-import { num, relative } from '../format.js';
+import { num, trackingNote } from '../format.js';
 import type { Usage, UsageCount } from '../types.js';
 import {
-  BarList, Card, DataTable, ErrorBox, Loading, Page, useAsync, type Column, RefreshButton, live,
+  BarList, Card, DataTable, ErrorBox, Loading, Page, When, useAsync, type Column, RefreshButton, live,
 } from '../ui.js';
 import { contextNames, installNames } from './user-detail.js';
 
@@ -56,7 +56,7 @@ export function UsagePage(): VNode {
   const failures = data?.setup.filter((row) => row.key.includes('failed')) ?? [];
   return Page({
     title: 'Kullanım',
-    subtitle: 'Komut ve düğme kullanımı, kurulum hunisi ve kullanıcıların geldiği sunucular (son 90 güne kadar saklanır).',
+    subtitle: `Komut ve düğme kullanımı, kurulum hunisi ve kullanıcıların geldiği sunucular (90 gün saklanır). ${trackingNote(data?.telemetrySince)}`,
     actions: html`
       <select class="input" value=${String(days)} aria-label="Dönem"
         onChange=${(event: Event) => setDays(Number((event.target as HTMLSelectElement).value))}>
@@ -97,7 +97,7 @@ export function UsagePage(): VNode {
                 sort: (row: Usage['sources'][number]) => row.users, csv: (row: Usage['sources'][number]) => row.users },
               { key: 'registered', label: 'Kayıtlı', align: 'end', render: (row: Usage['sources'][number]) => num(row.registeredUsers),
                 sort: (row: Usage['sources'][number]) => row.registeredUsers, csv: (row: Usage['sources'][number]) => row.registeredUsers },
-              { key: 'last', label: 'Son', render: (row: Usage['sources'][number]) => relative(row.lastSeenAt),
+              { key: 'last', label: 'Son', render: (row: Usage['sources'][number]) => When({ at: row.lastSeenAt }),
                 sort: (row: Usage['sources'][number]) => row.lastSeenAt, csv: (row: Usage['sources'][number]) => row.lastSeenAt },
             ]}
             rows=${data.sources} rowKey=${(row: Usage['sources'][number]) => row.guildId} csvName="dealio-kaynak-sunucular"

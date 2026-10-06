@@ -68,6 +68,7 @@ export class AdminQueryService {
         members: guilds.reduce((sum, guild) => sum + guild.memberCount, 0),
       },
       counts: repository.overviewCounts(now),
+      telemetrySince: telemetry.firstEventAt(),
       activity: {
         active24h: telemetry.activeUsersSince(day(1)),
         active7d: telemetry.activeUsersSince(day(7)),
@@ -101,6 +102,7 @@ export class AdminQueryService {
     const blocked = new Set(controls.userBlocks().map((block) => block.discordUserId));
     const guildNames = new Map(this.dependencies.directory.guilds().map((guild) => [guild.id, guild.name]));
     return {
+      telemetrySince: telemetry.firstEventAt(),
       users: this.dependencies.adminRepository.users().map((user) => {
         const source = sources.get(user.discordUserId) ?? null;
         return {
@@ -151,6 +153,7 @@ export class AdminQueryService {
       } : null,
       notifications: withArtwork(adminRepository.notifications(discordUserId, 100), adminRepository.gameArtwork()),
       usage: this.withGuildNames(this.dependencies.telemetry.userUsage(discordUserId)),
+      telemetrySince: this.dependencies.telemetry.firstEventAt(),
       blocked: this.dependencies.controls.isUserBlocked(discordUserId),
       messages: this.dependencies.broadcasts.forUser(discordUserId, 20),
       audit: this.dependencies.controls.auditEntries(30, discordUserId),
@@ -171,6 +174,7 @@ export class AdminQueryService {
         lastActivityAt: sources.get(guild.id)?.lastSeenAt ?? null,
       })),
       departed: telemetry.departedGuilds(),
+      telemetrySince: telemetry.firstEventAt(),
       blocked: controls.guildBlocks(),
       events: telemetry.guildEvents(100),
     };
@@ -189,6 +193,7 @@ export class AdminQueryService {
       blocked: controls.isGuildBlocked(guildId),
       events,
       users: users.map((user) => ({ ...user, profile: profiles.get(user.discordUserId) ?? null })),
+      telemetrySince: telemetry.firstEventAt(),
       audit: controls.auditEntries(30, guildId),
     };
   }
@@ -199,6 +204,7 @@ export class AdminQueryService {
     const guildNames = new Map(this.dependencies.directory.guilds().map((guild) => [guild.id, guild.name]));
     return {
       days,
+      telemetrySince: telemetry.firstEventAt(),
       dailyActive: telemetry.dailyActiveUsers(since),
       actions: telemetry.usageBy('action', since),
       contexts: telemetry.usageBy('context', since),

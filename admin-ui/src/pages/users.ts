@@ -1,13 +1,13 @@
 import { html, useMemo, useState, type VNode } from '../vendor/preact-htm.js';
 import { api } from '../api.js';
 import {
-  checkStatusNames, country, dateTime, day, displayName, flag, languageNames, notificationModeNames, num, relative,
+  checkStatusNames, country, dateTime, day, displayName, flag, languageNames, notificationModeNames, num, trackingNote,
 } from '../format.js';
 import { useProfiles } from '../profiles.js';
 import { navigate } from '../router.js';
 import type { Profile, UserRow } from '../types.js';
 import {
-  Avatar, Badge, DataTable, ErrorBox, Loading, Page, useAsync, type Column, type Tone, RefreshButton, live,
+  Avatar, Badge, DataTable, ErrorBox, Loading, Page, When, useAsync, type Column, type Tone, RefreshButton, live,
 } from '../ui.js';
 
 export function userStatus(row: { enabled: boolean; dmDeliveryBlockedAt: string | null; blocked?: boolean }): { tone: Tone; label: string } {
@@ -35,8 +35,9 @@ export function UserCell(props: { id: string; profile: Profile | null | undefine
 type StatusFilter = 'all' | 'active' | 'paused' | 'blocked' | 'banned';
 
 export function UsersPage(): VNode {
-  const state = useAsync(() => api.get<{ users: UserRow[] }>('/api/users'), [], live);
+  const state = useAsync(() => api.get<{ users: UserRow[]; telemetrySince?: string | null }>('/api/users'), [], live);
   const users = state.data?.users ?? [];
+  const telemetrySince = state.data?.telemetrySince ?? null;
   const profiles = useProfiles(users.map((user) => user.discordUserId));
   const [status, setStatus] = useState<StatusFilter>('all');
   const [countryFilter, setCountry] = useState('');
@@ -81,18 +82,21 @@ export function UsersPage(): VNode {
     { key: 'mode', label: 'Zamanlama', render: (row) => notificationModeNames[row.notificationMode] ?? row.notificationMode,
       sort: (row) => row.notificationMode, csv: (row) => row.notificationMode, hideOnMobile: true },
     { key: 'check', label: 'Son kontrol', render: (row) => html`${checkBadge(row.lastCheckStatus, row.lastCheckErrorCode)}
-      <small class="muted block">${relative(row.lastCheckCompletedAt)}</small>`,
+      <small class="muted block">${When({ at: row.lastCheckCompletedAt })}</small>`,
       sort: (row) => row.lastCheckCompletedAt, csv: (row) => row.lastCheckStatus },
     { key: 'alerts', label: 'Uyarı', align: 'end', render: (row) => html`${num(row.alertsSent)}
       ${row.pendingAlerts > 0 ? html`<small class="muted block">${num(row.pendingAlerts)} bekliyor</small>` : null}`,
       sort: (row) => row.alertsSent, csv: (row) => row.alertsSent },
-    { key: 'lastAlert', label: 'Son uyarı', render: (row) => relative(row.lastAlertAt), sort: (row) => row.lastAlertAt,
+    { key: 'lastAlert', label: 'Son uyarı', render: (row) => When({ at: row.lastAlertAt, empty: 'Hiç' }), sort: (row) => row.lastAlertAt,
       csv: (row) => row.lastAlertAt, hideOnMobile: true },
-    { key: 'source', label: 'Geldiği sunucu', render: (row) => row.sourceGuildId
+    // Usage tracking is newer than some users: without a record the source is unknown, not "DM".
+    { key: 'source', label: 'İlk kullandığı sunucu', render: (row) => row.sourceGuildId
       ? html`<a href=${`#/guilds/${row.sourceGuildId}`} onClick=${(event: Event) => event.stopPropagation()}>${row.sourceGuildName ?? 'Ayrılmış sunucu'}</a>`
-      : html`<span class="muted">DM / kişisel</span>`, sort: (row) => row.sourceGuildName ?? null,
+      : row.lastSeenAt ? html`<span class="muted">Yalnız DM / kişisel</span>`
+        : html`<span class="muted" title=${trackingNote(telemetrySince)}>Kayıt yok</span>`, sort: (row) => row.sourceGuildName ?? null,
       csv: (row) => row.sourceGuildName ?? row.sourceGuildId ?? '', hideOnMobile: true },
-    { key: 'seen', label: 'Son görüldü', render: (row) => relative(row.lastSeenAt ?? null), sort: (row) => row.lastSeenAt ?? null,
+    { key: 'seen', label: 'Son görüldü', render: (row) => row.lastSeenAt ? When({ at: row.lastSeenAt })
+      : html`<span class="muted" title=${trackingNote(telemetrySince)}>Kayıt yok</span>`, sort: (row) => row.lastSeenAt ?? null,
       csv: (row) => row.lastSeenAt ?? '', hideOnMobile: true },
     { key: 'created', label: 'Katıldı', render: (row) => html`<span title=${dateTime(row.createdAt)}>${day(row.createdAt)}</span>`,
       sort: (row) => row.createdAt, csv: (row) => row.createdAt },
@@ -120,7 +124,7 @@ export function UsersPage(): VNode {
 
   return Page({
     title: 'Kullanıcılar',
-    subtitle: state.data ? `${num(users.length)} kayıtlı kullanıcı` : undefined,
+    subtitle: state.data ? `${num(users.length)} kayıtlı kullanıcı. Son görülme ve sunucu bilgisi kullanım kaydından gelir. ${trackingNote(telemetrySince)}` : undefined,
     actions: html`<${RefreshButton} state=${state} />`,
     children: !state.data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())

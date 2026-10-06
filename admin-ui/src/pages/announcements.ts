@@ -5,7 +5,7 @@ import { AnnouncementEditor, editorLanguages, filledLanguages, type Content } fr
 import { dateTime, displayName, languageNames, num, relative } from '../format.js';
 import type { Broadcast, BroadcastRecipient, RecipientStatus } from '../types.js';
 import {
-  BackLink, Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, Spinner, useAsync, type Column, type Tone, RefreshButton, live,
+  BackLink, Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, Spinner, When, useAsync, type Column, type Tone, RefreshButton, live,
 } from '../ui.js';
 import { UserCell } from './users.js';
 import { Icon } from '../icons.js';
@@ -185,7 +185,7 @@ export function AnnouncementDetailPage(props: { id: string }): VNode {
     { key: 'attempts', label: 'Deneme', align: 'end', render: (row) => num(row.attemptCount), csv: (row) => row.attemptCount },
     { key: 'error', label: 'Hata', render: (row) => row.lastError ? html`<code class="small">${row.lastError}</code>` : '',
       csv: (row) => row.lastError, hideOnMobile: true },
-    { key: 'updated', label: 'Güncellendi', render: (row) => relative(row.updatedAt), sort: (row) => row.updatedAt, csv: (row) => row.updatedAt },
+    { key: 'updated', label: 'Güncellendi', render: (row) => When({ at: row.updatedAt }), sort: (row) => row.updatedAt, csv: (row) => row.updatedAt },
   ];
   return Page({
     title: data ? titleOf(data.broadcast) : 'Duyuru',

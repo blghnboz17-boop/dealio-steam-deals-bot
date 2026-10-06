@@ -1,12 +1,12 @@
 import { html, useState, type VNode } from '../vendor/preact-htm.js';
 import { api } from '../api.js';
 import { ConfirmDialog, useAction } from '../actions.js';
-import { compact, dateTime, day, displayName, num, relative } from '../format.js';
+import { compact, dateTime, day, displayName, num, relative, trackingNote } from '../format.js';
 import { Icon } from '../icons.js';
 import { navigate } from '../router.js';
 import type { Guild, GuildBlock, GuildDetail, GuildEvent, GuildsResponse } from '../types.js';
 import {
-  Avatar, BackLink, Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, Stat, useAsync, type Column, RefreshButton, live,
+  Avatar, BackLink, Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, Stat, When, useAsync, type Column, RefreshButton, live,
 } from '../ui.js';
 import { AuditTable } from './audit.js';
 import { UserCell } from './users.js';
@@ -61,7 +61,7 @@ export function GuildsPage(): VNode {
     { key: 'ownerId', label: 'Sahip ID', render: () => null, csv: (guild) => guild.ownerId },
     { key: 'joined', label: 'Bot katıldı', render: (guild) => html`<span title=${dateTime(guild.joinedAt)}>${relative(guild.joinedAt)}</span>`,
       sort: (guild) => guild.joinedAt, csv: (guild) => guild.joinedAt },
-    { key: 'activity', label: 'Son kullanım', render: (guild) => relative(guild.lastActivityAt ?? null),
+    { key: 'activity', label: 'Son kullanım', render: (guild) => When({ at: guild.lastActivityAt ?? null, empty: 'Kayıt yok' }),
       sort: (guild) => guild.lastActivityAt ?? null, csv: (guild) => guild.lastActivityAt ?? '', hideOnMobile: true },
     { key: 'locale', label: 'Dil', render: (guild) => guild.preferredLocale, sort: (guild) => guild.preferredLocale,
       csv: (guild) => guild.preferredLocale, hideOnMobile: true },
@@ -73,7 +73,7 @@ export function GuildsPage(): VNode {
     { key: 'guild', label: 'Sunucu', render: (block) => html`${block.guildName ?? '—'} <small class="muted block">${block.guildId}</small>`,
       csv: (block) => block.guildName ?? block.guildId },
     { key: 'reason', label: 'Sebep', render: (block) => block.reason ?? '—', csv: (block) => block.reason },
-    { key: 'at', label: 'Engellendi', render: (block) => relative(block.blockedAt), sort: (block) => block.blockedAt, csv: (block) => block.blockedAt },
+    { key: 'at', label: 'Engellendi', render: (block) => When({ at: block.blockedAt }), sort: (block) => block.blockedAt, csv: (block) => block.blockedAt },
     { key: 'actions', label: '', render: (block) => html`<button class="btn btn-small" disabled=${busy !== null}
       onClick=${() => run('unblock', `/api/guilds/${block.guildId}/unblock`, {}, 'Engel kaldırıldı').then((result) => {
         if (result !== null) state.reload();
@@ -87,7 +87,8 @@ export function GuildsPage(): VNode {
 
   return Page({
     title: 'Sunucular',
-    subtitle: 'Botun ekli olduğu sunucular (Discord’dan canlı). Üye listesi için ayrıcalıklı izin istenmez; yalnız sayı görünür.',
+    subtitle: data ? `Botun ekli olduğu sunucular ve katılma tarihleri Discord’dan canlı gelir. “Dealio kullanan” ve “Son kullanım” kullanım kaydından gelir. ${trackingNote(data.telemetrySince)}`
+      : 'Botun ekli olduğu sunucular (Discord’dan canlı).',
     actions: html`<${RefreshButton} state=${state} />`,
     children: !data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
@@ -173,7 +174,7 @@ export function GuildDetailPage(props: { id: string }): VNode {
             rows=${data.events} rowKey=${(event: GuildEvent) => `${event.occurredAt}-${event.event}`}
             initialSort=${{ key: 'time', direction: 'desc' }} empty="Olay yok." />` })}
         </div>
-        ${Card({ title: 'Bu sunucudan Dealio kullananlar', class: 'card-flush', children: html`<${DataTable}
+        ${Card({ title: 'Bu sunucudan Dealio kullananlar', subtitle: trackingNote(data.telemetrySince), class: 'card-flush', children: html`<${DataTable}
           columns=${[
             { key: 'user', label: 'Kullanıcı', render: (row: GuildDetail['users'][number]) => UserCell({ id: row.discordUserId, profile: row.profile }),
               csv: (row: GuildDetail['users'][number]) => row.discordUserId },
@@ -182,7 +183,7 @@ export function GuildDetailPage(props: { id: string }): VNode {
               sort: (row: GuildDetail['users'][number]) => (row.registered ? 1 : 0), csv: (row: GuildDetail['users'][number]) => String(row.registered) },
             { key: 'interactions', label: 'Etkileşim', align: 'end', render: (row: GuildDetail['users'][number]) => num(row.interactions),
               sort: (row: GuildDetail['users'][number]) => row.interactions, csv: (row: GuildDetail['users'][number]) => row.interactions },
-            { key: 'last', label: 'Son', render: (row: GuildDetail['users'][number]) => relative(row.lastSeenAt),
+            { key: 'last', label: 'Son', render: (row: GuildDetail['users'][number]) => When({ at: row.lastSeenAt }),
               sort: (row: GuildDetail['users'][number]) => row.lastSeenAt, csv: (row: GuildDetail['users'][number]) => row.lastSeenAt },
           ]}
           rows=${data.users} rowKey=${(row: GuildDetail['users'][number]) => row.discordUserId}

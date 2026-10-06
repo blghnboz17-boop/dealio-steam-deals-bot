@@ -4,7 +4,7 @@ import { useAction } from '../actions.js';
 import { bytes, dateTime, duration, num, relative } from '../format.js';
 import type { RuntimeSettings, SystemInfo } from '../types.js';
 import {
-  Badge, Card, ErrorBox, Facts, Loading, Page, useAsync, useTicker, RefreshButton, live,
+  Badge, Card, ErrorBox, Facts, Loading, Page, When, useAsync, useTicker, RefreshButton, live,
 } from '../ui.js';
 import { SchedulerFacts } from './overview.js';
 import { Icon } from '../icons.js';
@@ -89,8 +89,8 @@ export function SystemPage(): VNode {
             ['Discord', data.discord.ready ? Badge({ tone: 'good', label: 'Bağlı' }) : Badge({ tone: 'bad', label: 'Bağlı değil' })],
             ['Gecikme', data.discord.pingMs === null ? '—' : `${num(data.discord.pingMs)} ms`],
             ['Başladı', data.health ? dateTime(data.health.startedAt) : '—'],
-            ['Hazır oldu', data.health?.readyAt ? relative(data.health.readyAt) : '—'],
-            ['Son nabız', data.health ? relative(data.health.heartbeatAt) : '—'],
+            ['Hazır oldu', When({ at: data.health?.readyAt ?? null })],
+            ['Son nabız', When({ at: data.health?.heartbeatAt ?? null })],
           ] }) })}
           ${Card({ title: 'Süreç', children: Facts({ rows: [
             ['PID', String(data.process.pid)],
@@ -123,7 +123,7 @@ export function SystemPage(): VNode {
           ? html`<p class="empty">Engellenen kullanıcı yok.</p>`
           : html`<ul class="list">${data.blockedUsers.map((block) => html`<li>
               <a href=${`#/users/${block.discordUserId}`}><code>${block.discordUserId}</code></a>
-              <span class="muted small">${block.reason ?? 'sebep yok'} · ${relative(block.blockedAt)}</span>
+              <span class="muted small">${block.reason ?? 'sebep yok'} · ${When({ at: block.blockedAt })}</span>
               <button class="btn btn-small" disabled=${busy !== null}
                 onClick=${() => run('unblock', `/api/users/${block.discordUserId}/unblock`, {}, 'Engel kaldırıldı').then(state.reload)}>Engeli kaldır</button></li>`)}</ul>` })}`,
   });
