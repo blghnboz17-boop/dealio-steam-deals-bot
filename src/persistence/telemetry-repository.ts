@@ -110,6 +110,12 @@ export class TelemetryRepository {
       .map((row) => ({ day: text(row.day), count: int(row.count) }));
   }
 
+  /** The oldest kept interaction: usage figures cover only the time from here on. */
+  public firstEventAt(): string | null {
+    const row = this.database.prepare('SELECT MIN(occurred_at) AS first FROM interaction_event').get() as Row;
+    return row.first === null || row.first === undefined ? null : text(row.first);
+  }
+
   public activeUsersSince(since: string): number {
     return int((this.database.prepare(`SELECT COUNT(DISTINCT discord_user_id) AS n FROM interaction_event
       WHERE occurred_at >= ? AND kind != 'setup'`).get(since) as Row).n);

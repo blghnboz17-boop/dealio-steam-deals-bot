@@ -52,7 +52,12 @@ export interface DiscordStatus {
   readonly botUser: Profile | null;
 }
 
-export interface Overview {
+/** When usage tracking (interaction_event) began; usage figures cover only the time since. */
+export interface TelemetryCoverage {
+  readonly telemetrySince?: string | null;
+}
+
+export interface Overview extends TelemetryCoverage {
   readonly generatedAt: string;
   readonly discord: DiscordStatus;
   readonly application: {
@@ -166,7 +171,7 @@ export interface NotificationRow {
   readonly storeCountryCode: string;
 }
 
-export interface UserDetail {
+export interface UserDetail extends TelemetryCoverage {
   readonly config: {
     readonly discordUserId: string;
     readonly configurationId: string;
@@ -352,7 +357,7 @@ export interface BroadcastRecipient {
 
 export interface UsageCount { readonly key: string; readonly count: number; readonly users: number }
 
-export interface Usage {
+export interface Usage extends TelemetryCoverage {
   readonly days: number;
   readonly dailyActive: DayCount[];
   readonly actions: UsageCount[];
@@ -387,14 +392,14 @@ export interface GuildBlock {
   readonly blockedAt: string;
 }
 
-export interface GuildsResponse {
+export interface GuildsResponse extends TelemetryCoverage {
   readonly guilds: Guild[];
   readonly departed: GuildEvent[];
   readonly blocked: GuildBlock[];
   readonly events: GuildEvent[];
 }
 
-export interface GuildDetail {
+export interface GuildDetail extends TelemetryCoverage {
   readonly guild: Guild | null;
   readonly name: string;
   readonly blocked: boolean;

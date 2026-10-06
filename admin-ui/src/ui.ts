@@ -1,5 +1,6 @@
 import { html, useCallback, useEffect, useMemo, useRef, useState, type Child, type VNode } from './vendor/preact-htm.js';
 import { ApiError } from './api.js';
+import { dateTime, relative } from './format.js';
 import { Icon, type IconName } from './icons.js';
 
 export interface AsyncState<T> {
@@ -209,6 +210,12 @@ export function Avatar(props: { src?: string | null; name: string; size?: number
     ? html`<img class=${`avatar ${props.square ? 'avatar-square' : ''}`} src=${props.src} alt="" style=${style} loading="lazy" />`
     : html`<span class=${`avatar avatar-empty avatar-hue-${hue(props.name)} ${props.square ? 'avatar-square' : ''}`} style=${style}
         aria-hidden="true">${props.name.trim().charAt(0).toUpperCase() || '?'}</span>`;
+}
+
+/** "3 gün önce" with the exact date and time on hover; `empty` when there is no time. */
+export function When(props: { at: string | null | undefined; empty?: string }): VNode {
+  if (!props.at) return html`<span class="muted">${props.empty ?? '—'}</span>`;
+  return html`<time datetime=${props.at} title=${dateTime(props.at)}>${relative(props.at)}</time>`;
 }
 
 /** Page-level placeholder in the shape of the content that is coming. */

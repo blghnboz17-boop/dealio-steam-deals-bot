@@ -116,6 +116,13 @@ describe('TelemetryRepository', () => {
     expect(telemetry.cleanup(new Date('2026-10-06T00:00:00.000Z'))).toBe(1);
   });
 
+  it('tells when the kept usage record begins, so the panel never reads a gap as "no use"', () => {
+    expect(telemetry.firstEventAt()).toBeNull();
+    telemetry.recordInteraction(record({ occurredAt: '2026-10-06T17:19:40.953Z' }));
+    telemetry.recordInteraction(record({ occurredAt: '2026-10-06T19:11:40.602Z' }));
+    expect(telemetry.firstEventAt()).toBe('2026-10-06T17:19:40.953Z');
+  });
+
   it('is deleted with the user’s data, also for a visitor who never set up', () => {
     seedUser(database, { id: '100000000000000001' });
     telemetry.recordInteraction(record());

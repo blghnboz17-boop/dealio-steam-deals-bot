@@ -2,13 +2,13 @@ import { html, type VNode } from '../vendor/preact-htm.js';
 import { api } from '../api.js';
 import {
   country, dateTime, day, displayName, flag, languageNames, minuteOfDay, money, notificationModeNames,
-  notificationStatusNames, num, relative,
+  notificationStatusNames, num, relative, trackingNote,
 } from '../format.js';
 import { Icon } from '../icons.js';
 import { rememberProfile } from '../profiles.js';
 import type { NotificationRow, SnapshotItem, UserDetail } from '../types.js';
 import {
-  Avatar, BackLink, Badge, Card, CopyText, DataTable, ErrorBox, Facts, Loading, Page, useAsync, type Column, type Tone, RefreshButton, live,
+  Avatar, BackLink, Badge, Card, CopyText, DataTable, ErrorBox, Facts, Loading, Page, When, useAsync, type Column, type Tone, RefreshButton, live,
 } from '../ui.js';
 import { checkBadge, userStatus } from './users.js';
 import { UserActions } from './user-actions.js';
@@ -165,13 +165,13 @@ export function UserDetailPage(props: { id: string }): VNode {
           ['DM onayı', dateTime(config.dmOptInAt)],
           ['DM engeli', config.dmDeliveryBlockedAt ? `${dateTime(config.dmDeliveryBlockedAt)} (${config.dmDeliveryErrorCode ?? '?'})` : 'Yok'],
           ['Yapılandırma', html`v${config.configVersion} · <code class="small">${config.configurationId.slice(0, 8)}</code>`],
-          ['Güncellendi', relative(config.updatedAt)],
+          ['Güncellendi', When({ at: config.updatedAt })],
         ] }) })}
         ${Card({ title: 'Kontrol', subtitle: 'Son wishlist okuması', children: checkState ? Facts({ rows: [
           ['Son durum', checkBadge(checkState.lastStatus, checkState.lastErrorCode)],
           ['Hata kodu', checkState.lastErrorCode ? html`<code>${checkState.lastErrorCode}</code>` : '—'],
-          ['Son kontrol', relative(checkState.lastCompletedAt)],
-          ['Son başarılı', relative(checkState.lastSuccessCompletedAt)],
+          ['Son kontrol', When({ at: checkState.lastCompletedAt })],
+          ['Son başarılı', When({ at: checkState.lastSuccessCompletedAt })],
           ['Kontrol edilen', num(checkState.lastSuccessCheckedCount)],
           ['İndirimde', num(checkState.lastSuccessOnSaleCount)],
           ['Ücretsiz', num(checkState.lastSuccessFreeCount)],
@@ -202,14 +202,15 @@ export function UserDetailPage(props: { id: string }): VNode {
           csvName=${`dealio-bildirimler-${config.discordUserId}`} pageSize=${25} empty="Henüz bildirim yok." />` })}
 
       <div class="grid-2">
-        ${Card({ title: 'Kullanım', children: html`
+        ${Card({ title: 'Kullanım', subtitle: trackingNote(data.telemetrySince), children: html`
           ${Facts({ rows: [
-            ['İlk görüldü', data.usage.firstSeenAt ? dateTime(data.usage.firstSeenAt) : '—'],
-            ['Son görüldü', relative(data.usage.lastSeenAt)],
+            ['İlk kayıtlı etkileşim', data.usage.firstSeenAt ? dateTime(data.usage.firstSeenAt) : 'Kayıt yok'],
+            ['Son görüldü', When({ at: data.usage.lastSeenAt, empty: 'Kayıt yok' })],
             ['Etkileşim (90 gün)', num(data.usage.interactions)],
             ['Kurulum türü', data.usage.installs.length > 0
               ? data.usage.installs.map((install) => installNames[install] ?? install).join(', ') : '—'],
-            ['Kullandığı sunucular', data.usage.guilds.length === 0 ? 'Yalnız DM / kişisel kurulum' : html`${data.usage.guilds.map((guild) => html`
+            ['Kullandığı sunucular', data.usage.interactions === 0 ? 'Kayıt yok'
+              : data.usage.guilds.length === 0 ? 'Yalnız DM / kişisel kurulum' : html`${data.usage.guilds.map((guild) => html`
               <a class="chip" href=${`#/guilds/${guild.guildId}`}>${guild.guildName ?? guild.guildId} <small>${num(guild.count)}</small></a>`)}`],
           ] })}
           <h3 class="sub-head">Son etkileşimler</h3>
@@ -225,7 +226,7 @@ export function UserDetailPage(props: { id: string }): VNode {
             : html`<ul class="list">${data.messages.map((message: Broadcast) => {
                 const text = message.content[config.language as 'tr'] ?? Object.values(message.content)[0];
                 return html`<li><a href=${`#/announcements/${message.broadcastId}`}>${text?.title ?? '—'}</a>
-                  <span class="muted small">${relative(message.createdAt)}</span>
+                  <span class="muted small">${When({ at: message.createdAt })}</span>
                   ${BroadcastStatusBadge({ status: message.recipientStatus ?? message.status })}</li>`;
               })}</ul>` })}
           ${Card({ title: 'Denetim', class: 'card-flush', children: html`<${AuditTable} entries=${data.audit} />` })}
