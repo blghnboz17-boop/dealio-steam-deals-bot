@@ -14,7 +14,18 @@ export interface EnvironmentConfig {
   readonly dealioBannerUrl?: string;
   readonly azureLeaseContainerUrl?: string;
   readonly production?: boolean;
+  /** The owner's admin panel; absent unless DEALIO_ADMIN_TOKEN is set. */
+  readonly adminPanel?: AdminPanelConfig;
 }
+
+export interface AdminPanelConfig {
+  readonly token: string;
+  /** Always bound to 127.0.0.1; reached through an SSH tunnel. */
+  readonly port: number;
+}
+
+export const defaultAdminPanelPort = 8787;
+export const minAdminTokenLength = 32;
 
 const defaultDatabasePath = './data/wishlist.db';
 export const defaultPollIntervalHours = 0.5;
@@ -116,6 +127,17 @@ export function loadEnvironment(
     ? boundedInteger(environment.DEALIO_MAX_USERS.trim(), 'DEALIO_MAX_USERS', 1, 1_000_000)
     : defaultMaxUsers;
 
+  const adminToken = environment.DEALIO_ADMIN_TOKEN?.trim() || undefined;
+  if (adminToken !== undefined && adminToken.length < minAdminTokenLength) {
+    throw new Error(`Environment variable DEALIO_ADMIN_TOKEN must be at least ${minAdminTokenLength} characters`);
+  }
+  const adminPanel: AdminPanelConfig | undefined = adminToken === undefined ? undefined : {
+    token: adminToken,
+    port: environment.DEALIO_ADMIN_PORT?.trim()
+      ? boundedInteger(environment.DEALIO_ADMIN_PORT.trim(), 'DEALIO_ADMIN_PORT', 1_024, 65_535)
+      : defaultAdminPanelPort,
+  };
+
   if (environment.DEALIO_PRODUCTION === 'true' && !environment.AZURE_LEASE_CONTAINER_URL) {
     // Explicit single-host rollout while cloud resources await credit verification.
     // Copying this configuration to a different machine must not start a gateway.
@@ -142,5 +164,6 @@ export function loadEnvironment(
     ...(steamWebApiKey ? { steamWebApiKey } : {}),
     ...(isThereAnyDealApiKey ? { isThereAnyDealApiKey } : {}),
     ...(dealioBannerUrl ? { dealioBannerUrl } : {}),
+    ...(adminPanel ? { adminPanel } : {}),
   };
 }

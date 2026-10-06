@@ -59,6 +59,26 @@ export interface SchedulerRunSummary {
   readonly errorCount: number;
 }
 
+/** The latest completed scan, kept in memory for the admin panel. */
+export interface SchedulerRunReport extends SchedulerRunSummary {
+  readonly startedAt: string;
+  readonly completedAt: string;
+  readonly durationMs: number;
+  readonly checkedGames: number;
+  readonly steamItemErrors: number;
+  readonly unknownPrices: number;
+  readonly unavailable: number;
+  readonly dmSent: number;
+  readonly dmFailed: number;
+}
+
+export interface SchedulerStatus {
+  readonly intervalMs: number;
+  readonly running: boolean;
+  readonly runStartedAt: string | null;
+  readonly lastRun: SchedulerRunReport | null;
+}
+
 export class WishlistScheduler {
   private readonly intervalMs: number;
   private readonly clock: SchedulerClock;
@@ -70,6 +90,8 @@ export class WishlistScheduler {
   private stopping = false;
   private activeRun: Promise<SchedulerRunSummary> | null = null;
   private stopPromise: Promise<void> | null = null;
+  private runStartedAt: string | null = null;
+  private lastRun: SchedulerRunReport | null = null;
 
   public constructor(private readonly options: SchedulerOptions) {
     if (
@@ -95,6 +117,15 @@ export class WishlistScheduler {
 
   public get intervalMilliseconds(): number {
     return this.intervalMs;
+  }
+
+  public status(): SchedulerStatus {
+    return {
+      intervalMs: this.intervalMs,
+      running: this.activeRun !== null,
+      runStartedAt: this.activeRun !== null ? this.runStartedAt : null,
+      lastRun: this.lastRun,
+    };
   }
 
   public start(): void {
@@ -153,6 +184,20 @@ export class WishlistScheduler {
     return this.stopPromise;
   }
 
+  /**
+   * Starts a full scan now (owner request) unless one is running; the next automatic
+   * scan then follows one interval after it, exactly as after a timed scan.
+   */
+  public runNow(): boolean {
+    if (!this.started || this.stopping || this.activeRun !== null) return false;
+    if (this.timer !== null) {
+      this.clock.clearTimeout(this.timer);
+      this.timer = null;
+    }
+    void this.runAutomaticCycle();
+    return true;
+  }
+
   public runOnce(): Promise<SchedulerRunSummary> {
     if (this.stopping || this.activeRun !== null) {
       return Promise.resolve({ userCount: 0, completedCount: 0, errorCount: 0 });
@@ -172,6 +217,7 @@ export class WishlistScheduler {
 
   private async executeRun(): Promise<SchedulerRunSummary> {
     const runStartedMs = this.now().getTime();
+    this.runStartedAt = new Date(runStartedMs).toISOString();
     let users: UserConfig[];
     try {
       users = this.options.userConfigRepository.findEnabled();
@@ -250,6 +296,21 @@ export class WishlistScheduler {
       + `steamItemErrors=${steamItemErrors} unknownPrices=${unknownPrices} `
       + `unavailable=${unavailableCount} dmSent=${dmSent} dmFailed=${dmFailed}.`,
     );
+    const completedMs = this.now().getTime();
+    this.lastRun = {
+      userCount: users.length,
+      completedCount,
+      errorCount,
+      startedAt: new Date(runStartedMs).toISOString(),
+      completedAt: new Date(completedMs).toISOString(),
+      durationMs: Math.max(0, completedMs - runStartedMs),
+      checkedGames,
+      steamItemErrors,
+      unknownPrices,
+      unavailable: unavailableCount,
+      dmSent,
+      dmFailed,
+    };
     return { userCount: users.length, completedCount, errorCount };
   }
 

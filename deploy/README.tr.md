@@ -57,6 +57,13 @@ Kayda test edilen kaynak commit'ini, dağıtılan commit'i, derleme özetini,
 CI sonucunu, yedek/geri yükleme ve sağlık kanıtını yazın. Belgeler için daha
 sonra gelen commit'leri derlemenin kaynak commit'iyle karıştırmayın.
 Tarama aralığı sunucudaki `.env` dosyasında `POLL_INTERVAL_HOURS=0.5` olmalıdır.
+
+**Yönetim paneli (isteğe bağlı).** Paneli açmak için sunucudaki `.env` dosyasına
+en az 32 karakterlik rastgele bir `DEALIO_ADMIN_TOKEN` ekleyip servisi yeniden
+başlatın. Panel yalnız `127.0.0.1:8787` adresini dinler; Azure ağ kurallarında port
+açmayın. Erişim SSH tüneliyle yapılır (`scripts/admin-tunnel.ps1`). Doğrulama:
+`ss -ltnp | grep 8787` çıktısı yalnız `127.0.0.1:8787` göstermelidir. Ayrıntılar:
+[`docs/admin-panel.tr.md`](../docs/admin-panel.tr.md).
 WSL'deki yerel `.env` değişikliği sunucuya kendiliğinden aktarılmaz.
 
 **Aynı Discord bot token'ıyla Azure ve WSL kopyalarını birlikte çalıştırmayın.**

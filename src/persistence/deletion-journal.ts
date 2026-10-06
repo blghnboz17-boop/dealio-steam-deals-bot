@@ -31,6 +31,12 @@ export class DeletionJournal {
       { encoding: 'utf8', mode: 0o600 });
   }
 
+  /** Deletions still kept in the journal (the last 35 days), without pruning the file. */
+  public count(): number {
+    if (!existsSync(this.path)) return 0;
+    return readFileSync(this.path, 'utf8').split('\n').filter((line) => line.trim() !== '').length;
+  }
+
   /** Deletes restored configurations of users who deleted their data later; returns how many. */
   public reconcile(database: DatabaseSync): number {
     const entries = this.prune();
@@ -45,6 +51,22 @@ export class DeletionJournal {
     }>;
     const remove = database.prepare('DELETE FROM user_config WHERE discord_user_id = ? AND created_at <= ?');
     let removed = 0;
+    // Restored usage events and announcement deliveries from before a deletion go too.
+    const hasTelemetry = database.prepare(
+      "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'interaction_event'").get() !== undefined;
+    if (hasTelemetry) {
+      const removeEvents = database.prepare('DELETE FROM interaction_event WHERE discord_user_id = ? AND occurred_at <= ?');
+      const removeDeliveries = database.prepare(`DELETE FROM broadcast_recipient WHERE discord_user_id = ?
+        AND broadcast_id IN (SELECT broadcast_id FROM broadcast WHERE created_at <= ?)`);
+      const seen = database.prepare(`SELECT DISTINCT discord_user_id FROM interaction_event
+        UNION SELECT DISTINCT discord_user_id FROM broadcast_recipient`).all() as Array<{ discord_user_id: string }>;
+      for (const { discord_user_id: userId } of seen) {
+        const at = deletedAt.get(hashDiscordUserId(userId));
+        if (!at) continue;
+        removeEvents.run(userId, at);
+        removeDeliveries.run(userId, at);
+      }
+    }
     for (const user of users) {
       const at = deletedAt.get(hashDiscordUserId(user.discord_user_id));
       // A setup made after the deletion is a new, wanted configuration.

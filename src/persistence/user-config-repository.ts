@@ -393,6 +393,10 @@ export class UserConfigRepository {
   }
 
   public deleteByDiscordUserId(discordUserId: string): boolean {
+    // Usage telemetry and announcement deliveries are not tied to a configuration by a
+    // foreign key (a visitor can use Dealio before setup), so they are removed here.
+    this.database.prepare('DELETE FROM interaction_event WHERE discord_user_id = ?').run(discordUserId);
+    this.database.prepare('DELETE FROM broadcast_recipient WHERE discord_user_id = ?').run(discordUserId);
     const result = this.database
       .prepare('DELETE FROM user_config WHERE discord_user_id = ?')
       .run(discordUserId);

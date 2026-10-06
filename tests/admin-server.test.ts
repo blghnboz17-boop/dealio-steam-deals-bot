@@ -1,0 +1,161 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { request } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { AdminSessions } from '../src/admin/admin-auth.js';
+import { AdminServer, isLocalHost } from '../src/admin/admin-server.js';
+
+const token = 'test-admin-token-0123456789abcdefghij';
+
+interface Reply { status: number; headers: Record<string, string | string[] | undefined>; body: string }
+
+function call(port: number, path: string, options: {
+  method?: string; headers?: Record<string, string>; body?: unknown;
+} = {}): Promise<Reply> {
+  return new Promise((resolve, reject) => {
+    const payload = options.body === undefined ? undefined : JSON.stringify(options.body);
+    const req = request({
+      host: '127.0.0.1', port, path, method: options.method ?? 'GET',
+      headers: {
+        Host: `localhost:${port}`,
+        ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': String(Buffer.byteLength(payload)) } : {}),
+        ...options.headers,
+      },
+    }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body }));
+    });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+async function signIn(port: number): Promise<{ cookie: string; csrf: string }> {
+  const reply = await call(port, '/api/login', { method: 'POST', body: { token } });
+  expect(reply.status).toBe(200);
+  const cookie = String(reply.headers['set-cookie']).split(';')[0]!;
+  return { cookie, csrf: (JSON.parse(reply.body) as { csrf: string }).csrf };
+}
+
+describe('admin server', () => {
+  let server: AdminServer;
+  let port: number;
+  let staticDirectory: string;
+  const mutations: unknown[] = [];
+
+  beforeEach(async () => {
+    staticDirectory = mkdtempSync(join(tmpdir(), 'dealio-admin-ui-'));
+    writeFileSync(join(staticDirectory, 'index.html'), '<!doctype html><title>admin</title>');
+    writeFileSync(join(staticDirectory, 'app.js'), 'export {};');
+    server = new AdminServer({
+      port: 0,
+      sessions: new AdminSessions(token),
+      staticDirectory,
+      failedLoginDelayMs: 1,
+      logger: { log: () => undefined, error: () => undefined },
+      routes: [
+        { method: 'GET', path: '/api/things/:id', handler: ({ params }) => ({ json: { id: params.id } }) },
+        { method: 'POST', path: '/api/things', handler: ({ body }) => { mutations.push(body); return { json: { ok: true } }; } },
+      ],
+    });
+    port = await server.start();
+    mutations.length = 0;
+  });
+
+  afterEach(async () => {
+    await server.stop();
+    rmSync(staticDirectory, { recursive: true, force: true });
+  });
+
+  it('accepts only loopback host names, whatever the tunnel port is', () => {
+    expect(isLocalHost('localhost:8787')).toBe(true);
+    expect(isLocalHost('127.0.0.1:9999')).toBe(true);
+    expect(isLocalHost('[::1]:8787')).toBe(true);
+    expect(isLocalHost('dealio.example.com')).toBe(false);
+    expect(isLocalHost('localhost.evil.com:8787')).toBe(false);
+    expect(isLocalHost(undefined)).toBe(false);
+  });
+
+  it('rejects a foreign Host header (DNS rebinding) before anything else', async () => {
+    const reply = await call(port, '/api/session', { headers: { Host: 'evil.example:80' } });
+    expect(reply.status).toBe(421);
+  });
+
+  it('requires a session for API routes and sends security headers', async () => {
+    const reply = await call(port, '/api/things/1');
+    expect(reply.status).toBe(401);
+    expect(reply.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(reply.headers['x-frame-options']).toBe('DENY');
+    expect(reply.headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  it('signs in with the token and sets an HttpOnly, SameSite=Strict cookie', async () => {
+    const reply = await call(port, '/api/login', { method: 'POST', body: { token } });
+    expect(reply.status).toBe(200);
+    expect(String(reply.headers['set-cookie'])).toMatch(/HttpOnly; SameSite=Strict; Path=\//);
+    const { cookie } = await signIn(port);
+    const session = await call(port, '/api/session', { headers: { Cookie: cookie } });
+    expect(JSON.parse(session.body)).toMatchObject({ authenticated: true });
+    const thing = await call(port, '/api/things/42', { headers: { Cookie: cookie } });
+    expect(JSON.parse(thing.body)).toEqual({ id: '42' });
+  });
+
+  it('rejects a wrong token and locks sign-in after repeated failures', async () => {
+    const wrong = await call(port, '/api/login', { method: 'POST', body: { token: 'nope' } });
+    expect(wrong.status).toBe(401);
+    expect(wrong.headers['set-cookie']).toBeUndefined();
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      await call(port, '/api/login', { method: 'POST', body: { token: 'nope' } });
+    }
+    const locked = await call(port, '/api/login', { method: 'POST', body: { token } });
+    expect(locked.status).toBe(429);
+  });
+
+  it('requires the CSRF token and a same-origin Origin for changes', async () => {
+    const { cookie, csrf } = await signIn(port);
+    const missing = await call(port, '/api/things', { method: 'POST', body: { a: 1 }, headers: { Cookie: cookie } });
+    expect(missing.status).toBe(403);
+    const crossOrigin = await call(port, '/api/things', {
+      method: 'POST', body: { a: 1 },
+      headers: { Cookie: cookie, 'X-CSRF-Token': csrf, Origin: 'https://evil.example' },
+    });
+    expect(crossOrigin.status).toBe(403);
+    const ok = await call(port, '/api/things', {
+      method: 'POST', body: { a: 1 },
+      headers: { Cookie: cookie, 'X-CSRF-Token': csrf, Origin: `http://localhost:${port}` },
+    });
+    expect(ok.status).toBe(200);
+    expect(mutations).toEqual([{ a: 1 }]);
+  });
+
+  it('signs out', async () => {
+    const { cookie, csrf } = await signIn(port);
+    await call(port, '/api/logout', { method: 'POST', body: {}, headers: { Cookie: cookie, 'X-CSRF-Token': csrf } });
+    expect((await call(port, '/api/things/1', { headers: { Cookie: cookie } })).status).toBe(401);
+  });
+
+  it('serves the UI, falls back to index.html for routes and never leaves its directory', async () => {
+    expect((await call(port, '/app.js')).headers['content-type']).toContain('text/javascript');
+    expect((await call(port, '/users')).body).toContain('<title>admin</title>');
+    expect((await call(port, '/../package.json')).status).toBe(404);
+    expect((await call(port, '/..%2f..%2fpackage.json')).status).toBe(404);
+    expect((await call(port, '/missing.js')).status).toBe(404);
+    expect((await call(port, '/', { method: 'POST' })).status).toBe(405);
+  });
+});
+
+describe('admin sessions', () => {
+  it('expire after twelve hours', () => {
+    let now = 0;
+    const sessions = new AdminSessions(token, () => now);
+    const result = sessions.login(token);
+    expect(result.status).toBe('ok');
+    const id = result.status === 'ok' ? result.session.id : '';
+    expect(sessions.get(id)).not.toBeNull();
+    now = 12 * 3600_000;
+    expect(sessions.get(id)).toBeNull();
+  });
+});

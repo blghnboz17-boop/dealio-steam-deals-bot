@@ -9,10 +9,10 @@
     "node": ">=22.16.0"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && tsc -p tsconfig.admin-ui.json && node scripts/copy-admin-assets.mjs",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.admin-ui.json --noEmit",
     "typecheck:scenarios": "tsc -p tsconfig.scenarios.json",
     "test:capacity": "tsx scripts/capacity-check.ts",
     "pretest": "npm run build",
@@ -22,7 +22,8 @@
     "restore:test": "node scripts/backup.mjs --restore-test",
     "monitor:preview": "node scripts/monitor.mjs --preview",
     "metrics:report": "node scripts/metrics-report.mjs",
-    "release:check": "node scripts/release-gate.mjs"
+    "release:check": "node scripts/release-gate.mjs",
+    "preview:admin": "npm run build && node scripts/preview-admin.mjs"
   },
   "dependencies": {
     "@azure/identity": "^4.13.2",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "htm": "^3.1.1",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3",
     "vitest": "^4.1.11"

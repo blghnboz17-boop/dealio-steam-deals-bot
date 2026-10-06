@@ -1,0 +1,139 @@
+import { html, useMemo, useState, type VNode } from '../vendor/preact-htm.js';
+import { api } from '../api.js';
+import {
+  checkStatusNames, country, dateTime, day, displayName, flag, languageNames, notificationModeNames, num, relative,
+} from '../format.js';
+import { useProfiles } from '../profiles.js';
+import { navigate } from '../router.js';
+import type { Profile, UserRow } from '../types.js';
+import { Avatar, Badge, DataTable, ErrorBox, Loading, Page, useAsync, type Column, type Tone } from '../ui.js';
+
+export function userStatus(row: { enabled: boolean; dmDeliveryBlockedAt: string | null; blocked?: boolean }): { tone: Tone; label: string } {
+  if (row.blocked) return { tone: 'bad', label: 'Engellendi' };
+  if (row.dmDeliveryBlockedAt) return { tone: 'bad', label: 'DM engelli' };
+  if (!row.enabled) return { tone: 'warn', label: 'Duraklatıldı' };
+  return { tone: 'good', label: 'Aktif' };
+}
+
+export function checkBadge(status: string | null, errorCode: string | null): VNode {
+  if (!status) return Badge({ tone: 'neutral', label: 'Hiç' });
+  const tone: Tone = status === 'success' ? 'good' : status === 'pending' ? 'info' : status === 'unavailable' ? 'warn' : 'bad';
+  return Badge({ tone, label: checkStatusNames[status] ?? status, ...(errorCode ? { title: errorCode } : {}) });
+}
+
+export function UserCell(props: { id: string; profile: Profile | null | undefined }): VNode {
+  const name = displayName(props.profile, props.profile === undefined ? 'Yükleniyor…' : 'Bilinmeyen kullanıcı');
+  return html`<span class="person">
+    ${Avatar({ src: props.profile?.avatarUrl ?? null, name })}
+    <span><strong>${name}</strong>
+      <small class="muted">${props.profile ? `@${props.profile.username}` : props.id}</small></span>
+  </span>`;
+}
+
+type StatusFilter = 'all' | 'active' | 'paused' | 'blocked' | 'banned';
+
+export function UsersPage(): VNode {
+  const state = useAsync(() => api.get<{ users: UserRow[] }>('/api/users'), []);
+  const users = state.data?.users ?? [];
+  const profiles = useProfiles(users.map((user) => user.discordUserId));
+  const [status, setStatus] = useState<StatusFilter>('all');
+  const [countryFilter, setCountry] = useState('');
+  const [language, setLanguage] = useState('');
+
+  const countries = useMemo(() => [...new Set(users.map((user) => user.storeCountryCode))].sort(), [users]);
+  const rows = useMemo(() => users.filter((user) => {
+    const label = userStatus(user).label;
+    if (status === 'active' && label !== 'Aktif') return false;
+    if (status === 'paused' && label !== 'Duraklatıldı') return false;
+    if (status === 'blocked' && label !== 'DM engelli') return false;
+    if (status === 'banned' && label !== 'Engellendi') return false;
+    if (countryFilter && user.storeCountryCode !== countryFilter) return false;
+    if (language && user.language !== language) return false;
+    return true;
+  }), [users, status, countryFilter, language]);
+
+  const nameOf = (row: UserRow): string => {
+    const profile = profiles.get(row.discordUserId);
+    return profile ? `${profile.globalName ?? ''} ${profile.username}` : '';
+  };
+  const columns: Column<UserRow>[] = [
+    { key: 'user', label: 'Kullanıcı', render: (row) => UserCell({ id: row.discordUserId, profile: profiles.get(row.discordUserId) }),
+      sort: (row) => displayName(profiles.get(row.discordUserId), row.discordUserId).toLocaleLowerCase('tr-TR'),
+      csv: (row) => displayName(profiles.get(row.discordUserId), '') },
+    { key: 'id', label: 'Discord ID', render: () => null, csv: (row) => row.discordUserId },
+    { key: 'username', label: 'Kullanıcı adı', render: () => null, csv: (row) => profiles.get(row.discordUserId)?.username ?? '' },
+    { key: 'steam', label: 'SteamID64', render: () => null, csv: (row) => row.steamId64 },
+    { key: 'status', label: 'Durum', render: (row) => Badge(userStatus(row)), sort: (row) => userStatus(row).label,
+      csv: (row) => userStatus(row).label },
+    { key: 'country', label: 'Bölge', render: (row) => html`<span title=${country(row.storeCountryCode)}>${row.storeCountryCode}</span>`,
+      sort: (row) => row.storeCountryCode, csv: (row) => row.storeCountryCode },
+    { key: 'language', label: 'Dil', render: (row) => row.language.toUpperCase(), sort: (row) => row.language,
+      csv: (row) => languageNames[row.language] ?? row.language, hideOnMobile: true },
+    { key: 'wishlist', label: 'Wishlist', align: 'end', render: (row) => num(row.wishlistCount),
+      sort: (row) => row.wishlistCount, csv: (row) => row.wishlistCount },
+    { key: 'sale', label: 'İndirimde', align: 'end', render: (row) => num(row.onSaleCount), sort: (row) => row.onSaleCount,
+      csv: (row) => row.onSaleCount, hideOnMobile: true },
+    { key: 'rules', label: 'Kural', align: 'end', render: (row) => row.mutedCount > 0
+      ? html`${num(row.ruleCount)} <small class="muted">+${num(row.mutedCount)} sessiz</small>` : num(row.ruleCount),
+      sort: (row) => row.ruleCount + row.mutedCount, csv: (row) => row.ruleCount, hideOnMobile: true },
+    { key: 'mode', label: 'Zamanlama', render: (row) => notificationModeNames[row.notificationMode] ?? row.notificationMode,
+      sort: (row) => row.notificationMode, csv: (row) => row.notificationMode, hideOnMobile: true },
+    { key: 'check', label: 'Son kontrol', render: (row) => html`${checkBadge(row.lastCheckStatus, row.lastCheckErrorCode)}
+      <small class="muted block">${relative(row.lastCheckCompletedAt)}</small>`,
+      sort: (row) => row.lastCheckCompletedAt, csv: (row) => row.lastCheckStatus },
+    { key: 'alerts', label: 'Uyarı', align: 'end', render: (row) => html`${num(row.alertsSent)}
+      ${row.pendingAlerts > 0 ? html`<small class="muted block">${num(row.pendingAlerts)} bekliyor</small>` : null}`,
+      sort: (row) => row.alertsSent, csv: (row) => row.alertsSent },
+    { key: 'lastAlert', label: 'Son uyarı', render: (row) => relative(row.lastAlertAt), sort: (row) => row.lastAlertAt,
+      csv: (row) => row.lastAlertAt, hideOnMobile: true },
+    { key: 'source', label: 'Geldiği sunucu', render: (row) => row.sourceGuildId
+      ? html`<a href=${`#/guilds/${row.sourceGuildId}`} onClick=${(event: Event) => event.stopPropagation()}>${row.sourceGuildName ?? 'Ayrılmış sunucu'}</a>`
+      : html`<span class="muted">DM / kişisel</span>`, sort: (row) => row.sourceGuildName ?? null,
+      csv: (row) => row.sourceGuildName ?? row.sourceGuildId ?? '', hideOnMobile: true },
+    { key: 'seen', label: 'Son görüldü', render: (row) => relative(row.lastSeenAt ?? null), sort: (row) => row.lastSeenAt ?? null,
+      csv: (row) => row.lastSeenAt ?? '', hideOnMobile: true },
+    { key: 'created', label: 'Katıldı', render: (row) => html`<span title=${dateTime(row.createdAt)}>${day(row.createdAt)}</span>`,
+      sort: (row) => row.createdAt, csv: (row) => row.createdAt },
+  ];
+  const visibleColumns = columns.filter((column) => !['id', 'username', 'steam'].includes(column.key));
+  const exportColumns = columns;
+
+  const toolbar = html`
+    <select class="input" value=${status} onChange=${(event: Event) => setStatus((event.target as HTMLSelectElement).value as StatusFilter)}
+      aria-label="Durum">
+      <option value="all">Tüm durumlar</option><option value="active">Aktif</option>
+      <option value="paused">Duraklatıldı</option><option value="blocked">DM engelli</option>
+      <option value="banned">Engellendi</option>
+    </select>
+    <select class="input" value=${countryFilter} onChange=${(event: Event) => setCountry((event.target as HTMLSelectElement).value)}
+      aria-label="Bölge">
+      <option value="">Tüm bölgeler</option>
+      ${countries.map((code) => html`<option value=${code}>${flag(code)} ${country(code)}</option>`)}
+    </select>
+    <select class="input" value=${language} onChange=${(event: Event) => setLanguage((event.target as HTMLSelectElement).value)}
+      aria-label="Dil">
+      <option value="">Tüm diller</option>
+      ${Object.entries(languageNames).map(([code, name]) => html`<option value=${code}>${name}</option>`)}
+    </select>`;
+
+  return Page({
+    title: 'Kullanıcılar',
+    subtitle: state.data ? `${num(users.length)} kayıtlı kullanıcı` : undefined,
+    actions: html`<button class="btn" onClick=${state.reload} disabled=${state.loading}>Yenile</button>`,
+    children: !state.data
+      ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
+      : html`<div class="card card-flush"><${DataTable}
+          columns=${visibleColumns}
+          rows=${rows}
+          rowKey=${(row: UserRow) => row.discordUserId}
+          onRow=${(row: UserRow) => navigate(`/users/${row.discordUserId}`)}
+          search=${(row: UserRow) => `${row.discordUserId} ${row.steamId64} ${nameOf(row)}`}
+          searchPlaceholder="Ad, Discord ID veya SteamID ara…"
+          toolbar=${toolbar}
+          csvName="dealio-kullanicilar"
+          csvColumns=${exportColumns}
+          initialSort=${{ key: 'created', direction: 'desc' }}
+          empty="Bu filtrelere uyan kullanıcı yok."
+        /></div>`,
+  });
+}
