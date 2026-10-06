@@ -52,6 +52,8 @@ Yerel geliştirmede (`.env.test` ile) tünel gerekmez; doğrudan
 
 Veri sayfaları sekme açıkken 30 saniyede bir kendini sessizce yeniler (başlıkta “● Canlı · … önce”); sekme arka plandaysa bekler, öne gelince hemen yenilenir. Loglar anlık akar, gönderimdeki duyurular 3 saniyede bir güncellenir.
 
+Üst çubuktaki arama kutusu (veya **Ctrl+K**) kullanıcıyı adıyla, @kullanıcı adıyla, Discord ID'si veya SteamID64 ile; sunucuyu adıyla veya ID'siyle bulur ve sayfalara atlar. Ok tuşları seçer, Enter açar, Esc kapatır.
+
 Üst çubuktaki güneş/ay düğmesi açık ve koyu tema arasında geçer; seçim bu tarayıcıda hatırlanır, seçim yoksa sistem teması izlenir. Yazı tipi (Inter) panelle birlikte gelir; dışarıdan hiçbir şey yüklenmez.
 
 | Sayfa | İçerik |
