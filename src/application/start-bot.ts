@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path';
 import { SteamWishlistError } from '../domain/steam.js';
+import { nextSteamPriceChange } from '../domain/steam-price-schedule.js';
 import { AzureApplicationLease } from './azure-lease.js';
 import { AssistantService } from './assistant-service.js';
 import { safeLogger } from './safe-logger.js';
@@ -238,6 +239,7 @@ export async function startBot(
       checkService,
       notificationService,
       scheduleRepository: pollScheduleRepository,
+      nextPriceChange: nextSteamPriceChange,
     });
     const notificationRetryScheduler = new NotificationRetryScheduler({
       intervalSeconds: environment.notificationRetryIntervalSeconds,

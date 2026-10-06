@@ -103,7 +103,7 @@ Your Steam profile and “Game details” must be public so the wishlist can be 
 
 ## 🔔 When will I hear from Dealio?
 
-Dealio checks again **30 minutes after each scan finishes**. When a price change meets your rule, it sends a DM according to your notification schedule. Steam or Discord issues can add delay.
+Dealio checks again **30 minutes after each scan finishes**, and right after Steam changes prices each day at 10:00 Pacific time, when most sales start. When a price change meets your rule, it sends a DM according to your notification schedule. Steam or Discord issues can add delay.
 
 Initial setup may send a summary of existing discounts, rather than a new-sale alert for each one. Saving a rule, or changing your default discount, while a game already meets it won't trigger a DM either; Dealio alerts when that sale gets clearly better (at least 10 more discount points, or a met target 10% lower). Prices use your selected Steam Store currency; check the final price on Steam before buying.
 
@@ -225,7 +225,7 @@ Dealio stays focused on Steam wishlists. Payments, a user-facing web dashboard, 
 
 <br>
 
-**Checks run on a 30-minute schedule, not a live Steam event feed.** The next automatic scan is scheduled 30 minutes after the previous scan completes. Steam or Discord outages can add delay.
+**Checks run on a 30-minute schedule, not a live Steam event feed.** The next automatic scan is scheduled 30 minutes after the previous scan completes, or two minutes after Steam's 10:00 Pacific price change when that comes first. Steam or Discord outages can add delay.
 
 | Stage | What happens |
 | :--- | :--- |

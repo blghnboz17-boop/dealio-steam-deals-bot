@@ -9,6 +9,8 @@ import {
   TextInputBuilder,
   TextInputStyle,
   type ChatInputCommandInteraction,
+  type InteractionEditReplyOptions,
+  type InteractionUpdateOptions,
 } from 'discord.js';
 import type { DiscountThresholdService } from '../../application/discount-threshold-service.js';
 import type { StatusService, StatusDashboardResult } from '../../application/status-service.js';
@@ -125,13 +127,16 @@ export async function handleStatus(
       )],
     });
   });
+  // Inside a click's work, the first edit of the panel is the click's answer.
+  const edit = (options: InteractionEditReplyOptions & InteractionUpdateOptions) =>
+    operations.edit(options, () => interaction.editReply(options));
 
   const refresh = async (notice?: string): Promise<boolean> => {
     const refreshed = statusService.getDashboard(interaction.user.id, fallbackLanguage);
     if (refreshed.status !== 'ready') {
       controlsRemoved = true;
       collector.stop('unavailable');
-      await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+      await measureDiscordOperation(interaction, 'status-v2.render', () => edit({
         components: [buildNoticePanel(
           refreshed.language,
           refreshed.status === 'not-configured' ? 'warning' : 'danger',
@@ -144,7 +149,7 @@ export async function handleStatus(
       return false;
     }
     current = refreshed;
-    await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+    await measureDiscordOperation(interaction, 'status-v2.render', () => edit({
       components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, tabs, ...(notice ? { notice } : {}) })],
     }));
     return true;
@@ -153,7 +158,7 @@ export async function handleStatus(
   const showAccountChange = async (profileInput: string, country: string): Promise<void> => {
     if (!accountService) return;
     const language = current.language;
-    await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+    await measureDiscordOperation(interaction, 'status-v2.render', () => edit({
       components: [buildNoticePanel(language, 'info',
         localizer(language)({ tr: 'Steam hesabına bakıyorum', en: 'Looking up your Steam account', de: 'Ich suche dein Steam-Konto', fr: 'Je cherche ton compte Steam' }),
         messagesFor(language).setupWizardPreparing)],
@@ -176,7 +181,7 @@ export async function handleStatus(
       return;
     }
     pendingAccount = prepared;
-    await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+    await measureDiscordOperation(interaction, 'status-v2.render', () => edit({
       components: [buildAccountChangePanel(prepared, current.config, interaction.id)],
     }));
   };
@@ -197,25 +202,22 @@ export async function handleStatus(
     }
     if (component.customId === `country:${interaction.id}:range` && component.isStringSelectMenu()) {
       const rangeIndex = Number(component.values[0]);
-      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
-      void operations.enqueue(acknowledgement, async () => {
-        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+      void operations.enqueueClick(component, 'status-v2', async () => {
+        await measureDiscordOperation(interaction, 'status-v2.render', () => edit({
           components: [buildCountryListPanel(current.language, interaction.id, rangeIndex, current.config.storeCountryCode)],
         }));
       });
       return;
     }
     if (component.customId === `country:${interaction.id}:back` && component.isButton()) {
-      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
-      void operations.enqueue(acknowledgement, async () => {
-        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id, { selected: current.config.storeCountryCode })] }));
+      void operations.enqueueClick(component, 'status-v2', async () => {
+        await measureDiscordOperation(interaction, 'status-v2.render', () => edit({ components: [buildCountryRangePanel(current.language, interaction.id, { selected: current.config.storeCountryCode })] }));
       });
       return;
     }
     if (component.customId === `country:${interaction.id}:cancel` && component.isButton()) {
-      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       accountProfileInput = null;
-      void operations.enqueue(acknowledgement, async () => {
+      void operations.enqueueClick(component, 'status-v2', async () => {
         await refresh();
       });
       return;
@@ -239,7 +241,7 @@ export async function handleStatus(
         const query = modal.fields.getTextInputValue('country-query').trim();
         const acknowledgement = measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate());
         await operations.enqueue(acknowledgement, async () => {
-          await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+          await measureDiscordOperation(interaction, 'status-v2.render', () => edit({
             components: [buildCountrySearchPanel(current.language, interaction.id, query, current.config.storeCountryCode)],
           }));
         });
@@ -248,10 +250,9 @@ export async function handleStatus(
     }
     if (component.customId === `country:${interaction.id}:select` && component.isStringSelectMenu()) {
       const country = parseStoreCountryCode(component.values[0] ?? '');
-      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       const profileInput = accountProfileInput;
       accountProfileInput = null;
-      void operations.enqueue(acknowledgement, async () => {
+      void operations.enqueueClick(component, 'status-v2', async () => {
         if (profileInput !== null) {
           // The country for a new Steam account, chosen under "Other country".
           if (country) await showAccountChange(profileInput, country);
@@ -310,7 +311,7 @@ export async function handleStatus(
           if (!country) {
             // "Other country": pick it from the full list, then continue with this profile.
             accountProfileInput = profileInput;
-            await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+            await measureDiscordOperation(interaction, 'status-v2.render', () => edit({
               components: [buildCountryRangePanel(current.language, interaction.id, { selected: current.config.storeCountryCode })],
             }));
             return;
@@ -328,24 +329,22 @@ export async function handleStatus(
       return;
     }
     if (action === 'account-cancel') {
-      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       pendingAccount = null;
-      void operations.enqueue(acknowledgement, async () => {
+      void operations.enqueueClick(component, 'status-v2', async () => {
         await refresh();
       });
       return;
     }
     if (action === 'account-confirm' && accountService) {
-      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
       const prepared = pendingAccount;
       pendingAccount = null;
-      void operations.enqueue(acknowledgement, async () => {
+      void operations.enqueueClick(component, 'status-v2', async () => {
         if (!prepared) {
           await refresh();
           return;
         }
         const t = localizer(current.language);
-        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+        await measureDiscordOperation(interaction, 'status-v2.render', () => edit({
           components: [buildAccountChangePanel(prepared, current.config, interaction.id, true)],
         }));
         let notice: string;
@@ -373,9 +372,8 @@ export async function handleStatus(
       return;
     }
     if (action === 'region') {
-      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
-      void operations.enqueue(acknowledgement, async () => {
-        await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({ components: [buildCountryRangePanel(current.language, interaction.id, { selected: current.config.storeCountryCode })] }));
+      void operations.enqueueClick(component, 'status-v2', async () => {
+        await measureDiscordOperation(interaction, 'status-v2.render', () => edit({ components: [buildCountryRangePanel(current.language, interaction.id, { selected: current.config.storeCountryCode })] }));
       });
       return;
     }
@@ -441,8 +439,7 @@ export async function handleStatus(
     }
     if (action === 'test' && testNotificationService) {
       // The result shows inside this panel; a separate message would break the one-panel flow.
-      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
-      void operations.enqueue(acknowledgement, async () => {
+      void operations.enqueueClick(component, 'status-v2', async () => {
         const text = uiCopy(current.language);
         let notice: string;
         try {
@@ -462,8 +459,7 @@ export async function handleStatus(
       return;
     }
     if (action === 'enable' || action === 'disable') {
-      const acknowledgement = measureDiscordOperation(component, 'status-v2.button-ack', () => component.deferUpdate());
-      void operations.enqueue(acknowledgement, async () => {
+      void operations.enqueueClick(component, 'status-v2', async () => {
         await userConfigurationService.setEnabled(interaction.user.id, action === 'enable');
         await refresh();
       });
@@ -484,7 +480,7 @@ export async function handleStatus(
     sessionActive = false;
     await operations.drain();
     if (!controlsRemoved && !handedOff) {
-      await measureDiscordOperation(interaction, 'status-v2.render', () => interaction.editReply({
+      await measureDiscordOperation(interaction, 'status-v2.render', () => edit({
         components: [buildStatusV2Panel(current, interaction.id, { avatarUrl, tabs, disabled: true })],
       })).catch((error: unknown) => safeLogger.error('Discord status V2 cleanup failed', error));
     }

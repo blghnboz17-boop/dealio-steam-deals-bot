@@ -152,4 +152,38 @@ describe('in-place navigation', () => {
       db.close();
     }
   });
+
+  it('answers a wishlist click with the new screen in one Discord call', async () => {
+    const f = panel('assistant-one-call');
+    const db = createDatabase(':memory:');
+    try {
+      const users = new UserConfigRepository(db);
+      users.upsert('owner', '76561198000000000', 'en', 'US', new Date().toISOString());
+      const service = { config: () => users.findByDiscordUserId('owner'), repository: new AssistantRepository(db) } as unknown as AssistantService;
+      const load = vi.fn().mockResolvedValue({ status: 'success', capturedAt: new Date().toISOString(),
+        items: [{ appId: 1, name: 'Game 1', priority: 1, dateAdded: null, onSale: false, price: null }] });
+      const task = handleAssistant(f.interaction as unknown as ChatInputCommandInteraction, service,
+        { load } as unknown as WishlistViewService, undefined, 'wishlist', { navigate: vi.fn<Navigate>() });
+      await vi.waitFor(() => expect(f.collector.listenerCount('collect')).toBe(1));
+      const renders = f.interaction.editReply.mock.calls.length;
+
+      const component = {
+        customId: 'assistant:assistant-one-call:filter', user: { id: 'owner' },
+        isButton: () => true, isStringSelectMenu: () => false,
+        createdTimestamp: Date.now(), message: {},
+        update: vi.fn().mockResolvedValue(undefined),
+        deferUpdate: vi.fn().mockResolvedValue(undefined),
+      };
+      f.collector.emit('collect', component);
+
+      await vi.waitFor(() => expect(component.update).toHaveBeenCalledOnce());
+      expect(json(component.update.mock.calls[0])).toContain('assistant:assistant-one-call:filter');
+      expect(component.deferUpdate).not.toHaveBeenCalled();
+      expect(f.interaction.editReply).toHaveBeenCalledTimes(renders);
+      f.collector.stop('test');
+      await task;
+    } finally {
+      db.close();
+    }
+  });
 });
