@@ -1,5 +1,6 @@
 import { html, useCallback, useEffect, useMemo, useRef, useState, type Child, type VNode } from './vendor/preact-htm.js';
 import { ApiError } from './api.js';
+import { Icon, type IconName } from './icons.js';
 
 export interface AsyncState<T> {
   readonly data: T | null;
@@ -81,9 +82,15 @@ export function RefreshButton(props: { state: AsyncState<unknown> }): VNode {
   return html`<span class="refresh">
     ${state.live ? html`<span class=${`live ${state.error ? 'live-lost' : 'live-live'}`}
       title="Bu sayfa 30 saniyede bir kendini yeniler (sekme açıkken).">
-      <span aria-hidden="true">●</span> ${state.error ? 'Güncellenemedi' : 'Canlı'}${ageText ? ` · ${ageText}` : ''}</span>` : null}
-    <button class="btn" onClick=${state.reload} disabled=${state.loading}>${state.loading ? 'Yenileniyor…' : 'Yenile'}</button>
+      <span class="live-dot" aria-hidden="true"></span>${state.error ? 'Güncellenemedi' : 'Canlı'}${ageText ? ` · ${ageText}` : ''}</span>` : null}
+    <button class=${`btn ${state.loading ? 'spin' : ''}`} onClick=${state.reload} disabled=${state.loading}>
+      ${Icon({ name: 'refresh' })}${state.loading ? 'Yenileniyor…' : 'Yenile'}</button>
   </span>`;
+}
+
+/** The "← Kullanıcılar" button back to a list page. */
+export function BackLink(props: { href: string; label: string }): VNode {
+  return html`<a class="btn" href=${props.href}>${Icon({ name: 'arrowLeft' })}${props.label}</a>`;
 }
 
 export function Page(props: { title: string; subtitle?: Child; actions?: Child; children?: Child }): VNode {
@@ -100,12 +107,14 @@ export function Page(props: { title: string; subtitle?: Child; actions?: Child; 
     </section>`;
 }
 
-export function Card(props: { title?: Child; actions?: Child; class?: string; children?: Child }): VNode {
+export function Card(props: { title?: Child; subtitle?: Child; actions?: Child; class?: string; children?: Child }): VNode {
   return html`
     <article class=${`card ${props.class ?? ''}`}>
       ${props.title || props.actions ? html`
         <header class="card-head">
-          ${props.title ? html`<h2>${props.title}</h2>` : html`<span></span>`}
+          ${props.title
+            ? html`<h2>${props.title}${props.subtitle ? html`<span class="card-sub">${props.subtitle}</span>` : null}</h2>`
+            : html`<span></span>`}
           ${props.actions ?? null}
         </header>` : null}
       ${props.children}
@@ -114,45 +123,111 @@ export function Card(props: { title?: Child; actions?: Child; class?: string; ch
 
 export type Tone = 'good' | 'warn' | 'bad' | 'info' | 'neutral';
 
-export function Stat(props: { label: string; value: Child; sub?: Child; tone?: Tone; meter?: number }): VNode {
+export interface Trend {
+  /** e.g. "+12%" or "+3"; the sign is part of the text. */
+  readonly text: string;
+  readonly direction: 'up' | 'down' | 'flat';
+  /** What the change compares, shown on hover. */
+  readonly title?: string;
+}
+
+/** Change of the last `window` days against the `window` days before, in percent. */
+export function periodTrend(values: readonly number[], window = 7): Trend | null {
+  if (values.length < window * 2) return null;
+  const sum = (list: readonly number[]): number => list.reduce((total, value) => total + value, 0);
+  const current = sum(values.slice(-window));
+  const previous = sum(values.slice(-window * 2, -window));
+  const title = `Son ${window} gün ${current}, önceki ${window} gün ${previous}`;
+  if (previous === 0) {
+    return current === 0 ? { text: '0%', direction: 'flat', title } : { text: `+${current}`, direction: 'up', title };
+  }
+  const change = Math.round(((current - previous) / previous) * 100);
+  return { text: `${change > 0 ? '+' : ''}${change}%`, direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat', title };
+}
+
+/** Rising counts are good news on this panel; the arrow and the sign carry the direction, not colour alone. */
+export function TrendBadge(props: { trend: Trend }): VNode {
+  const { trend } = props;
+  return html`<span class=${`trend trend-${trend.direction}`} title=${trend.title ?? ''}>
+    ${trend.direction === 'flat' ? null : Icon({ name: trend.direction === 'up' ? 'trendUp' : 'trendDown', size: 14 })}${trend.text}</span>`;
+}
+
+export function Stat(props: {
+  label: string; value: Child; sub?: Child; tone?: Tone; meter?: number; icon?: IconName; trend?: Trend | null; spark?: Child;
+}): VNode {
   const meter = props.meter === undefined ? null : Math.max(0, Math.min(1, props.meter));
   const meterTone = meter === null ? '' : meter >= 0.9 ? 'bad' : meter >= 0.75 ? 'warn' : 'info';
+  const iconTone = props.tone === 'warn' || props.tone === 'bad' ? `stat-icon-${props.tone}` : '';
   return html`
     <div class=${`stat ${props.tone ? `stat-${props.tone}` : ''}`}>
-      <span class="stat-label">${props.label}</span>
+      <div class="stat-top">
+        <span class="stat-label">${props.label}</span>
+        ${props.icon ? html`<span class=${`stat-icon ${iconTone}`}>${Icon({ name: props.icon, size: 17 })}</span>` : null}
+      </div>
       <strong class="stat-value">${props.value}</strong>
-      ${props.sub ? html`<span class="stat-sub">${props.sub}</span>` : null}
+      ${props.sub || props.trend
+        ? html`<span class="stat-sub">${props.trend ? html`<${TrendBadge} trend=${props.trend} />` : null}${props.sub ?? null}</span>`
+        : null}
       ${meter === null ? null : html`
         <span class=${`meter meter-${meterTone}`} role="meter" aria-valuemin="0" aria-valuemax="100"
           aria-valuenow=${Math.round(meter * 100)}><span style=${`width:${meter * 100}%`}></span></span>`}
+      ${props.spark ?? null}
     </div>`;
 }
 
-const toneIcons: Record<Tone, string> = { good: '●', warn: '▲', bad: '■', info: '◆', neutral: '○' };
+/** A labelled ratio against a limit, e.g. users against the sign-up cap. */
+export function Meter(props: {
+  label: Child; value: number; max: number; valueText?: Child; left?: Child; right?: Child; tone?: 'good' | 'info' | 'warn' | 'bad';
+}): VNode {
+  const ratio = props.max > 0 ? Math.max(0, Math.min(1, props.value / props.max)) : 0;
+  const tone = props.tone ?? (ratio >= 0.9 ? 'bad' : ratio >= 0.75 ? 'warn' : 'info');
+  return html`<div>
+    <div class="goal-row"><span>${props.label}</span><strong>${props.valueText ?? `%${Math.round(ratio * 100)}`}</strong></div>
+    <span class=${`meter meter-${tone}`} role="meter" aria-valuemin="0" aria-valuemax=${props.max} aria-valuenow=${props.value}>
+      <span style=${`width:${ratio * 100}%`}></span></span>
+    ${props.left || props.right ? html`<div class="goal-foot"><span>${props.left ?? ''}</span><span>${props.right ?? ''}</span></div>` : null}
+  </div>`;
+}
 
-/** State is never colour alone: every badge has an icon and a label. */
+/** State is never colour alone: every badge has a label. */
 export function Badge(props: { tone: Tone; label: string; title?: string }): VNode {
   return html`<span class=${`badge badge-${props.tone}`} title=${props.title ?? ''}>
-    <span aria-hidden="true">${toneIcons[props.tone]}</span>${props.label}</span>`;
+    <span class="badge-dot" aria-hidden="true"></span>${props.label}</span>`;
+}
+
+/** A stable colour for an initials avatar, so the same name always looks the same. */
+function hue(name: string): number {
+  let hash = 0;
+  for (const character of name) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  return hash % 6;
 }
 
 export function Avatar(props: { src?: string | null; name: string; size?: number; square?: boolean }): VNode {
   const size = props.size ?? 32;
-  const style = `width:${size}px;height:${size}px`;
+  const style = `width:${size}px;height:${size}px${size >= 48 ? `;font-size:${Math.round(size * 0.4)}px` : ''}`;
   return props.src
     ? html`<img class=${`avatar ${props.square ? 'avatar-square' : ''}`} src=${props.src} alt="" style=${style} loading="lazy" />`
-    : html`<span class=${`avatar avatar-empty ${props.square ? 'avatar-square' : ''}`} style=${style} aria-hidden="true">
-        ${props.name.trim().charAt(0).toUpperCase() || '?'}</span>`;
+    : html`<span class=${`avatar avatar-empty avatar-hue-${hue(props.name)} ${props.square ? 'avatar-square' : ''}`} style=${style}
+        aria-hidden="true">${props.name.trim().charAt(0).toUpperCase() || '?'}</span>`;
 }
 
+/** Page-level placeholder in the shape of the content that is coming. */
 export function Loading(): VNode {
+  return html`<div class="skeleton" aria-busy="true" aria-label="Yükleniyor">
+    <div class="skeleton-row">${[0, 1, 2, 3].map((index) => html`<span key=${index} class="skeleton-block"></span>`)}</div>
+    <span class="skeleton-block tall"></span>
+  </div>`;
+}
+
+/** Progress inside a card. */
+export function Spinner(): VNode {
   return html`<div class="state"><span class="spinner" aria-hidden="true"></span> Yükleniyor…</div>`;
 }
 
 export function ErrorBox(props: { message: string; retry?: () => void }): VNode {
   return html`<div class="state state-error" role="alert">
-    <strong>Yüklenemedi.</strong> ${props.message}
-    ${props.retry ? html` <button class="btn btn-small" onClick=${props.retry}>Tekrar dene</button>` : null}
+    ${Icon({ name: 'alert', size: 18 })}<strong>Yüklenemedi.</strong> ${props.message}
+    ${props.retry ? html` <button class="btn btn-small" onClick=${props.retry}>${Icon({ name: 'refresh', size: 14 })}Tekrar dene</button>` : null}
   </div>`;
 }
 
@@ -173,8 +248,8 @@ export function CopyText(props: { value: string }): VNode {
       setTimeout(() => setCopied(false), 1200);
     });
   };
-  return html`<button class="copy" title="Kopyala" onClick=${copy}><code>${props.value}</code>
-    <span class="copy-hint">${copied ? 'kopyalandı' : 'kopyala'}</span></button>`;
+  return html`<button class=${`copy ${copied ? 'copied' : ''}`} title=${copied ? 'Kopyalandı' : 'Kopyala'} onClick=${copy}>
+    <code>${props.value}</code>${Icon({ name: copied ? 'check' : 'copy', size: 14 })}</button>`;
 }
 
 /** Proportional bars for a small distribution; the number is always printed. */
@@ -221,6 +296,13 @@ export function downloadCsv<T>(name: string, columns: readonly Column<T>[], rows
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** A search field with its icon; used in table toolbars and the logs page. */
+export function SearchInput(props: { value: string; placeholder: string; onInput: (value: string) => void }): VNode {
+  return html`<label class="search-box">${Icon({ name: 'search' })}
+    <input class="input" type="search" placeholder=${props.placeholder} aria-label=${props.placeholder}
+      value=${props.value} onInput=${(event: Event) => props.onInput((event.target as HTMLInputElement).value)} /></label>`;
+}
+
 export function DataTable<T>(props: {
   columns: readonly Column<T>[];
   rows: readonly T[];
@@ -265,12 +347,12 @@ export function DataTable<T>(props: {
     <div class="table-wrap">
       ${props.search || props.csvName || props.toolbar ? html`
         <div class="toolbar">
-          ${props.search ? html`<input class="input search" type="search" placeholder=${props.searchPlaceholder ?? 'Ara…'}
-            value=${query} onInput=${(event: Event) => setQuery((event.target as HTMLInputElement).value)} />` : null}
+          ${props.search ? SearchInput({ value: query, placeholder: props.searchPlaceholder ?? 'Ara…', onInput: setQuery }) : null}
           ${props.toolbar ?? null}
           <span class="toolbar-spacer"></span>
-          <span class="muted small">${filtered.length.toLocaleString('tr-TR')} kayıt</span>
-          ${props.csvName ? html`<button class="btn btn-small" onClick=${() => downloadCsv(props.csvName!, props.csvColumns ?? props.columns, filtered)}>CSV indir</button>` : null}
+          <span class="count-pill">${filtered.length.toLocaleString('tr-TR')} kayıt</span>
+          ${props.csvName ? html`<button class="btn btn-small" onClick=${() => downloadCsv(props.csvName!, props.csvColumns ?? props.columns, filtered)}>
+            ${Icon({ name: 'download', size: 14 })}CSV</button>` : null}
         </div>` : null}
       <div class="table-scroll">
         <table>
@@ -278,7 +360,7 @@ export function DataTable<T>(props: {
             <th class=${`${column.align === 'end' ? 'end' : ''} ${column.hideOnMobile ? 'hide-mobile' : ''}`}
               aria-sort=${sort?.key === column.key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
               ${column.sort ? html`<button class="th-sort" onClick=${() => toggleSort(column.key)}>${column.label}
-                <span aria-hidden="true">${sort?.key === column.key ? (sort.direction === 'asc' ? '▲' : '▼') : ''}</span></button>`
+                <span class="sort-mark" aria-hidden="true">${sort?.key === column.key ? (sort.direction === 'asc' ? '▲' : '▼') : ''}</span></button>`
                 : column.label}
             </th>`)}</tr></thead>
           <tbody>

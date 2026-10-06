@@ -18,6 +18,7 @@ export function filledLanguages(content: Content): Language[] {
 /** A close look at the Discord message: the same notice panel the bot sends. */
 export function DiscordPreview(props: { language: Language; title: string; body: string }): VNode {
   return html`<div class="discord-preview" aria-label="Discord önizlemesi">
+    <span class="discord-preview-label">Discord önizlemesi</span>
     <div class="discord-card">
       <strong class="discord-title">ℹ️ ${props.title || 'Başlık'}</strong>
       <p class="discord-body">${props.body || 'Mesaj metni burada görünür.'}</p>
@@ -41,12 +42,12 @@ export function AnnouncementEditor(props: { value: Content; onChange: (value: Co
   const filled = filledLanguages(props.value);
   return html`
     <div class="editor">
-      <div class="tabs" role="tablist">
+      <div><div class="tabs" role="tablist">
         ${editorLanguages.map((language) => html`<button role="tab" aria-selected=${active === language}
           class=${`tab ${active === language ? 'active' : ''}`} onClick=${() => setActive(language)}>
           ${languageNames[language]} ${filled.includes(language) ? html`<span class="tab-dot" aria-label="dolu">●</span>` : null}
         </button>`)}
-      </div>
+      </div></div>
       <div class="editor-grid">
         <div class="editor-fields">
           <label class="field"><span class="field-label">Başlık <small class="muted">${current.title.length}/${limits.title}</small></span>

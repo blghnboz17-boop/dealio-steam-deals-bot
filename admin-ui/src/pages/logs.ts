@@ -1,7 +1,8 @@
 import { html, useEffect, useMemo, useRef, useState, type VNode } from '../vendor/preact-htm.js';
 import { api } from '../api.js';
 import type { LogEntry } from '../types.js';
-import { Page } from '../ui.js';
+import { Icon } from '../icons.js';
+import { Page, SearchInput } from '../ui.js';
 
 const maximumEntries = 2_000;
 const timeFormat = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -62,8 +63,7 @@ export function LogsPage(): VNode {
     children: html`
       <div class="card card-flush">
         <div class="toolbar">
-          <input class="input search" type="search" placeholder="Loglarda ara…" value=${query}
-            onInput=${(event: Event) => setQuery((event.target as HTMLInputElement).value)} />
+          ${SearchInput({ value: query, placeholder: 'Loglarda ara…', onInput: setQuery })}
           <select class="input" value=${level} aria-label="Seviye"
             onChange=${(event: Event) => setLevel((event.target as HTMLSelectElement).value as 'all' | 'warn' | 'error')}>
             <option value="all">Tüm seviyeler</option><option value="warn">Uyarı ve hata</option><option value="error">Yalnız hata</option>
@@ -71,9 +71,9 @@ export function LogsPage(): VNode {
           <label class="check"><input type="checkbox" checked=${follow}
             onChange=${(event: Event) => setFollow((event.target as HTMLInputElement).checked)} /> Sona kaydır</label>
           <span class="toolbar-spacer"></span>
-          <span class=${`live live-${paused ? 'paused' : live}`}><span aria-hidden="true">●</span> ${liveLabel}</span>
-          <button class="btn btn-small" onClick=${() => setPaused(!paused)}>${paused ? 'Devam et' : 'Duraklat'}</button>
-          <button class="btn btn-small" onClick=${() => setEntries([])}>Temizle</button>
+          <span class=${`live live-${paused ? 'paused' : live}`}><span class="live-dot" aria-hidden="true"></span>${liveLabel}</span>
+          <button class="btn btn-small" onClick=${() => setPaused(!paused)}>${Icon({ name: paused ? 'play' : 'pause', size: 14 })}${paused ? 'Devam et' : 'Duraklat'}</button>
+          <button class="btn btn-small" onClick=${() => setEntries([])}>${Icon({ name: 'trash', size: 14 })}Temizle</button>
         </div>
         <ol class="log" ref=${listRef}>
           ${visible.map((entry) => html`<li key=${entry.id} class=${`log-${entry.level}`}>

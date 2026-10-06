@@ -1,5 +1,6 @@
 import { html, useEffect, useRef, useState, type Child, type VNode } from './vendor/preact-htm.js';
 import { api, ApiError } from './api.js';
+import { Icon } from './icons.js';
 
 /* Toasts: short confirmations and errors after an action. */
 
@@ -27,7 +28,7 @@ export function Toasts(): VNode {
   }, []);
   return html`<div class="toasts" role="status" aria-live="polite">
     ${toasts.map((item) => html`<div key=${item.id} class=${`toast toast-${item.tone}`}>
-      <span aria-hidden="true">${item.tone === 'good' ? '✓' : '!'}</span>${item.text}</div>`)}
+      <span class="toast-icon">${Icon({ name: item.tone === 'good' ? 'check' : 'alert' })}</span>${item.text}</div>`)}
   </div>`;
 }
 
@@ -83,7 +84,7 @@ export function Dialog(props: {
     <div class="dialog-backdrop" onClick=${(event: Event) => { if (event.target === event.currentTarget) props.onClose(); }}>
       <section class=${`dialog card ${props.wide ? 'dialog-wide' : ''}`} role="dialog" aria-modal="true" aria-label=${props.title} ref=${ref}>
         <header class="card-head"><h2>${props.title}</h2>
-          <button class="btn btn-small btn-ghost" onClick=${props.onClose} aria-label="Kapat">✕</button></header>
+          <button class="btn btn-small btn-ghost btn-icon" onClick=${props.onClose} aria-label="Kapat">${Icon({ name: 'x' })}</button></header>
         <div class="dialog-body">${props.children}</div>
         ${props.footer ? html`<footer class="dialog-foot">${props.footer}</footer>` : null}
       </section>

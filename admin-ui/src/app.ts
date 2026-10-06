@@ -1,5 +1,6 @@
 import { html, render, useEffect, useState, type VNode } from './vendor/preact-htm.js';
 import { api, ApiError, setCsrfToken, whenSignedOut } from './api.js';
+import { Icon, type IconName } from './icons.js';
 import { GamesPage } from './pages/games.js';
 import { GuildsPage } from './pages/guilds.js';
 import { LogsPage } from './pages/logs.js';
@@ -13,23 +14,40 @@ import { AnnouncementDetailPage, AnnouncementsPage } from './pages/announcements
 import { AuditPage } from './pages/audit.js';
 import { GuildDetailPage } from './pages/guilds.js';
 import { UsagePage } from './pages/usage.js';
+import { useTheme } from './theme.js';
 
 interface SessionResponse {
   readonly authenticated: boolean;
   readonly csrf?: string;
 }
 
-const navigation = [
-  { path: '/', label: 'Genel bakış', icon: '◧' },
-  { path: '/guilds', label: 'Sunucular', icon: '⌂' },
-  { path: '/users', label: 'Kullanıcılar', icon: '◉' },
-  { path: '/games', label: 'Oyunlar', icon: '▦' },
-  { path: '/usage', label: 'Kullanım', icon: '↗' },
-  { path: '/announcements', label: 'Duyurular', icon: '✉' },
-  { path: '/system', label: 'Sistem', icon: '⚙' },
-  { path: '/audit', label: 'Denetim', icon: '✓' },
-  { path: '/logs', label: 'Loglar', icon: '≡' },
-] as const;
+interface NavItem { readonly path: string; readonly label: string; readonly icon: IconName }
+
+const navigation: ReadonlyArray<{ readonly label: string; readonly items: readonly NavItem[] }> = [
+  { label: 'Genel', items: [
+    { path: '/', label: 'Genel bakış', icon: 'dashboard' },
+    { path: '/usage', label: 'Kullanım', icon: 'activity' },
+  ] },
+  { label: 'Topluluk', items: [
+    { path: '/users', label: 'Kullanıcılar', icon: 'users' },
+    { path: '/guilds', label: 'Sunucular', icon: 'server' },
+    { path: '/games', label: 'Oyunlar', icon: 'gamepad' },
+    { path: '/announcements', label: 'Duyurular', icon: 'megaphone' },
+  ] },
+  { label: 'Sistem', items: [
+    { path: '/system', label: 'Sistem', icon: 'sliders' },
+    { path: '/audit', label: 'Denetim', icon: 'shield' },
+    { path: '/logs', label: 'Loglar', icon: 'terminal' },
+  ] },
+];
+const sections = navigation.flatMap((group) => group.items);
+
+function ThemeToggle(): VNode {
+  const [theme, toggle] = useTheme();
+  const label = theme === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç';
+  return html`<button class="btn btn-icon btn-ghost" onClick=${toggle} title=${label} aria-label=${label}>
+    ${Icon({ name: theme === 'dark' ? 'sun' : 'moon', size: 18 })}</button>`;
+}
 
 function Login(props: { onSignedIn: (csrf: string) => void }): VNode {
   const [token, setToken] = useState('');
@@ -52,15 +70,23 @@ function Login(props: { onSignedIn: (csrf: string) => void }): VNode {
   };
   return html`
     <main class="login">
+      <span class="login-theme"><${ThemeToggle} /></span>
       <form class="card login-card" onSubmit=${submit}>
-        <div class="brand"><span class="mark">d</span><span>Dealio <em>Yönetim</em></span></div>
-        <p class="muted">Sunucudaki <code>DEALIO_ADMIN_TOKEN</code> değerini gir. Oturum 12 saat sürer ve bot yeniden başlarsa kapanır.</p>
+        <div class="login-head">
+          <span class="mark mark-lg">d</span>
+          <div>
+            <h1>Dealio Yönetim</h1>
+            <p class="muted">Sunucudaki <code>DEALIO_ADMIN_TOKEN</code> değeriyle giriş yap.</p>
+          </div>
+        </div>
         <label class="field">Yönetici anahtarı
-          <input class="input" type="password" autocomplete="current-password" required value=${token}
+          <input class="input" type="password" autocomplete="current-password" required value=${token} placeholder="••••••••••••"
             onInput=${(event: Event) => setToken((event.target as HTMLInputElement).value)} />
         </label>
-        ${error ? html`<p class="form-error" role="alert">${error}</p>` : null}
-        <button class="btn btn-primary" type="submit" disabled=${busy || token.length === 0}>${busy ? 'Giriş yapılıyor…' : 'Giriş yap'}</button>
+        ${error ? html`<p class="form-error" role="alert">${Icon({ name: 'alert' })}${error}</p>` : null}
+        <button class="btn btn-primary" type="submit" disabled=${busy || token.length === 0}>
+          ${Icon({ name: 'key' })}${busy ? 'Giriş yapılıyor…' : 'Giriş yap'}</button>
+        <p class="login-foot">${Icon({ name: 'shield', size: 14 })}Oturum 12 saat sürer; bot yeniden başlarsa kapanır.</p>
       </form>
     </main>`;
 }
@@ -85,26 +111,72 @@ function Route(props: { path: string }): VNode {
   }
 }
 
+const detailNames: Readonly<Record<string, string>> = {
+  '/users': 'Kullanıcı', '/guilds': 'Sunucu', '/announcements': 'Duyuru',
+};
+
+/** "Dealio › Kullanıcılar › Kullanıcı": where the owner is, with links back up. */
+function Crumbs(props: { path: string; section: string }): VNode {
+  const item = sections.find((candidate) => candidate.path === props.section) ?? sections[0]!;
+  const detail = props.path !== props.section && props.section !== '/' ? detailNames[props.section] : undefined;
+  return html`<nav class="crumbs" aria-label="Konum">
+    <a href="#/">Dealio</a>${Icon({ name: 'chevronRight', size: 14 })}
+    ${detail ? html`<a href=${`#${item.path}`}>${item.label}</a>${Icon({ name: 'chevronRight', size: 14 })}<strong>${detail}</strong>`
+      : html`<strong>${item.label}</strong>`}
+  </nav>`;
+}
+
 function Shell(props: { onSignOut: () => void }): VNode {
   const path = usePath();
   const section = '/' + (path.split('/')[1] ?? '');
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => setMenuOpen(false), [path]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
   return html`
     <div class="shell">
-      <aside class=${`sidebar ${menuOpen ? 'open' : ''}`}>
+      <aside class=${`sidebar ${menuOpen ? 'open' : ''}`} id="sidebar">
         <div class="sidebar-top">
-          <a class="brand" href="#/"><span class="mark">d</span><span>Dealio <em>Yönetim</em></span></a>
-          <button class="btn btn-small menu-toggle" aria-expanded=${menuOpen} onClick=${() => setMenuOpen(!menuOpen)}>Menü</button>
+          <a class="brand" href="#/"><span class="mark">d</span>
+            <span class="brand-text"><strong>Dealio</strong><small>Yönetim paneli</small></span></a>
+          <button class="btn btn-icon btn-ghost menu-toggle" aria-label="Menüyü kapat" onClick=${() => setMenuOpen(false)}>
+            ${Icon({ name: 'x', size: 18 })}</button>
         </div>
-        <nav aria-label="Bölümler">
-          ${navigation.map((item) => html`<a href=${`#${item.path}`} class=${section === item.path ? 'active' : ''}
-            aria-current=${section === item.path ? 'page' : undefined}>
-            <span class="nav-icon" aria-hidden="true">${item.icon}</span>${item.label}</a>`)}
-        </nav>
-        <button class="btn btn-ghost signout" onClick=${props.onSignOut}>Çıkış yap</button>
+        <div class="sidebar-scroll">
+          ${navigation.map((group) => html`
+            <nav class="nav-group" aria-label=${group.label}>
+              <span class="nav-label">${group.label}</span>
+              ${group.items.map((item) => html`<a href=${`#${item.path}`} class=${`nav-link ${section === item.path ? 'active' : ''}`}
+                aria-current=${section === item.path ? 'page' : undefined}>${Icon({ name: item.icon, size: 18 })}${item.label}</a>`)}
+            </nav>`)}
+        </div>
+        <div class="sidebar-foot">
+          <div class="owner">
+            <span class="owner-avatar">${Icon({ name: 'key', size: 16 })}</span>
+            <span class="owner-text"><strong>Sahip</strong><small>Yerel oturum · 127.0.0.1</small></span>
+            <button class="btn btn-icon btn-ghost btn-small" onClick=${props.onSignOut} title="Çıkış yap" aria-label="Çıkış yap">
+              ${Icon({ name: 'logout' })}</button>
+          </div>
+        </div>
       </aside>
-      <main class="content"><${Route} key=${path} path=${path} /></main>
+      ${menuOpen ? html`<div class="scrim" onClick=${() => setMenuOpen(false)}></div>` : null}
+      <div class="main">
+        <header class="topbar">
+          <button class="btn btn-icon menu-toggle" aria-label="Menü" aria-expanded=${menuOpen} aria-controls="sidebar"
+            onClick=${() => setMenuOpen(true)}>${Icon({ name: 'menu', size: 18 })}</button>
+          <${Crumbs} path=${path} section=${section} />
+          <div class="topbar-actions">
+            <${ThemeToggle} />
+          </div>
+        </header>
+        <main class="content"><${Route} key=${path} path=${path} /></main>
+      </div>
       <${Toasts} />
     </div>`;
 }

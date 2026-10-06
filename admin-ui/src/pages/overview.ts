@@ -1,12 +1,14 @@
-import { html, type VNode } from '../vendor/preact-htm.js';
+import { html, useState, type VNode } from '../vendor/preact-htm.js';
 import { api } from '../api.js';
-import { DailyColumns, fillDays } from '../chart.js';
+import { AreaChart, carryForward, DailyColumns, Donut, fillDays, Sparkline } from '../chart.js';
 import {
   checkStatusNames, compact, country, duration, flag, bytes, languageNames, notificationModeNames, num, relative,
 } from '../format.js';
+import { Icon } from '../icons.js';
 import type { Overview } from '../types.js';
 import {
-  Badge, BarList, Card, ErrorBox, Facts, Loading, Page, Stat, useAsync, useTicker, RefreshButton, live,
+  Badge, BarList, Card, ErrorBox, Facts, Loading, Meter, Page, Stat, useAsync, useTicker, RefreshButton, live, periodTrend,
+  type Tone, type Trend,
 } from '../ui.js';
 
 export function SchedulerFacts(props: { scheduler: Overview['scheduler'] }): VNode {
@@ -28,13 +30,53 @@ export function SchedulerFacts(props: { scheduler: Overview['scheduler'] }): VNo
   ] });
 }
 
-/** Servers at the end of each day, carried forward over days without changes. */
-function GuildHistory(props: { rows: Overview['charts']['guilds'] }): VNode {
-  const rows = fillDays([], 90).map((row) => ({
-    day: row.day,
-    count: props.rows.filter((change) => change.day <= row.day).pop()?.count ?? 0,
-  }));
-  return html`<${DailyColumns} rows=${rows} days=${90} unit="sunucu (gün sonu)" total=${false} />`;
+const checkTones: Readonly<Record<string, Tone>> = {
+  success: 'good', unavailable: 'warn', failed: 'bad', pending: 'info', never: 'neutral',
+};
+
+type Series = 'alerts' | 'active' | 'signups' | 'guilds';
+const seriesTabs: ReadonlyArray<readonly [Series, string]> = [
+  ['alerts', 'Uyarılar'], ['active', 'Aktif kullanıcı'], ['signups', 'Kayıtlar'], ['guilds', 'Sunucular'],
+];
+const seriesNotes: Readonly<Record<Series, string>> = {
+  alerts: 'Gün başına gönderilen indirim uyarısı',
+  active: 'Gün başına etkileşen farklı kullanıcı',
+  signups: 'Gün başına tamamlanan kurulum',
+  guilds: 'Her gün sonunda botun ekli olduğu sunucu sayısı',
+};
+
+function ActivityCard(props: { charts: Overview['charts'] }): VNode {
+  const [series, setSeries] = useState<Series>('alerts');
+  const { charts } = props;
+  const chart = series === 'alerts' ? html`<${DailyColumns} key="alerts" rows=${charts.alerts} days=${30} unit="uyarı" height=${300} />`
+    : series === 'active' ? html`<${AreaChart} key="active" rows=${charts.activeUsers} days=${30} unit="kişi-gün" height=${300} />`
+      : series === 'signups' ? html`<${DailyColumns} key="signups" rows=${charts.signups} days=${90} unit="kayıt" height=${300} />`
+        : html`<${AreaChart} key="guilds" rows=${carryForward(charts.guilds, 90)} days=${90} unit="sunucu" level total=${false} height=${300} />`;
+  return Card({
+    title: 'Etkinlik',
+    subtitle: seriesNotes[series],
+    actions: html`<div class="segmented" role="tablist" aria-label="Seri">${seriesTabs.map(([key, label]) => html`
+      <button role="tab" aria-selected=${series === key} class=${`tab ${series === key ? 'active' : ''}`}
+        onClick=${() => setSeries(key)}>${label}</button>`)}</div>`,
+    children: chart,
+  });
+}
+
+/** Users over the signup window, rebuilt backwards from today's total (deletions are not in the series). */
+function userGrowth(total: number, signups: Overview['charts']['signups']): number[] {
+  const days = fillDays(signups, 60);
+  let running = total;
+  const values: number[] = [];
+  for (let index = days.length - 1; index >= 0; index -= 1) {
+    values.unshift(running);
+    running -= days[index]!.count;
+  }
+  return values;
+}
+
+function levelTrend(values: readonly number[]): Trend {
+  const change = (values[values.length - 1] ?? 0) - (values[0] ?? 0);
+  return { text: `${change > 0 ? '+' : ''}${num(change)}`, direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat' };
 }
 
 export function OverviewPage(): VNode {
@@ -42,63 +84,81 @@ export function OverviewPage(): VNode {
   useTicker(30_000);
   const data = state.data;
   const actions = html`<${RefreshButton} state=${state} />`;
+  const subtitle = 'Dealio’nun bugünkü durumu: kullanıcılar, uyarılar, tarayıcı ve bot.';
   if (!data) {
-    return Page({ title: 'Genel bakış', actions,
+    return Page({ title: 'Genel bakış', subtitle, actions,
       children: state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading() });
   }
-  const { counts } = data;
+  const { counts, charts } = data;
   const app = data.application;
+  const guildLevels = carryForward(charts.guilds, 30).map((row) => row.count);
+  const growth = userGrowth(counts.users, charts.signups);
+  const active = fillDays(charts.activeUsers, 30).map((row) => row.count);
+  const alerts = fillDays(charts.alerts, 30).map((row) => row.count);
+  const queued = counts.queuePending + counts.queueRetry + counts.queueSending;
+  const checkTotal = data.distributions.checkStatuses.reduce((sum, row) => sum + row.count, 0);
+
   return Page({
     title: 'Genel bakış',
+    subtitle,
     actions,
     children: html`
       ${state.error ? ErrorBox({ message: state.error, retry: state.reload }) : null}
       <div class="stats">
-        ${Stat({ label: 'Sunucular', value: num(data.guilds.count),
-          sub: `${compact(data.guilds.members)} üye${app?.approximateUserInstallCount !== null && app?.approximateUserInstallCount !== undefined
-            ? ` · ${num(app.approximateUserInstallCount)} kişisel kurulum` : ''}` })}
-        ${Stat({ label: 'Kayıtlı kullanıcı', value: html`${num(counts.users)}<small> / ${num(data.maxUsers)}</small>`,
-          sub: `${data.settings.signupsOpen ? '' : 'Kayıtlar kapalı · '}Son 24 saat +${num(counts.newUsers24h)} · 7 gün +${num(counts.newUsers7d)}`,
+        ${Stat({ label: 'Sunucular', icon: 'server', value: num(data.guilds.count),
+          trend: levelTrend(guildLevels), sub: `30 günde · ${compact(data.guilds.members)} üye`,
+          spark: Sparkline({ values: guildLevels, label: 'Son 30 günde sunucu sayısı' }) })}
+        ${Stat({ label: 'Kayıtlı kullanıcı', icon: 'users', value: html`${num(counts.users)}<small> / ${num(data.maxUsers)}</small>`,
           tone: data.settings.signupsOpen ? undefined : 'warn',
-          meter: data.maxUsers > 0 ? counts.users / data.maxUsers : 0 })}
-        ${Stat({ label: 'Aktif kullanıcı (24 sa)', value: num(data.activity.active24h),
-          sub: `7 gün ${num(data.activity.active7d)} · 30 gün ${num(data.activity.active30d)}` })}
-        ${Stat({ label: 'İzleme açık', value: num(counts.enabled),
-          sub: `${num(counts.paused)} duraklatıldı · ${num(counts.dmBlocked)} DM engelli`,
-          tone: counts.dmBlocked > 0 ? 'warn' : undefined })}
-        ${Stat({ label: 'Gönderilen uyarı (24 sa)', value: num(counts.alertsSent24h),
-          sub: `7 gün ${num(counts.alertsSent7d)} · toplam ${compact(counts.alertsSentTotal)}` })}
-        ${Stat({ label: 'Bildirim kuyruğu', value: num(counts.queuePending + counts.queueRetry + counts.queueSending),
-          sub: `${num(counts.queuePending)} bekliyor · ${num(counts.queueRetry)} tekrar · ${num(counts.terminalFailed7d)} başarısız (7 g)`,
-          tone: counts.terminalFailed7d > 0 ? 'warn' : undefined })}
-        ${Stat({ label: 'Takip edilen oyun', value: compact(counts.trackedGames),
-          sub: `${num(counts.gamesOnSale)} indirimde · ${num(counts.rules)} özel kural` })}
+          trend: { text: `+${num(counts.newUsers7d)}`, direction: counts.newUsers7d > 0 ? 'up' : 'flat' },
+          sub: data.settings.signupsOpen ? `bu hafta · bugün +${num(counts.newUsers24h)}` : 'bu hafta · kayıtlar kapalı',
+          spark: Sparkline({ values: growth, label: 'Son 60 günde kayıtlı kullanıcı' }) })}
+        ${Stat({ label: 'Aktif kullanıcı (24 sa)', icon: 'activity', value: num(data.activity.active24h),
+          trend: periodTrend(active), sub: `7 günde ${num(data.activity.active7d)} · 30 günde ${num(data.activity.active30d)}`,
+          spark: Sparkline({ values: active, label: 'Son 30 günde günlük aktif kullanıcı' }) })}
+        ${Stat({ label: 'Gönderilen uyarı (24 sa)', icon: 'bell', value: num(counts.alertsSent24h),
+          trend: periodTrend(alerts), sub: `7 günde ${num(counts.alertsSent7d)} · toplam ${compact(counts.alertsSentTotal)}`,
+          spark: Sparkline({ values: alerts, label: 'Son 30 günde günlük uyarı' }) })}
       </div>
 
-      <div class="grid-2">
-        ${Card({ title: 'Yeni kayıtlar', children: html`<${DailyColumns} rows=${data.charts.signups} days=${90} unit="kayıt" />` })}
-        ${Card({ title: 'Gönderilen uyarılar', children: html`<${DailyColumns} rows=${data.charts.alerts} days=${30} unit="uyarı" />` })}
-        ${Card({ title: 'Günlük aktif kullanıcı', children: html`<${DailyColumns} rows=${data.charts.activeUsers} days=${30} unit="kişi-gün" />` })}
-        ${Card({ title: 'Sunucu sayısı', children: html`<${GuildHistory} rows=${data.charts.guilds} />` })}
+      <div class="grid-main">
+        <${ActivityCard} charts=${charts} />
+        ${Card({ title: 'Kontrol durumu', subtitle: 'Kullanıcıların son wishlist kontrolü', children: html`
+          ${Donut({ unit: 'kullanıcı', slices: data.distributions.checkStatuses.map((row) => ({
+            key: row.key, label: checkStatusNames[row.key] ?? row.key, value: row.count, tone: checkTones[row.key] ?? 'neutral' })) })}
+          ${data.distributions.checkErrors.length > 0 ? html`<h3 class="sub-head">Hata kodları</h3>
+            ${BarList({ rows: data.distributions.checkErrors.map((row) => ({
+              key: row.key, label: html`<code>${row.key}</code>`, value: row.count, title: row.key })) })}` : null}
+          ${checkTotal === 0 ? html`<p class="empty">Henüz kontrol yok.</p>` : null}` })}
       </div>
 
       <div class="grid-3">
-        ${Card({ title: 'Bot', children: Facts({ rows: [
-          ['Discord', data.discord.ready ? Badge({ tone: 'good', label: 'Bağlı' }) : Badge({ tone: 'bad', label: 'Bağlı değil' })],
-          ['Gecikme', data.discord.pingMs === null ? '—' : `${num(data.discord.pingMs)} ms`],
-          ['Bot hesabı', data.discord.botUser ? `${data.discord.botUser.username}` : '—'],
-          ['Yaklaşık sunucu', num(app?.approximateGuildCount ?? null)],
-          ['Kişisel kurulum', num(app?.approximateUserInstallCount ?? null)],
-          ['Çalışma süresi', duration(data.process.uptimeSeconds * 1000)],
-          ['Bellek (RSS)', bytes(data.process.rssBytes)],
-        ] }) })}
-        ${Card({ title: 'Tarayıcı', children: SchedulerFacts({ scheduler: data.scheduler }) })}
-        ${Card({ title: 'Kontrol durumu', children: html`
-          ${BarList({ rows: data.distributions.checkStatuses.map((row) => ({
-            key: row.key, label: checkStatusNames[row.key] ?? row.key, value: row.count })) })}
-          ${data.distributions.checkErrors.length > 0 ? html`<h3 class="sub-head">Hata kodları</h3>
-            ${BarList({ rows: data.distributions.checkErrors.map((row) => ({
-              key: row.key, label: html`<code>${row.key}</code>`, value: row.count, title: row.key })) })}` : null}` })}
+        ${Card({ title: 'Durum', subtitle: 'Kapasite, izleme ve bildirim kuyruğu', children: html`
+          <div class="goals">
+            ${Meter({ label: 'Kullanıcı kapasitesi', value: counts.users, max: data.maxUsers,
+              left: `${num(counts.users)} kayıtlı`, right: `sınır ${num(data.maxUsers)}` })}
+            ${Meter({ label: 'İzleme açık', value: counts.enabled, max: Math.max(1, counts.users), tone: 'good',
+              left: `${num(counts.enabled)} kullanıcı`, right: `${num(counts.paused)} duraklatıldı · ${num(counts.dmBlocked)} DM engelli` })}
+            ${Meter({ label: 'Şu an indirimde', value: counts.gamesOnSale, max: Math.max(1, counts.trackedGames), tone: 'info',
+              left: `${num(counts.gamesOnSale)} / ${compact(counts.trackedGames)} oyun`, right: `${num(counts.rules)} özel kural` })}
+          </div>
+          <div class="mini-stats">
+            <div title=${`${num(counts.queuePending)} bekliyor · ${num(counts.queueRetry)} tekrar · ${num(counts.queueSending)} gönderiliyor`}>
+              <span>Kuyrukta</span><strong>${num(queued)}</strong></div>
+            <div><span>Başarısız · 7 g</span><strong class=${counts.terminalFailed7d > 0 ? 'trend-down' : ''}>${num(counts.terminalFailed7d)}</strong></div>
+            <div><span>Tekrar denenecek</span><strong>${num(counts.queueRetry)}</strong></div>
+          </div>` })}
+        ${Card({ title: 'Bot', actions: data.discord.ready ? Badge({ tone: 'good', label: 'Bağlı' }) : Badge({ tone: 'bad', label: 'Bağlı değil' }),
+          children: Facts({ rows: [
+            ['Gecikme', data.discord.pingMs === null ? '—' : `${num(data.discord.pingMs)} ms`],
+            ['Bot hesabı', data.discord.botUser ? `${data.discord.botUser.username}` : '—'],
+            ['Yaklaşık sunucu', num(app?.approximateGuildCount ?? null)],
+            ['Kişisel kurulum', num(app?.approximateUserInstallCount ?? null)],
+            ['Çalışma süresi', duration(data.process.uptimeSeconds * 1000)],
+            ['Bellek (RSS)', bytes(data.process.rssBytes)],
+          ] }) })}
+        ${Card({ title: 'Tarayıcı', actions: html`<a class="btn btn-small btn-ghost" href="#/system">Sistem ${Icon({ name: 'chevronRight', size: 14 })}</a>`,
+          children: SchedulerFacts({ scheduler: data.scheduler }) })}
       </div>
 
       <div class="grid-3">
