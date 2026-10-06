@@ -2,6 +2,7 @@ import { html, useState, type VNode } from '../vendor/preact-htm.js';
 import { ConfirmDialog, Dialog, useAction } from '../actions.js';
 import { AnnouncementEditor, filledLanguages, type Content } from '../announcement-editor.js';
 import { languageNames } from '../format.js';
+import { Icon } from '../icons.js';
 import { navigate } from '../router.js';
 import type { UserDetail } from '../types.js';
 
@@ -29,25 +30,25 @@ export function UserActions(props: { detail: UserDetail; onChanged: () => void }
   return html`
     <div class="action-bar" role="toolbar" aria-label="Kullanıcı işlemleri">
       ${config.enabled
-        ? html`<button class="btn" disabled=${busy !== null} onClick=${() => setOpen('pause')}>⏸ İzlemeyi durdur</button>`
+        ? html`<button class="btn" disabled=${busy !== null} onClick=${() => setOpen('pause')}>${Icon({ name: 'pause' })}İzlemeyi durdur</button>`
         : html`<button class="btn" disabled=${busy !== null}
             onClick=${() => run('resume', `${base}/resume`, {}, config.dmDeliveryBlockedAt ? 'İzleme açıldı, DM engeli temizlendi' : 'İzleme açıldı').then(after)}>
-            ▶ ${config.dmDeliveryBlockedAt ? 'İzlemeyi aç ve DM engelini temizle' : 'İzlemeyi aç'}</button>`}
+            ${Icon({ name: 'play' })}${config.dmDeliveryBlockedAt ? 'İzlemeyi aç ve DM engelini temizle' : 'İzlemeyi aç'}</button>`}
       <button class="btn" disabled=${busy !== null}
         onClick=${() => run<{ status: string; checked?: number; sent?: number }>('check', `${base}/check`, {}, 'Kontrol tamamlandı').then((result) => {
           if (result) props.onChanged();
-        })}>${busy === 'check' ? 'Kontrol ediliyor…' : '↻ Şimdi kontrol et'}</button>
+        })}>${Icon({ name: 'refresh' })}${busy === 'check' ? 'Kontrol ediliyor…' : 'Şimdi kontrol et'}</button>
       <button class="btn" disabled=${busy !== null}
-        onClick=${() => run('test', `${base}/test-alert`, {}, 'Test uyarısı gönderildi')}>🔔 Test uyarısı</button>
+        onClick=${() => run('test', `${base}/test-alert`, {}, 'Test uyarısı gönderildi')}>${Icon({ name: 'bell' })}Test uyarısı</button>
       <button class="btn" disabled=${busy !== null || Boolean(config.dmDeliveryBlockedAt) || props.detail.blocked}
-        title=${config.dmDeliveryBlockedAt ? 'Kullanıcı DM almıyor' : ''} onClick=${() => setOpen('message')}>✉ DM gönder</button>
-      <button class="btn" disabled=${busy !== null} onClick=${() => setOpen('settings')}>⚙ Bölge ve dil</button>
+        title=${config.dmDeliveryBlockedAt ? 'Kullanıcı DM almıyor' : ''} onClick=${() => setOpen('message')}>${Icon({ name: 'mail' })}DM gönder</button>
+      <button class="btn" disabled=${busy !== null} onClick=${() => setOpen('settings')}>${Icon({ name: 'globe' })}Bölge ve dil</button>
       <span class="toolbar-spacer"></span>
       ${props.detail.blocked
         ? html`<button class="btn" disabled=${busy !== null}
             onClick=${() => run('unblock', `${base}/unblock`, {}, 'Engel kaldırıldı').then(after)}>Engeli kaldır</button>`
-        : html`<button class="btn btn-danger" disabled=${busy !== null} onClick=${() => setOpen('block')}>⛔ Engelle</button>`}
-      <button class="btn btn-danger" disabled=${busy !== null} onClick=${() => setOpen('delete')}>🗑 Verileri sil</button>
+        : html`<button class="btn btn-danger" disabled=${busy !== null} onClick=${() => setOpen('block')}>${Icon({ name: 'ban' })}Engelle</button>`}
+      <button class="btn btn-danger" disabled=${busy !== null} onClick=${() => setOpen('delete')}>${Icon({ name: 'trash' })}Verileri sil</button>
     </div>
 
     ${open === 'pause' ? html`<${ConfirmDialog} title="İzlemeyi durdur" confirmLabel="Durdur" busy=${busy === 'pause'}
@@ -70,7 +71,7 @@ export function UserActions(props: { detail: UserDetail; onChanged: () => void }
 
     ${open === 'settings' ? html`<${Dialog} title="Bölge ve dil" onClose=${() => setOpen(null)} footer=${html`
         <button class="btn" onClick=${() => setOpen(null)}>Kapat</button>`}>
-      <p class="muted">Bölge değişikliği yeni bir fiyat dönemi başlatır: eski bölgedeki bekleyen uyarılar emekliye ayrılır, ilk okuma uyarısız bir taban olur.</p>
+      <p class="note">${Icon({ name: 'info' })}<span>Bölge değişikliği yeni bir fiyat dönemi başlatır: eski bölgedeki bekleyen uyarılar emekliye ayrılır, ilk okuma uyarısız bir taban olur.</span></p>
       <div class="inline-form">
         <label class="field">Mağaza bölgesi
           <input class="input" list="country-codes" maxLength="2" value=${country}
@@ -101,7 +102,7 @@ export function UserActions(props: { detail: UserDetail; onChanged: () => void }
               setContent({});
               after(result);
             }
-          })}>Gönder</button>`}>
+          })}>${Icon({ name: 'send' })}Gönder</button>`}>
       <p class="muted">Kullanıcının dili: <strong>${languageNames[config.language] ?? config.language}</strong>. Bu dilde yazman yeterli.</p>
       <${AnnouncementEditor} value=${content} onChange=${setContent} initialLanguage=${config.language} />
     <//>` : null}`;

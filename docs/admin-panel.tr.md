@@ -52,9 +52,11 @@ Yerel geliştirmede (`.env.test` ile) tünel gerekmez; doğrudan
 
 Veri sayfaları sekme açıkken 30 saniyede bir kendini sessizce yeniler (başlıkta “● Canlı · … önce”); sekme arka plandaysa bekler, öne gelince hemen yenilenir. Loglar anlık akar, gönderimdeki duyurular 3 saniyede bir güncellenir.
 
+Üst çubuktaki güneş/ay düğmesi açık ve koyu tema arasında geçer; seçim bu tarayıcıda hatırlanır, seçim yoksa sistem teması izlenir. Yazı tipi (Inter) panelle birlikte gelir; dışarıdan hiçbir şey yüklenmez.
+
 | Sayfa | İçerik |
 |---|---|
-| Genel bakış | Sunucu/kullanıcı/aktif kullanıcı sayıları, kapasite, uyarı kuyruğu, günlük kayıt, uyarı, aktif kullanıcı ve sunucu grafikleri, dağılımlar |
+| Genel bakış | Eğilim çizgili sunucu/kullanıcı/aktif kullanıcı/uyarı kartları (önceki 7 güne göre değişim), sekmeli etkinlik grafiği (uyarı, aktif kullanıcı, kayıt, sunucu), kontrol durumu halkası, kapasite ve uyarı kuyruğu, bot ve tarayıcı, dağılımlar |
 | Sunucular | Botun olduğu sunucular (canlı), sahipleri, Dealio kullanan kişi sayısı; olay geçmişi, ayrılan ve engellenen sunucular. Detayda o sunucudan gelen kullanıcılar, **sunucudan çık** ve **engelle** |
 | Kullanıcılar | Arama, filtre, CSV; geldiği sunucu, son görülme. Detayda wishlist, kurallar, bildirim geçmişi, kullanım zaman çizelgesi ve işlemler |
 | Oyunlar | En çok istenen, şu an indirimde, en çok uyarı ve kural konan oyunlar |

@@ -5,9 +5,10 @@ import { AnnouncementEditor, editorLanguages, filledLanguages, type Content } fr
 import { dateTime, displayName, languageNames, num, relative } from '../format.js';
 import type { Broadcast, BroadcastRecipient, RecipientStatus } from '../types.js';
 import {
-  Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, useAsync, type Column, type Tone, RefreshButton, live,
+  BackLink, Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, Spinner, useAsync, type Column, type Tone, RefreshButton, live,
 } from '../ui.js';
 import { UserCell } from './users.js';
+import { Icon } from '../icons.js';
 
 const statusNames: Record<string, { tone: Tone; label: string }> = {
   sending: { tone: 'info', label: 'Gönderiliyor' },
@@ -89,16 +90,16 @@ function Composer(props: { onSent: () => void }): VNode {
         <label class="field">Bölgeler (boş = hepsi) <input class="input" placeholder="TR, DE, US" value=${countries}
           onInput=${(event: Event) => setCountries((event.target as HTMLInputElement).value)} /></label>
       </div>
-      <p class="muted small">Yalnız kurulumu tamamlamış (DM almayı kabul etmiş), engellenmemiş ve DM’i kapalı olmayan kullanıcılar alır.</p>
+      <p class="note">${Icon({ name: 'info' })}<span>Yalnız kurulumu tamamlamış (DM almayı kabul etmiş), engellenmemiş ve DM’i kapalı olmayan kullanıcılar alır.</span></p>
       <div class="composer-foot">
-        <span>${preview ? html`<strong>${num(preview.count)}</strong> kişiye gidecek${' '}
+        <span class="reach"><span class="reach-icon">${Icon({ name: 'users', size: 17 })}</span><span>${preview ? html`<strong>${num(preview.count)}</strong> kişiye gidecek${' '}
           <small class="muted">(${Object.entries(preview.byLanguage).filter(([, count]) => count > 0)
-            .map(([language, count]) => `${languageNames[language] ?? language} ${count}`).join(' · ') || '—'})</small>` : 'Hesaplanıyor…'}</span>
+            .map(([language, count]) => `${languageNames[language] ?? language} ${count}`).join(' · ') || '—'})</small>` : 'Hesaplanıyor…'}</span></span>
         ${missing.length > 0 && filled.length > 0 ? html`<span class="muted small">${missing.map((language) => languageNames[language]).join(', ')}
           okurları ${filled.includes('en') ? 'İngilizce' : languageNames[filled[0]!]} metni görecek.</span>` : null}
         <span class="toolbar-spacer"></span>
         <button class="btn btn-primary" disabled=${filled.length === 0 || !preview || preview.count === 0 || busy !== null}
-          onClick=${() => setConfirming(true)}>Gönder…</button>
+          onClick=${() => setConfirming(true)}>${Icon({ name: 'send' })}Gönder…</button>
       </div>
       ${confirming ? html`<${ConfirmDialog} title="Duyuruyu gönder" confirmLabel="Gönderimi başlat" typeToConfirm="GÖNDER"
         busy=${busy === 'send'}
@@ -127,9 +128,9 @@ export function BroadcastControls(props: { broadcast: Broadcast; onChanged: () =
   if (status === 'completed' || status === 'cancelled') return html`<span></span>`;
   return html`<span class="row-actions" onClick=${(event: Event) => event.stopPropagation()}>
     ${status === 'sending'
-      ? html`<button class="btn btn-small" disabled=${busy !== null} onClick=${() => set('paused', 'Duraklatıldı')}>Duraklat</button>`
-      : html`<button class="btn btn-small" disabled=${busy !== null} onClick=${() => set('sending', 'Sürdürülüyor')}>Sürdür</button>`}
-    <button class="btn btn-small btn-danger" disabled=${busy !== null} onClick=${() => set('cancelled', 'İptal edildi')}>İptal</button>
+      ? html`<button class="btn btn-small" disabled=${busy !== null} onClick=${() => set('paused', 'Duraklatıldı')}>${Icon({ name: 'pause', size: 14 })}Duraklat</button>`
+      : html`<button class="btn btn-small" disabled=${busy !== null} onClick=${() => set('sending', 'Sürdürülüyor')}>${Icon({ name: 'play', size: 14 })}Sürdür</button>`}
+    <button class="btn btn-small btn-danger" disabled=${busy !== null} onClick=${() => set('cancelled', 'İptal edildi')}>${Icon({ name: 'x', size: 14 })}İptal</button>
   </span>`;
 }
 
@@ -160,7 +161,7 @@ export function AnnouncementsPage(): VNode {
     children: html`
       <${Composer} onSent=${state.reload} />
       ${Card({ title: 'Geçmiş', class: 'card-flush', children: !state.data
-        ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
+        ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Spinner())
         : html`<${DataTable} columns=${columns} rows=${state.data.broadcasts} rowKey=${(broadcast: Broadcast) => broadcast.broadcastId}
             onRow=${(broadcast: Broadcast) => { window.location.hash = `/announcements/${broadcast.broadcastId}`; }}
             initialSort=${{ key: 'created', direction: 'desc' }} empty="Henüz duyuru yok." />` })}`,
@@ -188,7 +189,7 @@ export function AnnouncementDetailPage(props: { id: string }): VNode {
   ];
   return Page({
     title: data ? titleOf(data.broadcast) : 'Duyuru',
-    actions: html`<a class="btn" href="#/announcements">← Duyurular</a><${RefreshButton} state=${state} />`,
+    actions: html`${BackLink({ href: '#/announcements', label: 'Duyurular' })}<${RefreshButton} state=${state} />`,
     children: !data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`

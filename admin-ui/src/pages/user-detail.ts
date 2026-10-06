@@ -4,10 +4,11 @@ import {
   country, dateTime, day, displayName, flag, languageNames, minuteOfDay, money, notificationModeNames,
   notificationStatusNames, num, relative,
 } from '../format.js';
+import { Icon } from '../icons.js';
 import { rememberProfile } from '../profiles.js';
 import type { NotificationRow, SnapshotItem, UserDetail } from '../types.js';
 import {
-  Avatar, Badge, Card, CopyText, DataTable, ErrorBox, Facts, Loading, Page, useAsync, type Column, type Tone, RefreshButton, live,
+  Avatar, BackLink, Badge, Card, CopyText, DataTable, ErrorBox, Facts, Loading, Page, useAsync, type Column, type Tone, RefreshButton, live,
 } from '../ui.js';
 import { checkBadge, userStatus } from './users.js';
 import { UserActions } from './user-actions.js';
@@ -23,10 +24,17 @@ export function capsuleUrl(appId: number): string {
   return `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_184x69.jpg`;
 }
 
+/** A capsule Steam does not serve becomes the empty tile instead of a broken-image icon. */
+const emptyImage = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+function hideBrokenImage(event: Event): void {
+  const image = event.currentTarget as HTMLImageElement;
+  if (image.src !== emptyImage) image.src = emptyImage;
+}
+
 export function GameCell(props: { appId: number; name: string }): VNode {
   return html`<a class="game-cell" href=${storeUrl(props.appId)} target="_blank" rel="noreferrer noopener"
     onClick=${(event: Event) => event.stopPropagation()}>
-    <img src=${capsuleUrl(props.appId)} alt="" loading="lazy" width="92" height="35" />
+    <img src=${capsuleUrl(props.appId)} alt="" loading="lazy" width="92" height="35" onError=${hideBrokenImage} />
     <span>${props.name}</span></a>`;
 }
 
@@ -55,7 +63,7 @@ export function UserDetailPage(props: { id: string }): VNode {
   const state = useAsync(() => api.get<UserDetail>(`/api/users/${props.id}`), [props.id], live);
   const data = state.data;
   if (!data) {
-    return Page({ title: 'Kullanıcı', actions: html`<a class="btn" href="#/users">← Kullanıcılar</a>`,
+    return Page({ title: 'Kullanıcı', actions: BackLink({ href: '#/users', label: 'Kullanıcılar' }),
       children: state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading() });
   }
   rememberProfile(data.profile, data.config.discordUserId);
@@ -111,19 +119,18 @@ export function UserDetailPage(props: { id: string }): VNode {
   return Page({
     title: name,
     subtitle: html`${profile ? `@${profile.username} · ` : ''}Katıldı ${day(config.createdAt)}`,
-    actions: html`<a class="btn" href="#/users">← Kullanıcılar</a>
-      <${RefreshButton} state=${state} />`,
+    actions: html`${BackLink({ href: '#/users', label: 'Kullanıcılar' })}<${RefreshButton} state=${state} />`,
     children: html`
       <div class="profile-head card">
-        ${Avatar({ src: profile?.avatarUrl ?? null, name, size: 64 })}
+        ${Avatar({ src: profile?.avatarUrl ?? null, name, size: 72 })}
         <div class="profile-main">
           <div class="badges">${Badge(status)} ${checkBadge(checkState?.lastStatus ?? null, checkState?.lastErrorCode ?? null)}
             ${data.blocked ? Badge({ tone: 'bad', label: 'Engellendi' }) : null}
             ${profile?.bot ? Badge({ tone: 'neutral', label: 'Bot hesabı' }) : null}</div>
           <div class="links">
-            <a href=${`https://steamcommunity.com/profiles/${config.steamId64}`} target="_blank" rel="noreferrer noopener">Steam profili ↗</a>
-            <a href=${`https://store.steampowered.com/wishlist/profiles/${config.steamId64}/`} target="_blank" rel="noreferrer noopener">Steam wishlist ↗</a>
-            <a href=${`https://discord.com/users/${config.discordUserId}`} target="_blank" rel="noreferrer noopener">Discord profili ↗</a>
+            <a class="link-chip" href=${`https://steamcommunity.com/profiles/${config.steamId64}`} target="_blank" rel="noreferrer noopener">Steam profili ${Icon({ name: 'external', size: 13 })}</a>
+            <a class="link-chip" href=${`https://store.steampowered.com/wishlist/profiles/${config.steamId64}/`} target="_blank" rel="noreferrer noopener">Steam wishlist ${Icon({ name: 'external', size: 13 })}</a>
+            <a class="link-chip" href=${`https://discord.com/users/${config.discordUserId}`} target="_blank" rel="noreferrer noopener">Discord profili ${Icon({ name: 'external', size: 13 })}</a>
           </div>
         </div>
         <div class="profile-numbers">
@@ -148,7 +155,7 @@ export function UserDetailPage(props: { id: string }): VNode {
           ['Yapılandırma', html`v${config.configVersion} · <code class="small">${config.configurationId.slice(0, 8)}</code>`],
           ['Güncellendi', relative(config.updatedAt)],
         ] }) })}
-        ${Card({ title: 'Kontrol', children: checkState ? Facts({ rows: [
+        ${Card({ title: 'Kontrol', subtitle: 'Son wishlist okuması', children: checkState ? Facts({ rows: [
           ['Son durum', checkBadge(checkState.lastStatus, checkState.lastErrorCode)],
           ['Hata kodu', checkState.lastErrorCode ? html`<code>${checkState.lastErrorCode}</code>` : '—'],
           ['Son kontrol', relative(checkState.lastCompletedAt)],
@@ -170,7 +177,7 @@ export function UserDetailPage(props: { id: string }): VNode {
         ] }) })}
       </div>
 
-      ${Card({ title: html`Wishlist <small class="muted">${data.snapshot ? `· ${relative(data.snapshot.capturedAt)} okundu` : ''}</small>`,
+      ${Card({ title: 'Wishlist', subtitle: data.snapshot ? `${num(items.length)} oyun · ${relative(data.snapshot.capturedAt)} okundu` : undefined,
         class: 'card-flush', children: data.snapshot
           ? html`<${DataTable} columns=${wishlistColumns} rows=${items} rowKey=${(item: SnapshotItem) => String(item.appId)}
               search=${(item: SnapshotItem) => `${item.name} ${item.appId}`} searchPlaceholder="Oyun ara…"

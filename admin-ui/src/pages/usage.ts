@@ -1,6 +1,6 @@
 import { html, useState, type VNode } from '../vendor/preact-htm.js';
 import { api } from '../api.js';
-import { DailyColumns } from '../chart.js';
+import { AreaChart } from '../chart.js';
 import { num, relative } from '../format.js';
 import type { Usage, UsageCount } from '../types.js';
 import {
@@ -66,12 +66,12 @@ export function UsagePage(): VNode {
     children: !data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`
-        ${Card({ title: 'Günlük aktif kullanıcı', children: html`<${DailyColumns} rows=${data.dailyActive} days=${data.days} unit="kişi-gün" />` })}
+        ${Card({ title: 'Günlük aktif kullanıcı', subtitle: 'Gün başına etkileşen farklı kullanıcı', children: html`<${AreaChart} key=${data.days} rows=${data.dailyActive} days=${data.days} unit="kişi-gün" />` })}
         <div class="grid-3">
           ${Card({ title: 'Kurulum hunisi', children: html`
             <ol class="funnel">
-              <li><span>Profil doğrulandı</span><strong>${num(prepared)}</strong></li>
-              <li><span>Kurulum tamamlandı</span><strong>${num(completed)}</strong>
+              <li><span class="funnel-step">1</span><span>Profil doğrulandı</span><strong>${num(prepared)}</strong></li>
+              <li><span class="funnel-step">2</span><span>Kurulum tamamlandı</span><strong>${num(completed)}</strong>
                 <small class="muted">${prepared > 0 ? `%${Math.round((completed / prepared) * 100)} dönüşüm` : ''}</small></li>
             </ol>
             <h3 class="sub-head">Başarısız denemeler</h3>

@@ -7,6 +7,7 @@ import {
   Badge, Card, ErrorBox, Facts, Loading, Page, useAsync, useTicker, RefreshButton, live,
 } from '../ui.js';
 import { SchedulerFacts } from './overview.js';
+import { Icon } from '../icons.js';
 
 const phaseNames: Record<string, string> = {
   starting: 'Başlıyor', ready: 'Hazır', stopping: 'Duruyor', stopped: 'Durdu', failed: 'Hata',
@@ -34,9 +35,9 @@ function SettingsForm(props: { settings: RuntimeSettings; userCount: number | nu
       <div class="setting-row">
         <div><strong>Yeni kayıtlar</strong>
           <p class="muted small">Kapalıyken /setup “beta şu an dolu” der; mevcut kullanıcılar etkilenmez.</p></div>
-        <button class=${`btn ${props.settings.signupsOpen ? '' : 'btn-primary'}`} disabled=${busy !== null}
+        <button class=${`switch ${props.settings.signupsOpen ? 'on' : ''}`} role="switch" aria-checked=${props.settings.signupsOpen} disabled=${busy !== null}
           onClick=${() => save({ signupsOpen: !props.settings.signupsOpen }, props.settings.signupsOpen ? 'Kayıtlar kapatıldı' : 'Kayıtlar açıldı')}>
-          ${props.settings.signupsOpen ? 'Kayıtları kapat' : 'Kayıtları aç'}</button>
+          ${props.settings.signupsOpen ? 'Açık' : 'Kapalı'}<span class="switch-track" aria-hidden="true"></span></button>
       </div>
       <div class="setting-row">
         <div><strong>Kullanıcı sınırı</strong>
@@ -71,14 +72,14 @@ export function SystemPage(): VNode {
     title: 'Sistem',
     actions: html`
       <button class="btn" disabled=${busy !== null || data?.scheduler.running === true}
-        onClick=${() => run('scan', '/api/system/scan-now', {}, 'Tam tarama başladı').then(() => setTimeout(state.reload, 800))}>↻ Şimdi tara</button>
+        onClick=${() => run('scan', '/api/system/scan-now', {}, 'Tam tarama başladı').then(() => setTimeout(state.reload, 800))}>${Icon({ name: 'refresh' })}Şimdi tara</button>
       <button class="btn" disabled=${busy !== null}
-        onClick=${() => run('retry', '/api/system/retry-now', {}, 'Bekleyen bildirimler denendi').then(state.reload)}>✉ Bildirimleri şimdi dene</button>
+        onClick=${() => run('retry', '/api/system/retry-now', {}, 'Bekleyen bildirimler denendi').then(state.reload)}>${Icon({ name: 'send' })}Bildirimleri şimdi dene</button>
       <${RefreshButton} state=${state} />`,
     children: !data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`
-        ${Card({ title: 'Çalışma zamanı ayarları', children: html`<${SettingsForm} settings=${data.runtimeSettings} userCount=${null} onSaved=${state.reload} />` })}
+        ${Card({ title: 'Çalışma zamanı ayarları', subtitle: 'Botu yeniden başlatmadan uygulanır', children: html`<${SettingsForm} settings=${data.runtimeSettings} userCount=${null} onSaved=${state.reload} />` })}
         <div class="grid-3">
           ${Card({ title: 'Çalışma durumu', children: Facts({ rows: [
             ['Aşama', data.health

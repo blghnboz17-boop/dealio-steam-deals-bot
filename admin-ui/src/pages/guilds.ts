@@ -2,10 +2,11 @@ import { html, useState, type VNode } from '../vendor/preact-htm.js';
 import { api } from '../api.js';
 import { ConfirmDialog, useAction } from '../actions.js';
 import { compact, dateTime, day, displayName, num, relative } from '../format.js';
+import { Icon } from '../icons.js';
 import { navigate } from '../router.js';
 import type { Guild, GuildBlock, GuildDetail, GuildEvent, GuildsResponse } from '../types.js';
 import {
-  Avatar, Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, Stat, useAsync, type Column, RefreshButton, live,
+  Avatar, BackLink, Badge, Card, DataTable, ErrorBox, Facts, Loading, Page, Stat, useAsync, type Column, RefreshButton, live,
 } from '../ui.js';
 import { AuditTable } from './audit.js';
 import { UserCell } from './users.js';
@@ -76,7 +77,7 @@ export function GuildsPage(): VNode {
     { key: 'actions', label: '', render: (block) => html`<button class="btn btn-small" disabled=${busy !== null}
       onClick=${() => run('unblock', `/api/guilds/${block.guildId}/unblock`, {}, 'Engel kaldırıldı').then((result) => {
         if (result !== null) state.reload();
-      })}>Engeli kaldır</button>` },
+      })}>${Icon({ name: 'check', size: 14 })}Engeli kaldır</button>` },
   ];
 
   const tabs: Array<[Tab, string, number]> = [
@@ -92,14 +93,14 @@ export function GuildsPage(): VNode {
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`
         <div class="stats">
-          ${Stat({ label: 'Sunucu', value: num(guilds.length), sub: `${num(withUsers)} sunucuda Dealio kullanan var` })}
-          ${Stat({ label: 'Toplam üye', value: compact(members), sub: 'Sunucular arasında tekrar edenler dahil' })}
-          ${Stat({ label: 'Ayrılan sunucu', value: num(data.departed.length) })}
-          ${Stat({ label: 'En yeni', value: newest ? newest.name : '—', sub: newest ? relative(newest.joinedAt) : undefined })}
+          ${Stat({ label: 'Sunucu', icon: 'server', value: num(guilds.length), sub: `${num(withUsers)} sunucuda Dealio kullanan var` })}
+          ${Stat({ label: 'Toplam üye', icon: 'users', value: compact(members), sub: 'Sunucular arasında tekrar edenler dahil' })}
+          ${Stat({ label: 'Ayrılan sunucu', icon: 'logout', value: num(data.departed.length), sub: 'Botu çıkaran sunucular' })}
+          ${Stat({ label: 'En yeni', icon: 'zap', value: newest ? newest.name : '—', sub: newest ? relative(newest.joinedAt) : undefined })}
         </div>
-        <div class="tabs" role="tablist">${tabs.map(([key, label, count]) => html`
+        <div><div class="tabs" role="tablist">${tabs.map(([key, label, count]) => html`
           <button role="tab" aria-selected=${tab === key} class=${`tab ${tab === key ? 'active' : ''}`} onClick=${() => setTab(key)}>
-            ${label} <small class="muted">${num(count)}</small></button>`)}</div>
+            ${label} <small>${num(count)}</small></button>`)}</div></div>
         <div class="card card-flush">
           ${tab === 'active' ? html`<${DataTable} columns=${columns.filter((column) => !hidden.includes(column.key))}
             csvColumns=${columns} rows=${guilds} rowKey=${(guild: Guild) => guild.id} onRow=${(guild: Guild) => navigate(`/guilds/${guild.id}`)}
@@ -133,7 +134,7 @@ export function GuildDetailPage(props: { id: string }): VNode {
   return Page({
     title: data?.name ?? 'Sunucu',
     subtitle: guild ? `${num(guild.memberCount)} üye · bot ${relative(guild.joinedAt)} eklendi` : data ? 'Bot artık bu sunucuda değil' : undefined,
-    actions: html`<a class="btn" href="#/guilds">← Sunucular</a><${RefreshButton} state=${state} />`,
+    actions: html`${BackLink({ href: '#/guilds', label: 'Sunucular' })}<${RefreshButton} state=${state} />`,
     children: !data
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`
@@ -142,11 +143,11 @@ export function GuildDetailPage(props: { id: string }): VNode {
             ${guild ? GuildName({ guild }) : html`<code>${props.id}</code>`}
             ${data.blocked ? Badge({ tone: 'bad', label: 'Engelli' }) : null}
             <span class="toolbar-spacer"></span>
-            ${guild ? html`<button class="btn btn-danger" disabled=${busy !== null} onClick=${() => setOpen('leave')}>Sunucudan çık</button>` : null}
+            ${guild ? html`<button class="btn btn-danger" disabled=${busy !== null} onClick=${() => setOpen('leave')}>${Icon({ name: 'logout' })}Sunucudan çık</button>` : null}
             ${data.blocked
               ? html`<button class="btn" disabled=${busy !== null}
-                  onClick=${() => run('unblock', `/api/guilds/${props.id}/unblock`, {}, 'Engel kaldırıldı').then(done)}>Engeli kaldır</button>`
-              : html`<button class="btn btn-danger" disabled=${busy !== null} onClick=${() => setOpen('block')}>⛔ Engelle</button>`}
+                  onClick=${() => run('unblock', `/api/guilds/${props.id}/unblock`, {}, 'Engel kaldırıldı').then(done)}>${Icon({ name: 'check' })}Engeli kaldır</button>`
+              : html`<button class="btn btn-danger" disabled=${busy !== null} onClick=${() => setOpen('block')}>${Icon({ name: 'ban' })}Engelle</button>`}
           </div>
         </div>
         ${open === 'leave' ? html`<${ConfirmDialog} title="Sunucudan çık" confirmLabel="Çık" danger typeToConfirm=${props.id}
