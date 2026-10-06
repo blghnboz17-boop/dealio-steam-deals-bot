@@ -19,6 +19,8 @@ export function filledLanguages(content: Content): Language[] {
 export function DiscordPreview(props: { language: Language; title: string; body: string }): VNode {
   return html`<div class="discord-preview" aria-label="Discord önizlemesi">
     <span class="discord-preview-label">Discord önizlemesi</span>
+    <div class="discord-author"><img class="discord-avatar" src="/logo.png" alt="" width="40" height="40" />
+      <strong>Dealio</strong><span class="discord-app">UYGULAMA</span></div>
     <div class="discord-card">
       <strong class="discord-title">ℹ️ ${props.title || 'Başlık'}</strong>
       <p class="discord-body">${props.body || 'Mesaj metni burada görünür.'}</p>

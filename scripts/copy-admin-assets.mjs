@@ -10,7 +10,7 @@ const target = join(root, 'dist', 'admin-ui');
 mkdirSync(join(target, 'vendor'), { recursive: true });
 mkdirSync(join(target, 'fonts'), { recursive: true });
 for (const file of readdirSync(join(root, 'admin-ui'))) {
-  if (/\.(html|css|svg)$/.test(file)) copyFileSync(join(root, 'admin-ui', file), join(target, file));
+  if (/\.(html|css|svg|png)$/.test(file)) copyFileSync(join(root, 'admin-ui', file), join(target, file));
 }
 copyFileSync(join(root, 'node_modules', 'htm', 'preact', 'standalone.module.js'), join(target, 'vendor', 'preact-htm.js'));
 // Latin and Latin Extended cover Turkish, German and French (SIL Open Font License).
