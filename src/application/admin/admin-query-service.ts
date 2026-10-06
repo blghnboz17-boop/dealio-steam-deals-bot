@@ -40,6 +40,12 @@ function fileSize(path: string): number {
   return existsSync(path) ? statSync(path).size : 0;
 }
 
+/** Adds Steam's stored artwork URL to each game row (null when no wishlist read has seen it). */
+function withArtwork<T extends { readonly appId: number }>(rows: readonly T[], artwork: ReadonlyMap<number, string>):
+  Array<T & { readonly headerImageUrl: string | null }> {
+  return rows.map((row) => ({ ...row, headerImageUrl: artwork.get(row.appId) ?? null }));
+}
+
 /** Everything the admin panel reads. No method here changes state. */
 export class AdminQueryService {
   private readonly now: () => Date;
@@ -143,7 +149,7 @@ export class AdminQueryService {
           headerImageUrl: item.headerImageUrl ?? null,
         })),
       } : null,
-      notifications: adminRepository.notifications(discordUserId, 100),
+      notifications: withArtwork(adminRepository.notifications(discordUserId, 100), adminRepository.gameArtwork()),
       usage: this.withGuildNames(this.dependencies.telemetry.userUsage(discordUserId)),
       blocked: this.dependencies.controls.isUserBlocked(discordUserId),
       messages: this.dependencies.broadcasts.forUser(discordUserId, 20),
@@ -231,11 +237,12 @@ export class AdminQueryService {
 
   public games(): unknown {
     const repository = this.dependencies.adminRepository;
+    const artwork = repository.gameArtwork();
     return {
-      wishlisted: repository.topWishlistedGames(50),
-      onSale: repository.topGamesOnSale(50),
-      alerted: repository.topAlertedGames(30, 50, this.now()),
-      ruled: repository.topRuledGames(50),
+      wishlisted: withArtwork(repository.topWishlistedGames(50), artwork),
+      onSale: withArtwork(repository.topGamesOnSale(50), artwork),
+      alerted: withArtwork(repository.topAlertedGames(30, 50, this.now()), artwork),
+      ruled: withArtwork(repository.topRuledGames(50), artwork),
       currencies: repository.currencies(),
     };
   }

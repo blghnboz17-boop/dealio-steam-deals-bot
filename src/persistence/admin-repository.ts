@@ -1,4 +1,5 @@
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
+import { steamArtworkUrl } from '../domain/steam-artwork.js';
 import { preparedStatement } from './prepared-statement.js';
 
 /**
@@ -340,6 +341,27 @@ export class AdminRepository {
   }
 
   /** Games on the most current wishlists. */
+  /**
+   * Steam's own artwork URL per game, as the wishlist reads stored it. Newer games keep
+   * their art under a hashed folder that a URL built from the app ID cannot reach.
+   */
+  public gameArtwork(): Map<number, string> {
+    const rows = this.database.prepare(`
+      SELECT CAST(json_extract(item.value, '$.appId') AS INTEGER) AS app_id,
+             MAX(json_extract(item.value, '$.headerImageUrl')) AS url
+      FROM wishlist_snapshot AS snapshot
+      JOIN json_each(snapshot.payload, '$.items') AS item
+      WHERE json_extract(item.value, '$.headerImageUrl') IS NOT NULL
+      GROUP BY app_id`).all() as Row[];
+    const artwork = new Map<number, string>();
+    for (const row of rows) {
+      const appId = int(row.app_id);
+      const url = steamArtworkUrl(row.url, appId);
+      if (url) artwork.set(appId, url);
+    }
+    return artwork;
+  }
+
   public topWishlistedGames(limit: number): AdminGameRow[] {
     return (this.database.prepare(`
       WITH ${snapshotGamesCte}

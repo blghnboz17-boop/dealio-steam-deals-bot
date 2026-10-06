@@ -9,7 +9,7 @@ import { GameCell } from './user-detail.js';
 
 function gameColumns(countLabel: string, extra: Column<GameRow>[] = []): Column<GameRow>[] {
   return [
-    { key: 'game', label: 'Oyun', render: (row) => GameCell({ appId: row.appId, name: row.name }),
+    { key: 'game', label: 'Oyun', render: (row) => GameCell({ appId: row.appId, name: row.name, imageUrl: row.headerImageUrl ?? null }),
       sort: (row) => row.name.toLocaleLowerCase('tr-TR'), csv: (row) => row.name },
     { key: 'appId', label: 'App ID', render: (row) => html`<code>${row.appId}</code>`, csv: (row) => row.appId, hideOnMobile: true },
     { key: 'count', label: countLabel, align: 'end', render: (row) => num(row.count), sort: (row) => row.count, csv: (row) => row.count },

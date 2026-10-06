@@ -9,7 +9,7 @@ export interface SeedUser {
   readonly blocked?: boolean;
   readonly createdAt?: string;
   readonly configVersion?: number;
-  readonly games?: ReadonlyArray<{ appId: number; name: string; discount?: number }>;
+  readonly games?: ReadonlyArray<{ appId: number; name: string; discount?: number; headerImageUrl?: string }>;
 }
 
 /** Inserts a configured user with a snapshot and item states, as the check path would. */
@@ -27,6 +27,7 @@ export function seedUser(database: DatabaseSync, user: SeedUser): void {
     appId: game.appId, name: game.name, priority: 0, dateAdded: null, onSale: (game.discount ?? 0) > 0,
     price: { currency: 'USD', initialMinor: 1000, finalMinor: 1000 - (game.discount ?? 0) * 10,
       discountPercent: game.discount ?? 0, isFree: false },
+    ...(game.headerImageUrl ? { headerImageUrl: game.headerImageUrl } : {}),
   }));
   database.prepare('INSERT INTO wishlist_snapshot VALUES (?, ?, ?, ?, ?)')
     .run(user.id, version, user.language ?? 'tr', createdAt, JSON.stringify({ items, errors: [] }));
