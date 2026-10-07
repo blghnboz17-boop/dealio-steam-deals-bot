@@ -60,7 +60,7 @@ Discord-facing runtime messages use Components V2 with the required message flag
 
 Migration v10 adds configuration-scoped game rules (inherit, percent, target), currency-bound target amounts, mute state, and rule revisions. Existing percentage overrides are migrated. Target crossings use durable rule-event identities; saving an already-matching rule establishes a baseline without an initial alert. A target replaces the global percentage threshold for that game.
 
-Wishlist snapshots support fast panel opening. Steam is queried in batches of 100 apps: game names, free flags, and artwork come from `IStoreBrowseService/GetItems` (cached six hours per country/language), and prices with their currency come from `appdetails?filters=price_overview` (cached five minutes per country). A 500-game wishlist therefore needs about ten Steam requests instead of one per game. Concurrent scans of overlapping wishlists share in-flight batches, and the original price-observation time survives cache hits. A failed batch marks only its own games as item errors, and failed or unpriced results are not cached as prices.
+Wishlist snapshots support fast panel opening. Steam is queried in batches of 100 apps: game names, free flags, and artwork come from `IStoreBrowseService/GetItems` (cached six hours per country/language), and prices with their currency come from `appdetails?filters=price_overview` (cached five minutes per country, and never past Steam's daily price change at 10:00 Pacific, `src/domain/steam-price-schedule.ts`). A 500-game wishlist therefore needs about ten Steam requests instead of one per game. Concurrent scans of overlapping wishlists share in-flight batches, and the original price-observation time survives cache hits. A failed batch marks only its own games as item errors, and failed or unpriced results are not cached as prices.
 
 Notification preferences support detection-time delivery, IANA-timezone quiet hours, and a daily digest. Pending candidates remain durable while delivery is deferred. The sender revalidates them through the coordinated check path before sending; an unavailable upstream can therefore delay queued delivery. Discord message IDs record accepted delivery, not whether a user read the message.
 
@@ -97,8 +97,11 @@ The preview renders the production component builders with explicitly synthetic 
 It includes selected Turkish, English, German and French panels and synthetic states. The preview renderer may lag newer component structures. Browser rendering approximates Discord;
 validate final spacing and interactions in Discord before publishing.
 
-Panel operations on the home and settings screens acknowledge clicks immediately,
-serialize updates, and recover after failures. A failed wishlist threshold edit
+Panel clicks are serialized per panel and recover after failures. In the Wishlist,
+Alerts and Settings panels and on tab switches, the click is answered with the new
+screen itself (`component.update`, one Discord call) when that screen is ready within
+1.5 s of the click; otherwise it is deferred first, as before
+(`src/discord/ui/click-response.ts`, `PanelOperationQueue.enqueueClick`). A failed wishlist threshold edit
 reports the error without poisoning later pagination. Steam cancellation covers
 both response headers and body parsing. Contradictory price metadata is treated as
 an item error, preserving the prior confirmed sale state. Malformed Discord

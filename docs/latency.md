@@ -12,7 +12,7 @@
 
 ## Ölçüm
 
-`[discord-timing]` kayıtları komutun ilk yanıtını (`ack`), buton yanıtını (`button-ack`), modal açılışını (`modal`), modal yanıtını (`modal-submit-ack`) ve ekran güncellemesini (`render`) ayırır. Assistant veri yüklemesi ayrıca `assistant.load` olarak ölçülür. Panelin açık kalma süresi komut gecikmesi sayılmaz.
+`[discord-timing]` kayıtları komutun ilk yanıtını (`ack`), buton yanıtını (`button-ack`), yeni ekranla birlikte tek çağrıda verilen buton yanıtını (`button-update`; ilk yanıt sayılır), modal açılışını (`modal`), modal yanıtını (`modal-submit-ack`) ve ekran güncellemesini (`render`) ayırır. Assistant veri yüklemesi ayrıca `assistant.load` olarak ölçülür. Panelin açık kalma süresi komut gecikmesi sayılmaz.
 
 Bir işlem 1000 ms veya daha uzun sürerse ya da başarısız olursa kayıt oluşur. Discord ilk yanıtı tamamlandığında etkileşim en az 2000 ms yaşındaysa, istek hızlı tamamlanmış olsa bile kayıt oluşur. `startAgeMs` isteğin başlamadan önceki gecikmesini; `durationMs` ölçülen işlemin süresini gösterir. Kimlikler, tokenlar ve ham Discord yanıtları bu ölçümlere yazılmaz.
 

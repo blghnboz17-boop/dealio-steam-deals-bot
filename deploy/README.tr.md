@@ -18,6 +18,44 @@ baskısı ve geçici SSH yanıtsızlığı görüldü. Derlemeyi yerelde veya CI
    aktarılan arşivin SHA-256 değerini manifestle karşılaştırın. Güvenilen kendi
    derlemenizi bu boş klasörde açın; çalışan `dist` üzerine açmayın.
 
+### Komutlarla (7 Ekim 2026'dan beri kullanılan yol)
+
+`main`'deki birleştirme commit'i `<sha>` (kısa) ve `<full>` (tam) olsun. Yerelde,
+Git Bash'te:
+
+```bash
+git fetch origin && git worktree add --detach ../dealio-release-<sha> <full>
+cd ../dealio-release-<sha> && npm ci && npm run typecheck && npm run typecheck:scenarios && npm test && npm run build
+tar -czf /c/tmp/dist-<sha>.tar.gz dist
+```
+
+`tar`'a `/c/...` biçiminde yol verin; `C:/...` yazılırsa `C:` uzak sunucu sanılır.
+`manifest-<sha>.json` şu alanları taşır: `sourceCommit`, `sourceTree`
+(`git rev-parse HEAD^{tree}`), `builtOn`, `node`, `packageLockSha256`,
+`distArchiveSha256`, `ci`, `previousCommit`, `schemaChange`. Sonra:
+
+```bash
+ssh dealiobot@20.240.162.55 'mkdir -p ~/dealio-candidate-<sha>/extracted'
+scp dist-<sha>.tar.gz manifest-<sha>.json deploy/switch-release.sh dealiobot@20.240.162.55:dealio-candidate-<sha>/
+ssh dealiobot@20.240.162.55 'cd ~/dealio-candidate-<sha> && tar -xzf dist-<sha>.tar.gz -C extracted'
+```
+
+`main` CI'ı geçtikten sonra geçiş:
+
+```bash
+ssh dealiobot@20.240.162.55 'bash ~/dealio-candidate-<sha>/switch-release.sh <sha>'
+```
+
+[`switch-release.sh`](switch-release.sh) şunları yapar:
+- `origin/main`'in tree'sinin manifestle aynı olduğunu, fast-forward'u, temiz ağacı ve arşiv SHA-256'sını doğrular.
+- Botu durdurur, veritabanını `~/dealio-backups/<tarih>-<sha>/` içine yedekler ve kopyada bütünlük ile yabancı anahtar kontrolü yapar.
+- Git'i ilerletir, eski `dist`'i yedeğe taşır, adayı koyar ve botu başlatır.
+- Bir adım hata verirse eski `dist` ve commit'e döner ve botu başlatır.
+
+Derlemeden sonra `main`'e yalnız belge birleştirilmişse tree farklı olacağı için betik
+durur; yeni `main`'den yeniden derleyin. Ardından sağlık kaydını
+(`phase: ready`, `discordReady: true`) ve günlükteki hataları kontrol edin.
+
 Windows CMD veya PowerShell'den sunucuya bağlantı:
 
 ```bash

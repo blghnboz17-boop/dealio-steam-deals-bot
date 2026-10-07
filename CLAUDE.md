@@ -40,7 +40,8 @@ Out of scope: payments, a user-facing web dashboard (the owner admin panel is th
 ## Operating Constraints
 
 - Production is one Azure VM (`dealiobot`). Never run a second copy with the production Discord token; use a separate test application (`.env.test`, see `docs/development.md`).
-- The VM has 1 GiB RAM: build, typecheck, and the full test suite run locally or in CI, not on the VM. Deploy a verified `dist` (see `deploy/README.tr.md`).
+- The VM has 1 GiB RAM: build, typecheck, and the full test suite run locally or in CI, not on the VM. Deploy a verified `dist` with `deploy/switch-release.sh` (see `deploy/README.tr.md`). The bot runs with `node --optimize-for-size`, a 1 GB swap file, `OOMScoreAdjust=-500` and lean discord.js caches (`src/discord/client.ts`); do not run other long-lived tools on the VM.
 - No paid cloud resources. Azure Blob leasing and the Bicep template exist in code but are not provisioned; the single-host machine-ID pin and process lock protect production.
+- The subscription is Azure for Students (credit expires 7 Sep 2027). Keep the VM at `Standard_B2ats_v2` and the OS disk at 64 GiB P6: both are in the free services, while the "cheapest" list sizes such as `B2ts_v2` are not. New resources must use an allowed region (Sweden Central for this bot; `Global` for alert action groups). Details: `deploy/FREE-OPERATIONS.tr.md`.
 - The general public release gate is closed. Phase 4 (real-user acceptance) is in progress; see `docs/phase4-beta.tr.md` for scenarios, measurement rules, and results. Do not widen access or claim desktop/mobile, English, or one-week acceptance without real evidence and the owner's approval. The owner shares invitations; never message users on your own.
 - Evidence and acceptance records live in `docs/` and `deploy/`; do not mark a gate as passed without a recorded real run.
