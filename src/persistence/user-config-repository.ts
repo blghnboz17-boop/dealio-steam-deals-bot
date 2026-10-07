@@ -1,5 +1,6 @@
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
 import { rebaselineDiscountAlerts } from './alert-levels.js';
+import { deleteUserFromBroadcasts } from './broadcast-repository.js';
 import { randomUUID } from 'node:crypto';
 import { isLanguage, type Language, type UserConfig } from '../domain/user-config.js';
 import {
@@ -393,15 +394,23 @@ export class UserConfigRepository {
   }
 
   public deleteByDiscordUserId(discordUserId: string): boolean {
-    // Usage telemetry and announcement deliveries are not tied to a configuration by a
-    // foreign key (a visitor can use Dealio before setup), so they are removed here.
-    this.database.prepare('DELETE FROM interaction_event WHERE discord_user_id = ?').run(discordUserId);
-    this.database.prepare('DELETE FROM broadcast_recipient WHERE discord_user_id = ?').run(discordUserId);
-    const result = this.database
-      .prepare('DELETE FROM user_config WHERE discord_user_id = ?')
-      .run(discordUserId);
-
-    return Number(result.changes) === 1;
+    // One transaction: an interruption never leaves half of a user's data behind.
+    const ownsTransaction = !this.database.isTransaction;
+    if (ownsTransaction) this.database.exec('BEGIN IMMEDIATE');
+    try {
+      // Usage telemetry and announcements are not tied to a configuration by a foreign
+      // key (a visitor can use Dealio before setup), so they are removed here.
+      this.database.prepare('DELETE FROM interaction_event WHERE discord_user_id = ?').run(discordUserId);
+      deleteUserFromBroadcasts(this.database, discordUserId);
+      const result = this.database
+        .prepare('DELETE FROM user_config WHERE discord_user_id = ?')
+        .run(discordUserId);
+      if (ownsTransaction) this.database.exec('COMMIT');
+      return Number(result.changes) === 1;
+    } catch (error: unknown) {
+      if (ownsTransaction && this.database.isTransaction) this.database.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   private resetPricingContext(

@@ -52,6 +52,32 @@ const textOrNull = (value: SQLOutputValue): string | null => (value === null || 
 export const broadcastRetentionMs = 90 * 24 * 3600_000;
 
 /**
+ * Removes a user from owner announcements: their delivery rows, and their Discord ID
+ * in an audience that named recipients. A message addressed only to them is deleted
+ * with its content. With `createdUpTo`, only announcements created by then are touched
+ * (re-applying a deletion after a restore).
+ */
+export function deleteUserFromBroadcasts(database: DatabaseSync, discordUserId: string, createdUpTo?: string): void {
+  const named = preparedStatement(database, `SELECT broadcast_id, audience FROM broadcast
+    WHERE (? IS NULL OR created_at <= ?)
+      AND EXISTS (SELECT 1 FROM json_each(broadcast.audience, '$.userIds') WHERE value = ?)`)
+    .all(createdUpTo ?? null, createdUpTo ?? null, discordUserId) as Row[];
+  for (const row of named) {
+    const audience = JSON.parse(text(row.audience)) as BroadcastAudience;
+    const userIds = (audience.userIds ?? []).filter((id) => id !== discordUserId);
+    if (userIds.length === 0) {
+      preparedStatement(database, 'DELETE FROM broadcast WHERE broadcast_id = ?').run(row.broadcast_id);
+    } else {
+      preparedStatement(database, 'UPDATE broadcast SET audience = ? WHERE broadcast_id = ?')
+        .run(JSON.stringify({ ...audience, userIds }), row.broadcast_id);
+    }
+  }
+  preparedStatement(database, `DELETE FROM broadcast_recipient WHERE discord_user_id = ?
+    AND (? IS NULL OR broadcast_id IN (SELECT broadcast_id FROM broadcast WHERE created_at <= ?))`)
+    .run(discordUserId, createdUpTo ?? null, createdUpTo ?? null);
+}
+
+/**
  * Owner announcements. Every recipient is written before Discord is called, and a
  * recipient is claimed (`sending`) before each attempt: delivery is at-least-once.
  */
