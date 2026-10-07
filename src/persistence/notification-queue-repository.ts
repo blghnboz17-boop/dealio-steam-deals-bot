@@ -167,10 +167,7 @@ export class NotificationQueueRepository {
                       AND deferred_state.steam_id64 = notification.steam_id64
                       AND deferred_state.config_version = notification.config_version
                       AND deferred_state.app_id = notification.app_id
-                      AND (
-                        (deferred_state.on_sale = 1 OR deferred_state.rule_event_id IS NOT NULL)
-                        OR deferred_state.observation_status IN ('unknown', 'error')
-                      )
+                      AND deferred_state.observation_status IN ('unknown', 'error')
                   )
               )`,
         )
@@ -211,10 +208,7 @@ export class NotificationQueueRepository {
                     AND deferred_state.steam_id64 = notification.steam_id64
                     AND deferred_state.config_version = notification.config_version
                     AND deferred_state.app_id = notification.app_id
-                    AND (
-                      (deferred_state.on_sale = 1 OR deferred_state.rule_event_id IS NOT NULL)
-                      OR deferred_state.observation_status IN ('unknown', 'error')
-                    )
+                    AND deferred_state.observation_status IN ('unknown', 'error')
                 )`,
           )
           .run(batchId);
@@ -262,10 +256,7 @@ export class NotificationQueueRepository {
                   AND deferred_state.steam_id64 = notification.steam_id64
                   AND deferred_state.config_version = notification.config_version
                   AND deferred_state.app_id = notification.app_id
-                  AND (
-                    (deferred_state.on_sale = 1 OR deferred_state.rule_event_id IS NOT NULL)
-                    OR deferred_state.observation_status IN ('unknown', 'error')
-                  )
+                  AND deferred_state.observation_status IN ('unknown', 'error')
               )`,
         )
         .run(scope.discordUserId, scope.steamId64, scope.configVersion);
