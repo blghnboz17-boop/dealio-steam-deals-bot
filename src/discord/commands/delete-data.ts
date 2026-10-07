@@ -34,6 +34,7 @@ import {
 } from '../ui/components-v2.js';
 import { uiCopy } from '../ui/copy.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
+import { isFromUser } from '../ui/refused-interactions.js';
 
 export const deleteDataCommand = new SlashCommandBuilder()
   .setName('delete-data')
@@ -69,7 +70,7 @@ export async function handleDeleteData(
   );
   const collector = message.createMessageComponentCollector({
     time: dealioUiSessionTimeoutMs,
-    filter: (component) => component.user.id === interaction.user.id
+    filter: (component) => isFromUser(component, interaction.user.id)
       && component.customId.startsWith(`delete-v2:${sessionId}:`),
   });
   let sessionActive = true;
@@ -133,7 +134,7 @@ export async function handleDeleteData(
         component.awaitModalSubmit({
           time: dealioUiSessionTimeoutMs,
           filter: (submission) => submission.customId === modalId
-            && submission.user.id === interaction.user.id,
+            && isFromUser(submission, interaction.user.id),
         }).catch(() => null),
         sessionClosed.then(() => null),
       ]);

@@ -7,7 +7,7 @@ import type { UserConfig } from '../domain/user-config.js';
 import type { GameRule, HistoryEntry } from '../persistence/assistant-repository.js';
 import type { NotificationPreference } from '../domain/notification-preference.js';
 import type { GameHistory } from '../domain/price-history.js';
-import { formatMinorPrice } from './notification-messages.js';
+import { formatMinorPrice, sanitizeGameName } from './notification-messages.js';
 import { messagesFor } from './messages.js';
 import { defaultPollIntervalHours } from '../config/environment.js';
 import { historicalLowLine, priceChangeLine, priceHistoryCredit } from './price-history-text.js';
@@ -36,6 +36,8 @@ export interface AssistantViewData {
 }
 export type GameHistoryState={status:'loading'}|{status:'ready';history:GameHistory|null};
 const text=(value:string)=>new TextDisplayBuilder().setContent(value);
+/** A Steam name as plain text: no masked links, mentions or headings, and no escape cut in half. */
+const gameName=(name:string,max:number)=>sanitizeGameName(name.slice(0,max));
 const button=(id:string,label:string,emoji?:string,primary=false)=>{
   const control=new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(primary?ButtonStyle.Primary:ButtonStyle.Secondary);
   return emoji?control.setEmoji(emoji):control;
@@ -142,7 +144,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       const rule=data.rules.get(item.appId), p=pricedItem(item);
       const matches=matchesRule(item,rule,data.config.minimumDiscountPercent);
       root.addSectionComponents(artworkAccessory(new SectionBuilder().addTextDisplayComponents(text(
-        `### ${hotPrefix(p?.discountPercent)}${escapeMarkdown(item.name).slice(0,100)}\n${p?priceLine(p,lang):noPriceText(item,lang)}\n`+
+        `### ${hotPrefix(p?.discountPercent)}${gameName(item.name,100)}\n${p?priceLine(p,lang):noPriceText(item,lang)}\n`+
         `-# ${ruleText(rule,item)}${matches?' · ✅ '+t({tr:'Kuralına uyuyor',en:'Matches your rule',de:'Passt zu deiner Regel',fr:'Correspond à ta règle'}):''}`)), item));
     });
     const unavailable=unavailableGamesLine(data.errors,data.config.storeCountryCode,lang);
@@ -194,7 +196,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       add(panelKicker('games',lang));
       addArtwork(root, item);
       const facts=item.storeFacts;
-      add(['# '+hotPrefix(p?.discountPercent)+escapeMarkdown(item.name).slice(0,120),
+      add(['# '+hotPrefix(p?.discountPercent)+gameName(item.name,120),
         p?priceLine(p,lang):noPriceText(item,lang),
         p&&freeToKeepLine(p,lang), p&&savingsLine(p,lang), item.onSale?saleEndLine(facts,lang):null, reviewLine(facts,lang),
         '-# '+['🕒 '+priceFetched(relative(item.priceObservedAt??data.capturedAt),lang),
@@ -283,7 +285,7 @@ export function buildAssistantView(data:AssistantViewData,view:AssistantView,ses
       const why=h.reason.startsWith('target:')
         ?'🎯 '+t({tr:'Hedef fiyatına ulaştı',en:'Your target price was reached',de:'Dein Wunschpreis wurde erreicht',fr:'Ton prix cible est atteint'})
         :'🏷️ '+t({tr:'İndirim kuralına uydu',en:'Your discount rule was met',de:'Deine Rabattregel wurde erfüllt',fr:'Ta règle de réduction est remplie'});
-      add(`${status[0]} **${escapeMarkdown(h.game_name).slice(0,100)}**\n-# ${why} · ${status[1]} · ${relative(h.created_at)}`);
+      add(`${status[0]} **${gameName(h.game_name,100)}**\n-# ${why} · ${status[1]} · ${relative(h.created_at)}`);
     });
     if(!entries.length) add('📭 '+t({tr:'Henüz bildirim yok.',en:'No alerts yet.',de:'Noch keine Benachrichtigungen.',fr:'Pas encore d’alertes.'}));
     divider();

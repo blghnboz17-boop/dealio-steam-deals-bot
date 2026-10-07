@@ -10,10 +10,12 @@ import type { StatusService } from '../../application/status-service.js';
 import { buildCheckPanel, type CheckResultPresentation } from '../check-view-v2.js';
 import type { Language } from '../../domain/user-config.js';
 import { localizer } from '../i18n.js';
+import { languageFromDiscordLocale } from '../language.js';
 import { messagesFor } from '../messages.js';
 import { dealioUiSessionTimeoutMs, dealioV2Flags } from '../ui/components-v2.js';
 import { uiCopy } from '../ui/copy.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
+import { isFromUser } from '../ui/refused-interactions.js';
 import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-bar.js';
 
 export interface CheckPanelOptions extends PanelNavigation {
@@ -32,7 +34,7 @@ export async function handleCheck(
   }
   const navigate = ui.navigate;
   const config = statusService.get(interaction.user.id).config;
-  const language = config?.language ?? 'tr';
+  const language = config?.language ?? languageFromDiscordLocale(interaction.locale ?? '');
   const messages = messagesFor(language);
   if (!config) {
     await measureDiscordOperation(interaction, 'check.render', () => interaction.editReply({
@@ -81,7 +83,7 @@ export async function handleCheck(
   }
   const collector = message.createMessageComponentCollector({
     time: dealioUiSessionTimeoutMs,
-    filter: (component) => component.user.id === interaction.user.id
+    filter: (component) => isFromUser(component, interaction.user.id)
       && component.customId.startsWith(`check-v2:${interaction.id}:`),
   });
   const closeUiSession = dealioUiSessions.open(

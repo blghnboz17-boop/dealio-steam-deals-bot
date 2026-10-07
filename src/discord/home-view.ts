@@ -69,7 +69,7 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
     const price = hero.price?.currency ? { ...hero.price, currency: hero.price.currency } : null;
     const savings = price && savingsLine(price, language);
     const fetchedAt = relative(hero.priceObservedAt ?? options.capturedAt, '');
-    root.addTextDisplayComponents(display('## ' + hotPrefix(price?.discountPercent) + '[' + sanitizeGameName(hero.name).slice(0, 100) +
+    root.addTextDisplayComponents(display('## ' + hotPrefix(price?.discountPercent) + '[' + sanitizeGameName(hero.name.slice(0, 100)) +
       '](https://store.steampowered.com/app/' + hero.appId + ')\n' +
       (price ? priceLine(price, language) : noPriceText(hero, language)) +
       (savings ? '\n' + savings : '') +
