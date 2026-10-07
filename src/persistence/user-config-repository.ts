@@ -96,6 +96,14 @@ function toUserConfig(row: UserConfigRow): UserConfig {
   };
 }
 
+/** A new configuration was refused because the user limit is reached; nothing was written. */
+export class UserLimitReachedError extends Error {
+  public constructor() {
+    super('The user limit is reached');
+    this.name = 'UserLimitReachedError';
+  }
+}
+
 export class UserConfigRepository {
   public constructor(private readonly database: DatabaseSync) {}
 
@@ -141,12 +149,19 @@ export class UserConfigRepository {
     language: Language,
     storeCountryCode: StoreCountryCode,
     now: string,
-    options: { readonly forcePricingReset?: boolean } = {},
+    options: {
+      readonly forcePricingReset?: boolean;
+      /** Refuses a new user (not an update) once this many are configured, in the same transaction. */
+      readonly maximumUsers?: number;
+    } = {},
   ): UserConfig {
     this.database.exec('BEGIN IMMEDIATE');
 
     try {
       const existing = this.findByDiscordUserId(discordUserId);
+      if (existing === null && options.maximumUsers !== undefined && this.countUsers() >= options.maximumUsers) {
+        throw new UserLimitReachedError();
+      }
       const accountChanged = existing !== null && existing.steamId64 !== steamId64;
       const countryChanged = existing !== null
         && existing.storeCountryCode !== storeCountryCode;
