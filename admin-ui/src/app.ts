@@ -203,12 +203,13 @@ function App(): VNode {
       setCsrfToken(null);
       setState('signed-out');
     });
-    // scripts/admin-tunnel.ps1 opens `#login=<token>`: the fragment never reaches a
-    // server; it is removed from the address bar and history before signing in.
+    // scripts/admin-tunnel.ps1 opens `#login=<code>` with a one-minute, single-use
+    // code it got for the token, never the token itself; the fragment is removed
+    // from the address bar before signing in.
     const login = /^#login=([^&]+)$/.exec(window.location.hash);
     if (login) window.history.replaceState(null, '', '#/');
     const session = login
-      ? api.post<SessionResponse>('/api/login', { token: decodeURIComponent(login[1]!) })
+      ? api.post<SessionResponse>('/api/login', { code: decodeURIComponent(login[1]!) })
         .catch(() => api.get<SessionResponse>('/api/session'))
       : api.get<SessionResponse>('/api/session');
     session.then((result) => {
