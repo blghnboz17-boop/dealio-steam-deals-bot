@@ -51,24 +51,45 @@ function ThemeToggle(): VNode {
 }
 
 function Login(props: { onSignedIn: (csrf: string) => void }): VNode {
-  const [token, setToken] = useState('');
+  // `null` until the server says whether the owner has set a username and password.
+  const [mode, setMode] = useState<'password' | 'token' | null>(null);
+  const [passwordAvailable, setPasswordAvailable] = useState(false);
+  const [username, setUsername] = useState('');
+  const [secret, setSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api.get<{ password: boolean }>('/api/login-options')
+      .then((options) => {
+        setPasswordAvailable(options.password);
+        setMode(options.password ? 'password' : 'token');
+      })
+      .catch(() => setMode('token'));
+  }, []);
+  const switchMode = (next: 'password' | 'token'): void => {
+    setMode(next);
+    setSecret('');
+    setError(null);
+  };
   const submit = async (event: Event): Promise<void> => {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const session = await api.post<SessionResponse>('/api/login', { token });
+      const session = await api.post<SessionResponse>('/api/login',
+        mode === 'password' ? { username: username.trim(), password: secret } : { token: secret });
       props.onSignedIn(session.csrf ?? '');
     } catch (reason: unknown) {
       setError(reason instanceof ApiError && reason.status === 429
         ? 'Çok fazla hatalı deneme. 15 dakika sonra tekrar dene.'
-        : reason instanceof ApiError && reason.status === 401 ? 'Anahtar hatalı.' : 'Giriş yapılamadı.');
+        : reason instanceof ApiError && reason.status === 401
+          ? (mode === 'password' ? 'Kullanıcı adı veya şifre hatalı.' : 'Anahtar hatalı.')
+          : 'Giriş yapılamadı.');
     } finally {
       setBusy(false);
     }
   };
+  const ready = mode === 'password' ? username.trim().length > 0 && secret.length > 0 : secret.length > 0;
   return html`
     <main class="login">
       <span class="login-theme"><${ThemeToggle} /></span>
@@ -77,16 +98,30 @@ function Login(props: { onSignedIn: (csrf: string) => void }): VNode {
           <img class="mark mark-lg" src="/logo.png" alt="Dealio" width="64" height="64" />
           <div>
             <h1>Dealio Yönetim</h1>
-            <p class="muted">Sunucudaki <code>DEALIO_ADMIN_TOKEN</code> değeriyle giriş yap.</p>
+            <p class="muted">${mode === 'password'
+              ? 'Kullanıcı adın ve şifrenle giriş yap.'
+              : html`Sunucudaki <code>DEALIO_ADMIN_TOKEN</code> değeriyle giriş yap.`}</p>
           </div>
         </div>
-        <label class="field">Yönetici anahtarı
-          <input class="input" type="password" autocomplete="current-password" required value=${token} placeholder="••••••••••••"
-            onInput=${(event: Event) => setToken((event.target as HTMLInputElement).value)} />
-        </label>
+        ${mode === 'password' ? html`
+          <label class="field">Kullanıcı adı
+            <input class="input" autocomplete="username" required value=${username}
+              onInput=${(event: Event) => setUsername((event.target as HTMLInputElement).value)} />
+          </label>
+          <label class="field">Şifre
+            <input class="input" type="password" autocomplete="current-password" required value=${secret} placeholder="••••••••••••"
+              onInput=${(event: Event) => setSecret((event.target as HTMLInputElement).value)} />
+          </label>` : html`
+          <label class="field">Yönetici anahtarı
+            <input class="input" type="password" autocomplete="current-password" required value=${secret} placeholder="••••••••••••"
+              onInput=${(event: Event) => setSecret((event.target as HTMLInputElement).value)} />
+          </label>`}
         ${error ? html`<p class="form-error" role="alert">${Icon({ name: 'alert' })}${error}</p>` : null}
-        <button class="btn btn-primary" type="submit" disabled=${busy || token.length === 0}>
+        <button class="btn btn-primary" type="submit" disabled=${busy || mode === null || !ready}>
           ${Icon({ name: 'key' })}${busy ? 'Giriş yapılıyor…' : 'Giriş yap'}</button>
+        ${mode === null || !passwordAvailable ? null : html`<button class="btn btn-ghost" type="button"
+          onClick=${() => switchMode(mode === 'password' ? 'token' : 'password')}>
+          ${mode === 'password' ? 'Yönetici anahtarıyla giriş yap' : 'Kullanıcı adı ve şifreyle giriş yap'}</button>`}
         <p class="login-foot">${Icon({ name: 'shield', size: 14 })}Oturum 12 saat sürer; bot yeniden başlarsa kapanır.</p>
       </form>
     </main>`;

@@ -42,9 +42,17 @@ açar ve tarayıcıda `http://localhost:8787` adresini başlatır. Masaüstünde
 Anahtar `%USERPROFILE%\.dealio\admin-token` dosyasındaysa panel giriş yapmış
 olarak açılır: betik anahtarı tünel üzerinden panele gönderip bir dakika geçerli,
 tek kullanımlık bir giriş kodu alır; URL'nin `#` kısmında anahtarın kendisi değil
-yalnız bu kod taşınır ve sayfa onu adres çubuğundan hemen siler. Dosya yoksa giriş ekranına
-`DEALIO_ADMIN_TOKEN` değerini yazın. Oturum 12 saat sürer, bot yeniden başlayınca
-kapanır.
+yalnız bu kod taşınır ve sayfa onu adres çubuğundan hemen siler.
+
+Kendi kullanıcı adınız ve şifrenizle girmek için bir kez **Sistem → Panel girişi**
+bölümünde kullanıcı adı ve en az 10 karakterlik bir şifre belirleyin. Sunucuda
+yalnız şifrenin scrypt özeti (`runtime_setting` tablosu) tutulur; `.env` değişmez,
+bot yeniden başlatılmaz. Kaydedince diğer açık oturumlar kapanır. Bundan sonra giriş
+ekranı kullanıcı adı ve şifre ister; hatalı denemeler anahtarla aynı kilide sayılır
+(15 dakikada 10 deneme). Şifre belirlenmemişse ekran `DEALIO_ADMIN_TOKEN` değerini
+ister. Şifreyi unutursanız masaüstü kısayoluyla (veya giriş ekranındaki "Yönetici
+anahtarıyla giriş yap" ile) girip yenisini belirleyin ya da kaldırın. Oturum 12 saat
+sürer, bot yeniden başlayınca kapanır.
 
 Yerel geliştirmede (`.env.test` ile) tünel gerekmez; doğrudan
 `http://localhost:8787` açılır. Sentetik verili önizleme için:

@@ -63,6 +63,57 @@ function SettingsForm(props: { settings: RuntimeSettings; userCount: number | nu
     </div>`;
 }
 
+/** The owner's own username and password; only a hash is stored on the server. */
+function OwnerAccount(): VNode {
+  const account = useAsync(() => api.get<{ username: string | null }>('/api/account'), []);
+  const { busy, run } = useAction();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [repeat, setRepeat] = useState('');
+  const current = account.data?.username ?? null;
+  useEffect(() => { setUsername(current ?? ''); }, [current]);
+  const mismatch = repeat.length > 0 && password !== repeat;
+  const ready = username.trim().length >= 3 && password.length >= 10 && password === repeat;
+  const save = (): void => {
+    void run('account', '/api/account/credentials', { username: username.trim(), password },
+      'Giriş bilgileri kaydedildi; diğer oturumlar kapatıldı').then((result) => {
+      if (result === null) return;
+      setPassword('');
+      setRepeat('');
+      account.reload();
+    });
+  };
+  const clear = (): void => {
+    void run('account-clear', '/api/account/credentials/clear', {}, 'Şifre kaldırıldı; giriş yönetici anahtarıyla yapılır')
+      .then((result) => { if (result !== null) account.reload(); });
+  };
+  return html`
+    <div class="settings">
+      <div class="setting-row">
+        <div><strong>Durum</strong>
+          <p class="muted small">${current
+            ? html`Giriş ekranı kullanıcı adı ve şifre ister. Kullanıcı adı: <code>${current}</code>.`
+            : 'Henüz şifre yok; giriş ekranı yönetici anahtarını ister.'}
+            Masaüstü kısayolu her durumda çalışır; şifreyi unutursan onunla girip yenisini belirle.</p></div>
+        ${current ? html`<button class="btn" disabled=${busy !== null} onClick=${clear}>Şifreyi kaldır</button>` : null}
+      </div>
+      <div class="setting-row">
+        <div><strong>${current ? 'Kullanıcı adı ve şifreyi değiştir' : 'Kullanıcı adı ve şifre belirle'}</strong>
+          <p class="muted small">Şifre en az 10 karakter. Sunucuda yalnız şifrenin özeti (scrypt) saklanır.</p></div>
+        <div class="inline-form">
+          <input class="input" autocomplete="username" placeholder="Kullanıcı adı" aria-label="Kullanıcı adı" value=${username}
+            onInput=${(event: Event) => setUsername((event.target as HTMLInputElement).value)} />
+          <input class="input" type="password" autocomplete="new-password" placeholder="Yeni şifre" aria-label="Yeni şifre" value=${password}
+            onInput=${(event: Event) => setPassword((event.target as HTMLInputElement).value)} />
+          <input class="input" type="password" autocomplete="new-password" placeholder="Şifre tekrar" aria-label="Şifre tekrar" value=${repeat}
+            onInput=${(event: Event) => setRepeat((event.target as HTMLInputElement).value)} />
+          <button class="btn btn-primary" disabled=${busy !== null || !ready} onClick=${save}>Kaydet</button>
+        </div>
+      </div>
+      ${mismatch ? html`<p class="form-error" role="alert">${Icon({ name: 'alert' })}Şifreler aynı değil.</p>` : null}
+    </div>`;
+}
+
 export function SystemPage(): VNode {
   const state = useAsync(() => api.get<SystemInfo>('/api/system'), [], live);
   const { busy, run } = useAction();
@@ -80,6 +131,7 @@ export function SystemPage(): VNode {
       ? (state.error ? ErrorBox({ message: state.error, retry: state.reload }) : Loading())
       : html`
         ${Card({ title: 'Çalışma zamanı ayarları', subtitle: 'Botu yeniden başlatmadan uygulanır', children: html`<${SettingsForm} settings=${data.runtimeSettings} userCount=${null} onSaved=${state.reload} />` })}
+        ${Card({ title: 'Panel girişi', subtitle: 'Sana ait kullanıcı adı ve şifre', children: html`<${OwnerAccount} />` })}
         <div class="grid-3">
           ${Card({ title: 'Çalışma durumu', children: Facts({ rows: [
             ['Aşama', data.health

@@ -1,41 +1,14 @@
 # Genel yayın kontrol listesi
 
-7 Ekim 2026 itibarıyla genel yayını hâlâ engelleyen işler. Bu liste hiçbir kapıyı
-geçti saymaz; kabul kayıtlarının sonuçları [phase4-beta.tr.md](phase4-beta.tr.md),
-[phase4-beta-results.json](phase4-beta-results.json) ve yayın kapısı kanıt
-dosyalarındadır. Genel davet kararı ve davetler yalnız sahibindir.
+Genel yayından önce bakılacak işler. 4. aşama (gerçek kullanıcı kabulü) şartı
+7 Ekim 2026'da sahibin kararıyla kaldırıldı; genel yayın kararı ve davetler yalnız
+sahibindir. Bu liste hiçbir kapıyı geçti saymaz.
 
 İşaretler: **[Sahip kanıtı]** gerçek kullanıcı, gerçek cihaz veya gerçek hesapla
 yapılması ve kaydedilmesi gereken iş; **[Sahip işlemi]** sahibin yapacağı ayar
 veya karar; **[Kod]** kod değişikliği gerektiren iş.
 
-## 1. Gerçek kullanıcı kabulü (4. aşama)
-
-`generalReleaseAccepted: false`. Bekleyen kanıtlar (`pendingEvidence`):
-
-- [ ] **[Sahip kanıtı]** İlk deneme tarihinin netleşmesi (`first-test-date`).
-- [ ] **[Sahip kanıtı]** İngilizce istemciyle kurulum ve panel denemesi (`english-client`).
-- [ ] **[Sahip kanıtı]** Almanca ve Fransızca gerçek kullanıcı denemesi; README bunların
-  henüz denenmediğini söylüyor.
-- [ ] **[Sahip kanıtı]** Android denemesi (`android-client`). iOS için tek kişilik
-  operatör bildirimi var; mobil kabul sayılmaz.
-- [ ] **[Sahip kanıtı]** Sessiz saat ve günlük özetle gerçek zamanlanmış teslim;
-  beklenen ve gerçek teslim saati (`scheduled-delivery`). Üretim günlüğünde örnek yok.
-- [ ] **[Sahip kanıtı]** Yeterli örnekle aynı teklif için yinelenen DM olmaması
-  (`duplicate-prevention`). 6 Ekim veritabanı kontrolü ve sentetik yük testi tek
-  başına kabul değildir.
-- [ ] **[Sahip kanıtı]** Açıkça onay veren bir gönüllüyle `/delete-data` ve yeniden
-  kurulum (`consented-data-deletion`).
-- [ ] **[Sahip kanıtı]** Kapalı DM ve erişilemeyen wishlist hatalarının anlaşılır
-  olduğu ve düzeltilince takibin sürdüğü.
-- [ ] **[Sahip kanıtı]** Hedef fiyat, yüzde kuralı ve susturma senaryoları.
-- [ ] **[Sahip kanıtı]** Yanlış indirim veya kaybolan kalıcı bildirim olmadığının
-  gözlem süresi boyunca incelenmesi (sıfır toleranslı engel).
-- [ ] **[Sahip işlemi]** Yedi günlük gözlem kaydını (7 Ekim, operatör bildirimi +
-  üretim günlüğü) kabul için yeterli sayıp saymama kararı. Önemli bir düzeltme
-  sonrası gözlem süresinin yeniden başlayıp başlamadığı kayda geçirilir.
-
-## 2. Yayın kapısı (`npm run release:check`)
+## 1. Yayın kapısı (`npm run release:check`)
 
 Yayınlanacak commit'e bağlı, her kapı için ayrı kanıt kaydı ve dosyası gerekir.
 Bu kapılar o commit için çalıştırılmadan geçti sayılmaz:
@@ -49,11 +22,10 @@ Bu kapılar o commit için çalıştırılmadan geçti sayılmaz:
   maliyetin doğrulanması (kredi 7 Eylül 2027'de biter).
 - [ ] **[Sahip işlemi]** `termsUrl`, `privacyUrl`, `supportUrl` HTTPS üzerinden açılıyor.
 
-## 3. Yasal sayfalar ve Discord uygulaması
+## 2. Yasal sayfalar ve Discord uygulaması
 
-- [ ] **[Sahip işlemi]** Bu daldaki 7 Ekim 2026 tarihli gizlilik politikası ve
-  koşullar `main`'e birleşince `Publish public Dealio pages` iş akışını elle
-  çalıştır; canlı sayfada tarihi kontrol et.
+- [x] **[Sahip işlemi]** 7 Ekim 2026 tarihli gizlilik politikası ve koşullar
+  `Publish public Dealio pages` iş akışıyla yayımlandı (7 Ekim 2026).
 - [ ] **[Sahip işlemi]** Discord Developer Portal'daki Terms of Service ve Privacy
   Policy URL'lerinin yayımlanan sayfalara gittiğini doğrula.
 - [ ] **[Sahip işlemi]** Politikadaki önemli değişikliğin mevcut beta kullanıcılarına
@@ -63,7 +35,7 @@ Bu kapılar o commit için çalıştırılmadan geçti sayılmaz:
 - [ ] **[Sahip işlemi]** Destek yolu: sitede yalnız e-posta var. Genel yayında yanıt
   süresi ve kanal (ör. destek sunucusu) belirlenmeli.
 
-## 4. Kapasite ve işletim
+## 3. Kapasite ve işletim
 
 - [ ] **[Sahip işlemi]** `DEALIO_MAX_USERS` (varsayılan 200) genel yayında ne olacak?
   200 kullanıcılık sentetik ölçüm var
@@ -72,7 +44,7 @@ Bu kapılar o commit için çalıştırılmadan geçti sayılmaz:
 - [ ] **[Sahip kanıtı]** Genel yayın sonrası ilk hafta için ilk yanıt, tarama, Steam
   hata oranı ve DM gecikmesinin yeniden ölçülmesi (`npm run metrics:report`).
 
-## 5. Yayından önce kod değişikliği isteyen bulgular
+## 4. Yayından önce kod değişikliği isteyen bulgular
 
 Gizlilik politikası bunları bugünkü davranışla açıklıyor; düzeltilince politika da
 güncellenmeli.

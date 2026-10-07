@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { safeLogger } from '../application/safe-logger.js';
 import { csrfMatches, type AdminSession, type AdminSessions } from './admin-auth.js';
+import { InvalidOwnerCredentialsError } from './owner-credentials.js';
 
 export class AdminHttpError extends Error {
   public constructor(public readonly status: number, message: string) {
@@ -224,6 +225,10 @@ export class AdminServer {
       sendJson(response, 200, session ? { authenticated: true, csrf: session.csrf } : { authenticated: false });
       return;
     }
+    if (url.pathname === '/api/login-options' && method === 'GET') {
+      sendJson(response, 200, { password: this.options.sessions.passwordLoginEnabled() });
+      return;
+    }
     if (url.pathname === '/api/login' && method === 'POST') {
       await this.login(request, response);
       return;
@@ -249,6 +254,21 @@ export class AdminServer {
       this.options.sessions.logout(session.id);
       response.setHeader('Set-Cookie', `${cookieName}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`);
       sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (url.pathname === '/api/account' && method === 'GET') {
+      sendJson(response, 200, { username: this.options.sessions.ownerUsername() });
+      return;
+    }
+    if (url.pathname === '/api/account/credentials' && method === 'POST') {
+      await this.setOwnerCredentials(request, response, session);
+      return;
+    }
+    if (url.pathname === '/api/account/credentials/clear' && method === 'POST') {
+      this.options.sessions.clearOwnerCredentials(session.id);
+      this.logger.log(`${new Date().toISOString()} [admin] Owner removed the admin panel password.`);
+      sendJson(response, 200, { result: { username: null } });
       return;
     }
 
@@ -295,13 +315,15 @@ export class AdminServer {
   }
 
   private async readCredentials(request: IncomingMessage, response: ServerResponse)
-    : Promise<{ readonly token?: string; readonly code?: string } | null> {
+    : Promise<{ readonly token?: string; readonly code?: string; readonly username?: string; readonly password?: string } | null> {
     try {
       const body = await readBody(request);
       const record = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
       return {
         ...(typeof record.token === 'string' ? { token: record.token } : {}),
         ...(typeof record.code === 'string' ? { code: record.code } : {}),
+        ...(typeof record.username === 'string' ? { username: record.username } : {}),
+        ...(typeof record.password === 'string' ? { password: record.password } : {}),
       };
     } catch (error: unknown) {
       if (error instanceof AdminHttpError) {
@@ -333,9 +355,11 @@ export class AdminServer {
   private async login(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const credentials = await this.readCredentials(request, response);
     if (!credentials) return;
-    const result = credentials.code !== undefined && credentials.token === undefined
-      ? this.options.sessions.redeemLoginCode(credentials.code)
-      : this.options.sessions.login(credentials.token ?? '');
+    const result = credentials.username !== undefined && credentials.password !== undefined
+      ? await this.options.sessions.loginWithPassword(credentials.username, credentials.password)
+      : credentials.code !== undefined && credentials.token === undefined
+        ? this.options.sessions.redeemLoginCode(credentials.code)
+        : this.options.sessions.login(credentials.token ?? '');
     if (result.status === 'locked') {
       sendJson(response, 429, { error: 'Too many attempts', retryAfterMs: result.retryAfterMs });
       return;
@@ -350,6 +374,23 @@ export class AdminServer {
       `${cookieName}=${result.session.id}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}`);
     this.logger.log(`${new Date().toISOString()} [admin] Owner signed in to the admin panel.`);
     sendJson(response, 200, { authenticated: true, csrf: result.session.csrf });
+  }
+
+  private async setOwnerCredentials(request: IncomingMessage, response: ServerResponse, session: AdminSession): Promise<void> {
+    const credentials = await this.readCredentials(request, response);
+    if (!credentials) return;
+    try {
+      await this.options.sessions.setOwnerCredentials(
+        credentials.username?.trim() ?? '', credentials.password ?? '', session.id);
+    } catch (error: unknown) {
+      if (error instanceof InvalidOwnerCredentialsError) {
+        sendJson(response, 400, { error: error.message });
+        return;
+      }
+      throw error;
+    }
+    this.logger.log(`${new Date().toISOString()} [admin] Owner set the admin panel username and password.`);
+    sendJson(response, 200, { result: { username: this.options.sessions.ownerUsername() } });
   }
 
   private serveStatic(pathname: string, response: ServerResponse): void {
