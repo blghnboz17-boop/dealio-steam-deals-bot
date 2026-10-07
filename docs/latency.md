@@ -30,13 +30,13 @@ Bu değerler yalnız kural okuma maliyetidir; Discord'da uçtan uca hız ölçü
 
 Yerel geliştirme makinesinde `npm run typecheck`, `npm test` ve `npm run build` çalıştırılır. Gecikme regresyonları `tests/assistant-latency.test.ts`, `tests/wishlist-view-service.test.ts`, `tests/setup-command.test.ts` ve `tests/interaction-timing.test.ts` içindedir.
 
-Canlı Discord kontrolü: `/dealio`, `/setup`, `/status`, `/wishlist` ekranlarını aç; wishlist yenilenirken geçmişe ve tekrar wishlist'e geç; aynı kontrolleri ikinci bir Discord kullanıcısıyla tekrarla. Sorun varsa yaklaşık saatiyle birlikte ilgili timing kaydını incele. Otomatik testler kullanıcının Discord istemcisindeki görünür gecikmeyi ölçmez.
+Canlı Discord kontrolü: `/dealio` panelinin Ana sayfa, İstek listem, Bildirimler ve Ayarlar sekmelerini ve `/setup` ekranını aç; wishlist yenilenirken geçmişe ve tekrar wishlist'e geç; aynı kontrolleri ikinci bir Discord kullanıcısıyla tekrarla. Sorun varsa yaklaşık saatiyle birlikte ilgili timing kaydını incele. Otomatik testler kullanıcının Discord istemcisindeki görünür gecikmeyi ölçmez.
 
 Mevcut 1 GiB sunucuda tam test paketi çalıştırılmaz. Derleme ve testler yerelde yapılır. Kaynak sürümü, dağıtılan JavaScript dosyaları ve servis sağlığı ayrıca doğrulanır. Steam/Discord kesintileri ve ağ gecikmesi kod optimizasyonuyla sıfırlanamaz; yeni fiyatın doğrulanması için gerçek Steam yanıtı beklenir.
 
 ## Canlı ölçüm
 
-`/test-notification` için Discord teslim makbuzundan hesaplanan süre `testDeliveries` alanında ayrı raporlanır. Bu kontrollü DM denemesi taşıma yolunu doğrular; doğal bir indirim tespitini veya kalıcı kuyrukta beklemeyi ölçmez. Gerçek indirim teslimatları örnek üretince `deliveries` alanında ayrıca değerlendirilir.
+Ayarlar’daki Test DM (eski `/test-notification`) için Discord teslim makbuzundan hesaplanan süre `testDeliveries` alanında ayrı raporlanır. Bu kontrollü DM denemesi taşıma yolunu doğrular; doğal bir indirim tespitini veya kalıcı kuyrukta beklemeyi ölçmez. Gerçek indirim teslimatları örnek üretince `deliveries` alanında ayrıca değerlendirilir.
 
 Yeni sürüm dağıtıldıktan sonra, üretim sunucusunda şu iki salt okunur komutu çalıştır:
 
