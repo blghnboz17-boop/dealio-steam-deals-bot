@@ -35,10 +35,12 @@ tar -czf /c/tmp/dist-<sha>.tar.gz dist
 `distArchiveSha256`, `ci`, `previousCommit`, `schemaChange`. Sonra:
 
 ```bash
-ssh dealiobot@20.240.162.55 'mkdir -p ~/dealio-candidate-<sha>/extracted'
+ssh dealiobot@20.240.162.55 'mkdir -p ~/dealio-candidate-<sha>'
 scp dist-<sha>.tar.gz manifest-<sha>.json deploy/switch-release.sh dealiobot@20.240.162.55:dealio-candidate-<sha>/
-ssh dealiobot@20.240.162.55 'cd ~/dealio-candidate-<sha> && tar -xzf dist-<sha>.tar.gz -C extracted'
 ```
+
+Arşivi elle açmayın: betik SHA-256'sını doğruladığı arşivi kendisi açar ve canlıya
+yalnız o kopyayı koyar.
 
 `main` CI'ı geçtikten sonra geçiş:
 
@@ -50,7 +52,16 @@ ssh dealiobot@20.240.162.55 'bash ~/dealio-candidate-<sha>/switch-release.sh <sh
 - `origin/main`'in tree'sinin manifestle aynı olduğunu, fast-forward'u, temiz ağacı ve arşiv SHA-256'sını doğrular.
 - Botu durdurur, veritabanını `~/dealio-backups/<tarih>-<sha>/` içine yedekler ve kopyada bütünlük ile yabancı anahtar kontrolü yapar.
 - Git'i ilerletir, eski `dist`'i yedeğe taşır, adayı koyar ve botu başlatır.
-- Bir adım hata verirse eski `dist` ve commit'e döner ve botu başlatır.
+- Yeni sürecin `.runtime/bot.health.json` kaydında `phase: ready` ve
+  `discordReady: true` görünmesini bekler (varsayılan 180 sn,
+  `DEALIO_SWITCH_HEALTH_TIMEOUT` ile değişir). Görünmezse ya da bir adım hata
+  verirse eski commit ve `dist`'e, şema sürümü değiştiyse eski veritabanına döner,
+  eski sürümü başlatır ve hata koduyla çıkar.
+- `package-lock.json` değişiyorsa durur; doğrulanmış üretim bağımlılıklarını
+  kurduktan sonra `DEALIO_DEPENDENCIES_READY=1` ile yeniden çalıştırın.
+- Başarılı geçişten sonra 7 günden eski sürüm klasörlerindeki veritabanı
+  kopyalarını siler (`dist` ve manifestler geri dönüş için kalır). Silinen
+  kullanıcıların verisi bu kopyalarda kalmasın diye; silme günlüğü 35 gün tutulur.
 
 Derlemeden sonra `main`'e yalnız belge birleştirilmişse tree farklı olacağı için betik
 durur; yeni `main`'den yeniden derleyin. Ardından sağlık kaydını
@@ -147,7 +158,10 @@ sudo systemctl disable --now dealio
 
 Aşağıdaki yerel servisi ancak ayrı bir test bot token'ıyla veya Azure kopyasını
 bilerek durdurduktan sonra açın. Azure'daki mevcut servis dosyasını bu yerel
-şablonla değiştirmeyin.
+şablonla değiştirmeyin. Şablondaki systemd sertleştirmesi (`ProtectSystem=full`,
+`PrivateDevices`, `RestrictNamespaces` vb.) VM'deki servise kendiliğinden geçmez;
+istenirse aynı satırlar VM'deki `/etc/systemd/system/dealio.service` dosyasına
+elle eklenip `daemon-reload` ve yeniden başlatma ile denenmelidir.
 
 Bu servis Bilgehan'ın Ubuntu-24.04 kurulumuna göre ayarlandı. Başka bir makinede
 `dealio.service` içindeki kullanıcı, grup, proje klasörü ve Node yolunu uyarlayın.

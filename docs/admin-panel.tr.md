@@ -40,8 +40,9 @@ açar ve tarayıcıda `http://localhost:8787` adresini başlatır. Masaüstünde
 **Dealio Yönetim** kısayolu aynı betiği çalıştırır; pencereyi kapatmak tüneli kapatır.
 
 Anahtar `%USERPROFILE%\.dealio\admin-token` dosyasındaysa panel giriş yapmış
-olarak açılır: anahtar URL'nin `#` kısmında taşınır (sunucuya gönderilmez) ve
-sayfa onu adres çubuğundan ve geçmişten hemen siler. Dosya yoksa giriş ekranına
+olarak açılır: betik anahtarı tünel üzerinden panele gönderip bir dakika geçerli,
+tek kullanımlık bir giriş kodu alır; URL'nin `#` kısmında anahtarın kendisi değil
+yalnız bu kod taşınır ve sayfa onu adres çubuğundan hemen siler. Dosya yoksa giriş ekranına
 `DEALIO_ADMIN_TOKEN` değerini yazın. Oturum 12 saat sürer, bot yeniden başlayınca
 kapanır.
 
