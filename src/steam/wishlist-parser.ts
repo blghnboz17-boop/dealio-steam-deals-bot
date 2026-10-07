@@ -121,9 +121,24 @@ export function parseStoreItemsResponse(
   return new Map(appIds.map((appId) => [appId, settle(() => parseStoreItem(byAppId.get(appId), appId))]));
 }
 
+/**
+ * Steam EResults that report a busy or failing service (NoConnection, Busy, Timeout,
+ * ServiceUnavailable, LimitExceeded, RateLimitExceeded), never a missing app.
+ */
+const transientEResults: ReadonlySet<number> = new Set([3, 10, 16, 20, 25, 84]);
+
 function parseStoreItem(item: JsonObject | undefined, appId: number): ParsedStoreItem {
   if (item === undefined) {
     schemaError(`Steam GetItems response is missing app ${appId}`);
+  }
+
+  if (typeof item.success !== 'number') {
+    schemaError(`Steam GetItems success for app ${appId} must be a number`);
+  }
+
+  if (transientEResults.has(item.success)) {
+    // Steam could not answer for this app right now; that says nothing about the app.
+    throw new SteamWishlistError('STEAM_UPSTREAM_ERROR', `Steam GetItems was unavailable for app ${appId}`);
   }
 
   if (item.success !== 1) {
