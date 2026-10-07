@@ -68,6 +68,40 @@ export class DiscountThresholdRepository {
     minimumDiscountPercent: number,
     now: string,
   ): boolean {
+    return this.transaction(() => this.writeGameOverride(scope, appId, minimumDiscountPercent, now));
+  }
+
+  public deleteGameOverride(scope: ThresholdScope, appId: number): boolean {
+    return this.transaction(() => {
+      const result = this.database.prepare(
+        `DELETE FROM game_discount_threshold
+         WHERE discord_user_id = ? AND config_version = ? AND app_id = ?`,
+      ).run(scope.discordUserId, scope.configVersion, appId);
+      if (Number(result.changes) === 1) rebaselineDiscountAlerts(this.database, scope, { appId });
+      return Number(result.changes) === 1;
+    });
+  }
+
+  /** The threshold and the alert baseline it implies change together, or not at all. */
+  private transaction<T>(work: () => T): T {
+    if (this.database.isTransaction) return work();
+    this.database.exec('BEGIN IMMEDIATE');
+    try {
+      const result = work();
+      this.database.exec('COMMIT');
+      return result;
+    } catch (error: unknown) {
+      if (this.database.isTransaction) this.database.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  private writeGameOverride(
+    scope: ThresholdScope,
+    appId: number,
+    minimumDiscountPercent: number,
+    now: string,
+  ): boolean {
     const result = this.database.prepare(
       `INSERT INTO game_discount_threshold
          (discord_user_id, config_version, app_id, minimum_discount_percent, updated_at)
@@ -84,15 +118,6 @@ export class DiscountThresholdRepository {
       scope.discordUserId,
       scope.configVersion,
     );
-    if (Number(result.changes) === 1) rebaselineDiscountAlerts(this.database, scope, { appId });
-    return Number(result.changes) === 1;
-  }
-
-  public deleteGameOverride(scope: ThresholdScope, appId: number): boolean {
-    const result = this.database.prepare(
-      `DELETE FROM game_discount_threshold
-       WHERE discord_user_id = ? AND config_version = ? AND app_id = ?`,
-    ).run(scope.discordUserId, scope.configVersion, appId);
     if (Number(result.changes) === 1) rebaselineDiscountAlerts(this.database, scope, { appId });
     return Number(result.changes) === 1;
   }
