@@ -235,7 +235,10 @@ export async function startBot(
         return {items:[...result.wishlistItems],errors:[...result.failedItems,...result.unavailableItems]};
       },
     );
-    const retentionTimer=setInterval(()=>{try{wishlistStateRepository.assistant.cleanup();telemetryRepository.cleanup();adminControlRepository.cleanup();broadcastRepository.cleanup();}catch(error){safeLogger.error('Retention cleanup failed',error);}},3600000);
+    const runRetention=()=>{try{wishlistStateRepository.assistant.cleanup();telemetryRepository.cleanup();adminControlRepository.cleanup();broadcastRepository.cleanup();}catch(error){safeLogger.error('Retention cleanup failed',error);}};
+    // Also once at startup: frequent restarts must not keep postponing the hourly cleanup.
+    runRetention();
+    const retentionTimer=setInterval(runRetention,3600000);
     retentionTimer.unref();
     const scheduler = new WishlistScheduler({
       intervalHours: environment.pollIntervalHours,

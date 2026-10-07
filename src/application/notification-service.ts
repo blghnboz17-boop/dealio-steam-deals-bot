@@ -176,7 +176,15 @@ export class NotificationService {
 
     const assistant = this.wishlistStateRepository.assistant;
     const preference = assistant.preference(discordUserId);
-    if (!deliveryAllowed(preference, this.now())) return {candidateCount:0,sentCount:0,failedCount:0};
+    let allowed: boolean;
+    try {
+      allowed = deliveryAllowed(preference, this.now());
+    } catch (error: unknown) {
+      // An unreadable stored preference must not hold this user's alerts back forever.
+      safeLogger.error('Invalid notification preference; delivering without a schedule', error);
+      allowed = true;
+    }
+    if (!allowed) return {candidateCount:0,sentCount:0,failedCount:0};
     // Interrupted sends become due retries before deciding whether anything is due.
     const staleBefore = new Date(this.now().getTime() - this.sendingTimeoutMs).toISOString();
     this.wishlistStateRepository.recoverStaleSending(config, staleBefore);

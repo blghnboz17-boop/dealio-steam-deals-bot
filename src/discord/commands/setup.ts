@@ -15,6 +15,7 @@ import {
   InvalidUserConfigurationError,
   type PreparedUserConfiguration,
 } from '../../application/user-configuration-service.js';
+import { AccountBlockedError } from '../../application/account-block.js';
 import { SetupAlreadyCompletedError, SetupCapacityReachedError } from '../../application/setup-service.js';
 import type { SetupService } from '../../application/setup-service.js';
 import { SteamWishlistError } from '../../domain/steam.js';
@@ -701,6 +702,14 @@ export function setupErrorMessage(error: unknown, language: Language): string {
   const messages = messagesFor(language);
   if (error instanceof SetupAlreadyCompletedError) {
     return messages.setupWizardAlreadyCompletedDescription;
+  }
+  if (error instanceof AccountBlockedError) {
+    return localizer(language)({
+      tr: 'Bu hesabın Dealio erişimi kapatıldı. Verilerini /delete-data ile yine de silebilirsin.',
+      en: 'Dealio access has been turned off for this account. You can still delete your data with /delete-data.',
+      de: 'Der Dealio-Zugang für dieses Konto wurde deaktiviert. Deine Daten kannst du trotzdem mit /delete-data löschen.',
+      fr: 'L’accès à Dealio a été désactivé pour ce compte. Tu peux toujours supprimer tes données avec /delete-data.',
+    });
   }
   if (error instanceof SetupCapacityReachedError) {
     return localizer(language)({
