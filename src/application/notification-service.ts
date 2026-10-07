@@ -82,6 +82,9 @@ export interface NotificationServiceOptions {
   readonly maxRetryDelayMs?: number;
   readonly lifecycleSignal?: AbortSignal;
   readonly revalidate?: (user: string) => Promise<boolean>;
+  /** First wait after a failed revalidation; it doubles per failure up to the maximum. */
+  readonly revalidationRetryBaseMs?: number;
+  readonly revalidationRetryMaxMs?: number;
   readonly priceHistory?: HistoricalLowSource;
 }
 
@@ -89,6 +92,8 @@ const defaultSendingTimeoutMs = 15 * 60 * 1000;
 const defaultMaxAttempts = 5;
 const defaultRetryBaseDelayMs = 5 * 60 * 1000;
 const defaultMaxRetryDelayMs = 24 * 60 * 60 * 1000;
+const defaultRevalidationRetryBaseMs = 60 * 1000;
+const defaultRevalidationRetryMaxMs = 15 * 60 * 1000;
 /** Two DMs' worth of games: enough that only the carried last DM is ever re-planned. */
 const planningWindowSize = 20;
 
@@ -102,6 +107,13 @@ export class NotificationService {
   private readonly lifecycleSignal?: AbortSignal;
   private readonly revalidate?: (user: string) => Promise<boolean>;
   private readonly priceHistory?: HistoricalLowSource;
+  private readonly revalidationRetryBaseMs: number;
+  private readonly revalidationRetryMaxMs: number;
+  /**
+   * Users whose last revalidation failed (Steam outage, a wishlist made private).
+   * Without a backoff every retry tick would read their whole wishlist again.
+   */
+  private readonly revalidationBackoff = new Map<string, { failures: number; retryAtMs: number }>();
 
   public constructor(
     private readonly userConfigRepository: UserConfigRepository,
@@ -118,6 +130,8 @@ export class NotificationService {
     this.lifecycleSignal = options.lifecycleSignal;
     this.revalidate = options.revalidate;
     this.priceHistory = options.priceHistory;
+    this.revalidationRetryBaseMs = options.revalidationRetryBaseMs ?? defaultRevalidationRetryBaseMs;
+    this.revalidationRetryMaxMs = options.revalidationRetryMaxMs ?? defaultRevalidationRetryMaxMs;
 
     if (!Number.isSafeInteger(this.sendingTimeoutMs) || this.sendingTimeoutMs <= 0) {
       throw new Error('Notification sending timeout must be a positive safe integer');
@@ -130,6 +144,8 @@ export class NotificationService {
     for (const [name, value] of [
       ['retry base delay', this.retryBaseDelayMs],
       ['maximum retry delay', this.maxRetryDelayMs],
+      ['revalidation retry delay', this.revalidationRetryBaseMs],
+      ['maximum revalidation retry delay', this.revalidationRetryMaxMs],
     ] as const) {
       if (!Number.isSafeInteger(value) || value <= 0) {
         throw new Error(`Notification ${name} must be a positive safe integer`);
@@ -166,7 +182,7 @@ export class NotificationService {
     // scheduled for later must not rescan the wishlist on every retry tick.
     const due = this.wishlistStateRepository.hasPendingNotifications(
       discordUserId, config.configVersion, this.now().toISOString());
-    if (due && this.revalidate && !await this.revalidate(discordUserId))
+    if (due && this.revalidate && !await this.revalidateWithBackoff(discordUserId, this.revalidate))
       return {candidateCount:0,sentCount:0,failedCount:0};
     // A removed/replaced account must never receive an old queued message.
     const fresh = this.userConfigRepository.findByDiscordUserId(discordUserId);
@@ -293,6 +309,33 @@ export class NotificationService {
       sentCount,
       failedCount,
     };
+  }
+
+  /** False while a recent failed revalidation is backing off, without asking Steam. */
+  private async revalidateWithBackoff(
+    discordUserId: string,
+    revalidate: (user: string) => Promise<boolean>,
+  ): Promise<boolean> {
+    const backoff = this.revalidationBackoff.get(discordUserId);
+    if (backoff && this.now().getTime() < backoff.retryAtMs) {
+      return false;
+    }
+    let valid = false;
+    try {
+      valid = await revalidate(discordUserId);
+    } finally {
+      if (valid) {
+        this.revalidationBackoff.delete(discordUserId);
+      } else {
+        const failures = (backoff?.failures ?? 0) + 1;
+        const delayMs = Math.min(
+          this.revalidationRetryBaseMs * (2 ** Math.min(failures - 1, 30)),
+          this.revalidationRetryMaxMs,
+        );
+        this.revalidationBackoff.set(discordUserId, { failures, retryAtMs: this.now().getTime() + delayMs });
+      }
+    }
+    return valid;
   }
 
   /**
