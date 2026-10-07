@@ -587,6 +587,8 @@ export class SteamClient {
 
       return await Promise.race([response.json(), timeoutPromise, cancellationPromise]) as unknown;
     } catch (error: unknown) {
+      // An unread error body keeps its connection busy; during a 429 storm that piles up.
+      discardBody(response);
       if (error instanceof SteamWishlistError) {
         throw error;
       }
@@ -619,6 +621,13 @@ const freePrice = {
   discountPercent: 0,
   isFree: true,
 } as const;
+
+/** Releases the connection behind a response whose body will not be read. */
+export function discardBody(response: Response): void {
+  if (!response.bodyUsed) {
+    response.body?.cancel().catch(() => undefined);
+  }
+}
 
 function cancelledError(): SteamWishlistError {
   return new SteamWishlistError('STEAM_CANCELLED', 'Steam request cancelled');

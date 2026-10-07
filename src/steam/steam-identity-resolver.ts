@@ -4,7 +4,7 @@ import {
   globalSteamRequestLimiter,
   type SteamRequestLimiter,
 } from './request-limiter.js';
-import type { SteamFetch } from './steam-client.js';
+import { discardBody, type SteamFetch } from './steam-client.js';
 
 const resolveVanityEndpoint =
   'https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/';
@@ -226,6 +226,7 @@ export class SteamIdentityResolver {
         cancellationPromise,
       ]);
       if (!response.ok) {
+        discardBody(response);
         throw unavailableIdentityError();
       }
       return await Promise.race([

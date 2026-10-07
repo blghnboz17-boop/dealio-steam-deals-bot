@@ -217,6 +217,19 @@ describe('SteamIdentityResolver', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('releases the connection of an error response it does not read', async () => {
+    const failed = new Response('busy', { status: 503 });
+    const resolver = new SteamIdentityResolver({
+      apiKey: 'secret-api-key',
+      fetchImpl: fetchMock().mockResolvedValue(failed),
+    });
+
+    await resolver.resolve('valid-name').catch((error: unknown) => {
+      expectIdentityCode(error, 'STEAM_VANITY_UNAVAILABLE');
+    });
+    expect(failed.bodyUsed).toBe(true);
+  });
+
   it('does not log API keys, vanity input, or request URLs', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const resolver = new SteamIdentityResolver({
