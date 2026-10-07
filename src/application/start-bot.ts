@@ -148,10 +148,19 @@ export async function startBot(
       steamClient,
       userOperationCoordinator,
     );
+    // Owner controls exist whether or not the admin panel is enabled: the sign-up
+    // limit, blocks and usage telemetry also apply to a bot without the panel.
+    const telemetryRepository = new TelemetryRepository(database);
+    const adminControlRepository = new AdminControlRepository(database);
+    const broadcastRepository = new BroadcastRepository(database);
+    const runtimeSettings = new RuntimeSettings(adminControlRepository, environment.maxUsers);
+    const isBlocked = (discordUserId: string): boolean => adminControlRepository.isUserBlocked(discordUserId);
     const discountThresholdService = new DiscountThresholdService(
       userConfigRepository,
       discountThresholdRepository,
       userOperationCoordinator,
+      undefined,
+      isBlocked,
     );
     const client = createDiscordClient();
     health?.setDiscordReadyProbe(() => client.isReady());
@@ -165,12 +174,6 @@ export async function startBot(
       checkService,
       notificationSender,
     );
-    // Owner controls exist whether or not the admin panel is enabled: the sign-up
-    // limit, blocks and usage telemetry also apply to a bot without the panel.
-    const telemetryRepository = new TelemetryRepository(database);
-    const adminControlRepository = new AdminControlRepository(database);
-    const broadcastRepository = new BroadcastRepository(database);
-    const runtimeSettings = new RuntimeSettings(adminControlRepository, environment.maxUsers);
     const setupService = new SetupService(
       userConfigurationService,
       initialWishlistSummaryService,
@@ -178,6 +181,7 @@ export async function startBot(
       {
         maxUsers: () => runtimeSettings.maxUsers(),
         signupsOpen: () => runtimeSettings.signupsOpen(),
+        isBlocked,
         onStep: (discordUserId, step, code) => telemetryRepository.recordInteraction({
           discordUserId, guildId: null, context: 'unknown', install: 'unknown', kind: 'setup',
           action: code ? `${step}:${code}` : step, locale: null, occurredAt: new Date().toISOString(),
@@ -216,7 +220,7 @@ export async function startBot(
     });
     const assistantService = new AssistantService(wishlistStateRepository.assistant,userConfigRepository,userOperationCoordinator,
       config=>testNotificationService.send(config.discordUserId,config.language,config.storeCountryCode),priceHistory,
-      environment.pollIntervalHours);
+      environment.pollIntervalHours,isBlocked);
     const wishlistViewService = new WishlistViewService(
       userConfigRepository,
       steamClient,
