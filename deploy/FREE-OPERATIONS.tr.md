@@ -6,7 +6,30 @@ Canlı kabul kaydı: `docs/phase3-acceptance.tr.md`.
 ## Sınırlar ve maliyet
 
 Mevcut VM dışında ücretli kaynak açılmaz. Azure birleşik Bicep şablonu bu
-kurulumda kullanılmaz. GitHub Actions hesabındaki 0 USD bütçe ve Stop usage
+kurulumda kullanılmaz.
+
+### Azure aboneliği (7 Ekim 2026'da portaldan okundu)
+
+- Abonelik: Azure for Students. 100 USD kredi, 83 USD kaldı, bitiş 7 Eylül 2027.
+  12 aylık ücretsiz servisler de bu tarihe kadar geçerlidir; yenileme öğrenci
+  hesabına bağlıdır.
+- VM `Standard_B2ats_v2` (AMD, 2 vCPU, 1 GiB): ücretsiz kotada (ayda 750 saat).
+  Önceki `Standard_B2ts_v2` kotada değildi ve ayda yaklaşık 7,4 USD tutuyordu.
+- İşletim sistemi diski 64 GiB Premium SSD (P6): ücretsiz kotada. Önceki 30 GiB
+  (P4) kotaya girmiyordu, ayda yaklaşık 5,4 USD. Disk küçültülemez.
+- Standard sabit genel IP (`20.240.162.55`) kotada yoktur, ayda yaklaşık 3,5 USD.
+  VM durdurulup başlatıldığında değişmez.
+- Beklenen aylık maliyet yaklaşık 3,5 USD (önce yaklaşık 17,4 USD); bu hızla
+  kredi bitiş tarihine kadar yeter. Cost Management'ta free services kullanımı
+  sıfırdan büyük görünmelidir.
+- Bütçe `dealio-aylik`: gerçek maliyet ayda 8 USD'yi geçerse okul adresine e-posta.
+- Service Health kuralı `dealio-azure-saglik` (eylem grubu `dealio-email-global`):
+  arıza, planlı bakım ve güvenlik duyurusunda e-posta. Eylem grubunun e-postası
+  doğrulanmadan bildirim gönderilmez.
+- Öğrenci politikası kaynak bölgelerini sınırlar (aşağıya bakın). Service Health
+  eylem grupları yalnız `Global` bölgesinde çalışır ve bu bölgeye izin vardır.
+- VM boyutu çalışırken B2ats v2'ye çevrilemez ("Unsupported hardware"); önce
+  durdurulup serbest bırakılır (deallocate), sonra boyut ve disk değiştirilir. GitHub Actions hesabındaki 0 USD bütçe ve Stop usage
 koruması korunur. Kota dolması yedek işini durdurabilir; Healthchecks sinyal
 kesilmesini dışarıdan izler. Günlük şifreli artifact yedi gün tutulur;
 veritabanı üst sınırı 16 MiB, şifreli çıktı üst sınırı 23 MiB'dir. Bu sınırlar
