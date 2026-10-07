@@ -1,4 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import {
+  hashOwnerPassword, validateOwnerCredentials, verifyOwnerPassword, type OwnerCredentialStore,
+} from './owner-credentials.js';
 
 export interface AdminSession {
   readonly id: string;
@@ -26,8 +29,10 @@ function digest(value: string): Buffer {
 }
 
 /**
- * Owner sessions for the admin panel: one shared secret from the environment, kept
- * in memory only. A restart signs the owner out. Repeated wrong tokens lock login.
+ * Owner sessions for the admin panel, kept in memory only; a restart signs the owner
+ * out. The owner signs in with their own username and password once they set one;
+ * the environment token stays valid for the tunnel script and as the way back in.
+ * Repeated wrong tokens or passwords lock login.
  */
 export class AdminSessions {
   private readonly sessions = new Map<string, AdminSession>();
@@ -38,8 +43,53 @@ export class AdminSessions {
   public constructor(
     token: string,
     private readonly now: () => number = Date.now,
+    private readonly credentials: OwnerCredentialStore | null = null,
   ) {
     this.tokenDigest = digest(token);
+  }
+
+  public passwordLoginEnabled(): boolean {
+    return this.credentials?.read() != null;
+  }
+
+  public ownerUsername(): string | null {
+    return this.credentials?.read()?.username ?? null;
+  }
+
+  public async loginWithPassword(username: string, password: string): Promise<AdminLoginResult> {
+    const locked = this.lockout(this.now());
+    if (locked) return locked;
+    const stored = this.credentials?.read() ?? null;
+    // Without stored credentials the hash still runs, so timing does not tell either case apart.
+    const passwordMatches = stored
+      ? await verifyOwnerPassword(password, stored.passwordHash)
+      : (await hashOwnerPassword(password), false);
+    const usernameMatches = stored !== null && timingSafeEqual(digest(username), digest(stored.username));
+    const now = this.now();
+    if (!passwordMatches || !usernameMatches) {
+      this.failures.push(now);
+      return { status: 'invalid' };
+    }
+    this.failures = [];
+    return { status: 'ok', session: this.createSession(now) };
+  }
+
+  /** Sets the owner's username and password and signs out every other session. */
+  public async setOwnerCredentials(username: string, password: string, keepSessionId: string): Promise<void> {
+    if (!this.credentials) throw new Error('Owner credentials are not available');
+    validateOwnerCredentials(username, password);
+    this.credentials.write({ username, passwordHash: await hashOwnerPassword(password) });
+    this.revokeOtherSessions(keepSessionId);
+  }
+
+  public clearOwnerCredentials(keepSessionId: string): void {
+    this.credentials?.write(null);
+    this.revokeOtherSessions(keepSessionId);
+  }
+
+  private revokeOtherSessions(keepSessionId: string): void {
+    for (const id of this.sessions.keys()) if (id !== keepSessionId) this.sessions.delete(id);
+    this.loginCodes.clear();
   }
 
   public login(candidate: string): AdminLoginResult {
@@ -74,11 +124,16 @@ export class AdminSessions {
     return { status: 'ok', session: this.createSession(now) };
   }
 
-  private checkToken(candidate: string, now: number): Exclude<AdminLoginResult, { readonly status: 'ok' }> | null {
+  private lockout(now: number): { readonly status: 'locked'; readonly retryAfterMs: number } | null {
     this.failures = this.failures.filter((at) => at > now - failureWindowMs);
-    if (this.failures.length >= maximumFailures) {
-      return { status: 'locked', retryAfterMs: this.failures[0]! + failureWindowMs - now };
-    }
+    return this.failures.length >= maximumFailures
+      ? { status: 'locked', retryAfterMs: this.failures[0]! + failureWindowMs - now }
+      : null;
+  }
+
+  private checkToken(candidate: string, now: number): Exclude<AdminLoginResult, { readonly status: 'ok' }> | null {
+    const locked = this.lockout(now);
+    if (locked) return locked;
     if (!timingSafeEqual(digest(candidate), this.tokenDigest)) {
       this.failures.push(now);
       return { status: 'invalid' };

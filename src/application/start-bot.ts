@@ -42,6 +42,7 @@ import { UserConfigurationService } from './user-configuration-service.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
 import { WishlistViewService } from './wishlist-view-service.js';
 import { AdminPanel } from '../admin/admin-panel.js';
+import { settingOwnerCredentialStore } from '../admin/owner-credentials.js';
 import { readRoutes } from '../admin/admin-routes.js';
 import { DiscordClientDirectory } from '../admin/discord-directory.js';
 import { LogBuffer } from '../admin/log-buffer.js';
@@ -311,7 +312,7 @@ export async function startBot(
       return new AdminPanel(environment.adminPanel!, () => [
         ...readRoutes({ query, logs }),
         ...actionRoutes({ actions, query, broadcasts: broadcastService }),
-      ], logs);
+      ], logs, safeLogger, settingOwnerCredentialStore(adminControlRepository));
     })() : null;
     registerGuildTracking({
       client,
