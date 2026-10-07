@@ -134,7 +134,7 @@ Dealio runs on a single server as a **limited beta**. Three users reported succe
 - [ ] Real sale alerts, scheduled delivery, and duplicate checks
 - [ ] English, German, French and mobile trials, and a consented data-deletion trial
 
-[Roadmap and acceptance notes, TR →](docs/phase4-beta.tr.md)
+[Public launch checklist, TR →](docs/public-launch-checklist.tr.md)
 
 ## 🔒 Privacy & control
 

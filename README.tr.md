@@ -134,7 +134,7 @@ Dealio tek sunucuda **sınırlı beta** olarak çalışıyor. Üç kişi Türkç
 - [ ] Gerçek indirim, zamanlanmış teslim ve tekrar bildirim kontrolleri
 - [ ] İngilizce, Almanca, Fransızca ve mobil denemeler; onaylı veri silme denemesi
 
-[Yol haritası ve kabul notları →](docs/phase4-beta.tr.md)
+[Genel yayın kontrol listesi →](docs/public-launch-checklist.tr.md)
 
 ## 🔒 Verilerin ve kontrolün
 
