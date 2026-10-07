@@ -32,7 +32,8 @@ function savedPreference(p:NotificationPreference):NotificationPreference {
 }
 
 export async function handleAssistant(interaction:ChatInputCommandInteraction, service:AssistantService,
-  wishlist:WishlistViewService, signal?:AbortSignal, screen:AssistantView['screen']='wishlist', ui:PanelNavigation={}):Promise<void> {
+  wishlist:WishlistViewService, signal?:AbortSignal, screen:AssistantView['screen']='wishlist', ui:PanelNavigation={},
+  initial:{readonly eligibleOnly?:boolean}={}):Promise<void> {
   const editPanel=(options:Parameters<typeof interaction.editReply>[0])=>
     measureDiscordOperation(interaction,'assistant.render',()=>interaction.editReply(options));
   const loadWishlist=(refresh=false)=>measureDiscordOperation(interaction,'assistant.load',()=>wishlist.load(interaction.user.id,language,refresh));
@@ -66,7 +67,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
   let items:AssistantViewData['items']=result?.items??[],capturedAt=result?.capturedAt??new Date().toISOString();
   let errors:AssistantViewData['errors']=result?.errors??[];
   let loaded=result!==null;
-  const view:AssistantView={screen,page:0,query:'',eligibleOnly:false};
+  const view:AssistantView={screen,page:0,query:'',eligibleOnly:initial.eligibleOnly===true};
   const data=():AssistantViewData=>{
     const current=service.config(user);
     if(!current || current.configurationId!==config.configurationId || current.configVersion!==config.configVersion)

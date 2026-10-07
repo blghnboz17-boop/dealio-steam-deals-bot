@@ -37,7 +37,8 @@ it.each(['tr', 'en'] as const)('fits the complete home panel and disables nested
     if (value && value.type === 2) (value.style === 5 ? links : controls).push(value);
     return value;
   });
-  expect(controls).toHaveLength(5);
+  // Four tabs, the manual check and the Matching deals shortcut.
+  expect(controls).toHaveLength(6);
   // A fresh Steam check is the only Home action; there is no second "refresh" button.
   expect(serialized).not.toContain('dealio:session:refresh');
   // The support link lives here, on the panel, and never in alert DMs.

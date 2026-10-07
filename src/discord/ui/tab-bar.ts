@@ -6,8 +6,11 @@ import { tabNames } from './design.js';
 
 /** The four sections of the single Dealio panel. */
 export type DealioTab = 'home' | 'games' | 'alerts' | 'settings';
-/** A tab, or a screen opened from one (the manual check runs from Home). */
-export type PanelTarget = DealioTab | 'check';
+/**
+ * A tab, or a screen opened from one: the manual check and the matching deals
+ * (the Wishlist with only the deals that meet the user's rule) open from Home.
+ */
+export type PanelTarget = DealioTab | 'check' | 'deals';
 /** Opens a target in the message of an already acknowledged component interaction. */
 export type Navigate = (target: PanelTarget, component: MessageComponentInteraction) => Promise<void>;
 

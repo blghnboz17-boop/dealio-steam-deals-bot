@@ -118,8 +118,16 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
     de: 'Erlaube DMs in Discord und schick dann unter ⚙️ Einstellungen eine Test-DM.',
     fr: 'Autorise les MP dans Discord, puis envoie un MP de test depuis ⚙️ Réglages.',
   })));
+  // The matching deals from the last check, one tap away; a fresh Steam check is the other action.
+  const dealCount = options.eligibleDealCount;
+  const deals = dealCount === undefined ? null : dealCount > 0
+    ? button('deals', t({ tr: 'Kuralıma uyanlar', en: 'Matching deals', de: 'Passende Angebote', fr: 'Bons plans pour moi' })
+      + ' (' + dealCount + ')', '✅').setStyle(ButtonStyle.Primary)
+    : button('deals', t({ tr: 'Şu an kuralına uyan indirim yok', en: 'No matching deals right now',
+      de: 'Gerade keine passenden Angebote', fr: 'Aucun bon plan pour l’instant' }), '✅').setDisabled(true);
   root.addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
-    // One action: a fresh Steam check, whose result screen leads back to an up-to-date Home.
+    ...(deals ? [deals] : []),
+    // A fresh Steam check, whose result screen leads back to an up-to-date Home.
     button('check', t({ tr: 'Steam’de şimdi kontrol et', en: 'Check Steam now', de: 'Jetzt bei Steam prüfen', fr: 'Vérifier Steam maintenant' }), '🔄'),
     supportButton(language),
   ));

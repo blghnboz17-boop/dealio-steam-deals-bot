@@ -79,7 +79,7 @@ export function createDealioNavigator(services: DealioCommandServices): Navigate
     const assistant = services.wishlistViewService.assistantService;
     if (!assistant) throw new Error('The Dealio assistant is not configured');
     return handleAssistant(interaction, assistant, services.wishlistViewService, services.lifecycleSignal,
-      target === 'games' ? 'wishlist' : 'rhythm', ui);
+      target === 'games' || target === 'deals' ? 'wishlist' : 'rhythm', ui, { eligibleOnly: target === 'deals' });
   };
   return navigate;
 }
@@ -177,7 +177,7 @@ export async function handleDealio(
       component, 'dealio.button-ack', () => component.deferUpdate(),
     );
     const action = component.customId.slice(`dealio:${interaction.id}:`.length);
-    const target = action === 'check' ? 'check' : parseTabAction(action);
+    const target = action === 'check' || action === 'deals' ? action : parseTabAction(action);
     if (target && target !== 'home') {
       handedOff = true;
       handOffPanel({ component, target, navigate, stop: () => collector.stop('handoff'), settle: () => operations.drain() });
