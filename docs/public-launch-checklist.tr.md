@@ -77,16 +77,20 @@ Bu kapılar o commit için çalıştırılmadan geçti sayılmaz:
 Gizlilik politikası bunları bugünkü davranışla açıklıyor; düzeltilince politika da
 güncellenmeli.
 
-- [ ] **[Kod]** `deploy/switch-release.sh` her sürümde VM'de
+- [x] **[Kod, düzeltildi]** `deploy/switch-release.sh` her sürümde VM'de
   `~/dealio-backups/<tarih>-<sha>/wishlist.db` ve `restore-test.db` bırakıyor ve
   bunları hiç silmiyor. Silme günlüğü 35 gün sonra temizlendiği için daha eski bir
   kopyadan geri dönüş silinmiş kullanıcıyı geri getirebilir. Otomatik temizlik
-  (ör. 7 gün) eklenmeli; politika şu an “elle silinir” diyor.
-- [ ] **[Kod]** `/delete-data`, doğrudan mesajın `broadcast.audience` alanındaki
+  (ör. 7 gün) eklenmeli. Artık başarılı her geçişte 7 günden eski kopyalar
+  siliniyor; politika güncellendi. Sürüm çıkmazsa eski kopyalar bir sonraki sürüme
+  kadar kalır.
+- [x] **[Kod, düzeltildi]** `/delete-data`, doğrudan mesajın `broadcast.audience` alanındaki
   alıcı kimliğini (90 gün) ve `admin_audit.target` satırlarını (1 yıl) silmiyor.
-  Politika bunu açıklıyor; kimliğin silinmesi veya özetlenmesi değerlendirilmeli.
-- [ ] **[Kod]** Kurulumu olmayan biri `/delete-data` çalıştırınca kullanım kayıtları
+  Artık yalnız o kişiye giden mesaj siliniyor, diğer kitlelerden kimlik çıkarılıyor
+  ve denetim kaydındaki kimlik hash ile değiştiriliyor; politika güncellendi.
+- [x] **[Kod, düzeltildi]** Kurulumu olmayan biri `/delete-data` çalıştırınca kullanım kayıtları
   siliniyor ama ekran “veri bulunamadı” diyor ve silme günlüğüne kayıt yazılmıyor;
-  yedekten dönüşte bu kayıtlar geri gelebilir.
+  yedekten dönüşte bu kayıtlar geri gelebilir. Artık her silme günlüğe yazılıyor
+  ve ekran kalan kullanım kayıtlarının da silindiğini söylüyor.
 - [ ] **[Kod]** VM'in genel IP adresi `scripts/admin-tunnel.ps1` ve `deploy/*.md`
   içinde yazılı. Depo özel olduğu sürece sorun değil; depo açılacaksa çıkarılmalı.

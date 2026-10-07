@@ -100,15 +100,17 @@ Gizlilik politikasında (`docs/privacy*.html`, 7 Ekim 2026) açıklandığı gib
 - `interaction_event`: kullanıcı, sunucu (DM'de boş), bağlam, kurulum türü,
   komut/düğme adı (girdi metni değil), Discord dili, zaman. 90 gün.
 - `guild_event`: botun eklendiği/çıkarıldığı sunucu, ad, üye sayısı, zaman.
-- `admin_audit`: panel işlemleri, hedef hesabın Discord kimliği ve ayrıntı, 1 yıl.
+- `admin_audit`: panel işlemleri, hedef hesabın Discord kimliği (hesap silinince
+  hash'i) ve ayrıntı, 1 yıl.
 - `broadcast`, `broadcast_recipient`: duyuru/mesaj metni, hedef kitle (doğrudan mesajda
   alıcı kimliği) ve teslim durumu; oluşturulmasından 90 gün sonra (gönderim bitmişse) silinir.
 - `user_block`, `guild_block`, `runtime_setting`.
 
 `/delete-data` kullanım ve teslim kayıtlarını da siler; silme günlüğü yedekten
-dönen eski kullanım kayıtlarını da temizler. Engel kaydı, `admin_audit` satırları ve
-doğrudan mesajın `broadcast.audience` alanındaki alıcı kimliği korunur; gizlilik
-politikası bunu açıkça yazar.
+dönen eski kullanım kayıtlarını da temizler. Yalnız o kişiye giden doğrudan
+mesajları siler, diğer `broadcast.audience` listelerinden kimliği çıkarır ve
+`admin_audit` satırlarındaki kimliği silme günlüğündeki hash ile değiştirir. Engel
+kaydı korunur; gizlilik politikası bunu açıkça yazar.
 
 ## Güvenlik
 
