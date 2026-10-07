@@ -71,6 +71,8 @@ interface BatchDeliveryOutcome {
   readonly sentCount: number;
   readonly failedCount: number;
   readonly cancelled: boolean;
+  /** The user does not accept DMs: the user's further batches would fail the same way. */
+  readonly recipientBlocked?: boolean;
 }
 
 export interface NotificationServiceOptions {
@@ -205,6 +207,7 @@ export class NotificationService {
     let sentCount = 0;
     let failedCount = 0;
     let cancelled = false;
+    let recipientBlocked = false;
 
     for (const batch of retryableBatches) {
       if (this.lifecycleSignal?.aborted) {
@@ -232,13 +235,14 @@ export class NotificationService {
       sentCount += outcome.sentCount;
       failedCount += outcome.failedCount;
       cancelled = outcome.cancelled;
-      if (cancelled) {
+      if (cancelled || outcome.recipientBlocked) {
+        recipientBlocked = outcome.recipientBlocked === true;
         break;
       }
     }
 
     const candidateGroups: NotificationCandidate[][] = [];
-    if (!cancelled && !this.lifecycleSignal?.aborted) {
+    if (!cancelled && !recipientBlocked && !this.lifecycleSignal?.aborted) {
       let currentAttemptCount: number | undefined;
       let currentCandidates: NotificationCandidate[] = [];
 
@@ -290,7 +294,8 @@ export class NotificationService {
         sentCount += outcome.sentCount;
         failedCount += outcome.failedCount;
         cancelled = outcome.cancelled;
-        if (cancelled) {
+        // Every further DM to a user who blocks them is another rejected Discord request.
+        if (cancelled || outcome.recipientBlocked) {
           break delivery;
         }
         // Commands and other users' work get a turn between DMs of a long queue.
@@ -459,6 +464,7 @@ export class NotificationService {
         sentCount: 0,
         failedCount: batch.notifications.length,
         cancelled: false,
+        recipientBlocked: permanentlyBlocked,
       };
     }
 
