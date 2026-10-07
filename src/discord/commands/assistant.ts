@@ -2,6 +2,7 @@
 import { ChatInputCommandInteraction, LabelBuilder, MessageFlags, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle, type InteractionEditReplyOptions, type InteractionUpdateOptions } from 'discord.js';
 import type { AssistantService } from '../../application/assistant-service.js';
 import type { WishlistViewService } from '../../application/wishlist-view-service.js';
+import { TestNotificationCooldownError } from '../../application/test-notification-service.js';
 import { formatMinorPrice } from '../notification-messages.js';
 import { buildAssistantView, effectiveTimezone, type AssistantView, type AssistantViewData, type GameHistoryState, filteredAssistantItems } from '../assistant-view.js';
 import { languageFromDiscordLocale } from '../language.js';
@@ -10,6 +11,7 @@ import { messagesFor } from '../messages.js';
 import { uiCopy } from '../ui/copy.js';
 import { buildNoticePanel, dealioV2Flags, dealioEphemeralV2Flags, dealioUiSessionTimeoutMs } from '../ui/components-v2.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
+import { isFromUser } from '../ui/refused-interactions.js';
 import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { safeLogger } from '../../application/safe-logger.js';
 import { handOffPanel, parseTabAction, type PanelNavigation } from '../ui/tab-bar.js';
@@ -102,7 +104,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
   try { message=await measureDiscordOperation(interaction,'assistant.open',()=>interaction.editReply({flags:dealioV2Flags,components:[buildAssistantView(data(),view,interaction.id)]})); }
   catch(error) { close();throw error; }
   const collector=message.createMessageComponentCollector({time:dealioUiSessionTimeoutMs,
-    filter:c=>c.user.id===user&&c.customId.startsWith('assistant:'+interaction.id+':')});
+    filter:c=>isFromUser(c,user)&&c.customId.startsWith('assistant:'+interaction.id+':')});
   const operations=new PanelOperationQueue(async(error)=>{
     safeLogger.error('Assistant panel failed',error);
     await interaction.followUp({flags:dealioEphemeralV2Flags,components:[buildNoticePanel(language,'warning',
@@ -189,7 +191,7 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
       const task=(async()=>{
         await measureDiscordOperation(component,'assistant.modal',()=>component.showModal(modal));
         const submit=await component.awaitModalSubmit({time:dealioUiSessionTimeoutMs,
-          filter:m=>m.user.id===user&&m.customId===id}).catch(()=>null);
+          filter:m=>isFromUser(m,user)&&m.customId===id}).catch(()=>null);
         if(!submit)return;
         if(collector.ended||signal?.aborted){await submit.reply({content:t({tr:'Bu panel kapandı. /dealio ile yenisini açabilirsin.',en:'This panel has closed. Open a new one with /dealio.',
           de:'Dieses Panel ist geschlossen. Öffne mit /dealio ein neues.',fr:'Ce panneau est fermé. Ouvre-en un nouveau avec /dealio.'}),flags:MessageFlags.Ephemeral});return;}
@@ -230,12 +232,19 @@ export async function handleAssistant(interaction:ChatInputCommandInteraction, s
     void operations.enqueueClick(component,'assistant',async()=>{
       view.notice=undefined;
       if(action==='retry'){
-        await service.retryDm(user,config.configurationId,config.configVersion);
-        view.notice=t({
-          tr:'Deneme DM’i Discord’a ulaştı. Takip kapalıysa /dealio → ⚙️ Ayarlar’dan bildirimleri açabilirsin.',
-          en:'Test DM delivered to Discord. If tracking is paused, turn alerts on in /dealio → ⚙️ Settings.',
-          de:'Test-DM an Discord zugestellt. Ist die Überwachung pausiert, schalte sie unter /dealio → ⚙️ Einstellungen ein.',
-          fr:'MP de test remis à Discord. Si le suivi est en pause, réactive les alertes dans /dealio → ⚙️ Réglages.'});
+        try{
+          await service.retryDm(user,config.configurationId,config.configVersion);
+          view.notice=t({
+            tr:'Deneme DM’i Discord’a ulaştı. Takip kapalıysa /dealio → ⚙️ Ayarlar’dan bildirimleri açabilirsin.',
+            en:'Test DM delivered to Discord. If tracking is paused, turn alerts on in /dealio → ⚙️ Settings.',
+            de:'Test-DM an Discord zugestellt. Ist die Überwachung pausiert, schalte sie unter /dealio → ⚙️ Einstellungen ein.',
+            fr:'MP de test remis à Discord. Si le suivi est en pause, réactive les alertes dans /dealio → ⚙️ Réglages.'});
+        }catch(error){
+          // Closed DMs are what this button exists to find: say so here, like Settings does.
+          if(error instanceof TestNotificationCooldownError)view.notice='⏳ '+messages.testNotificationCooldown(error.retryAfterSeconds);
+          else if(error instanceof Error&&error.message==='Account changed')throw error;
+          else view.notice='🛑 '+messages.testNotificationFailed;
+        }
       }
       else if(action==='game'&&component.isStringSelectMenu()){view.selectedAppId=Number(component.values[0]);view.screen='detail';loadHistory();}
       else if(action==='refresh'){

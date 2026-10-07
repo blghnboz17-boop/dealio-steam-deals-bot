@@ -21,6 +21,7 @@ import { dealioUiSessions } from './ui/session-manager.js';
 import { localizer } from './i18n.js';
 import { languageFromDiscordLocale } from './language.js';
 import { recordInteraction } from './interaction-telemetry.js';
+import { refuseInteraction } from './ui/refused-interactions.js';
 import type { TelemetryRepository } from '../persistence/telemetry-repository.js';
 
 export interface BotCommandServices {
@@ -49,10 +50,16 @@ export interface BotEventOptions {
   readonly blocks?: { isUserBlocked(discordUserId: string): boolean };
 }
 
-/** Deleting one's data stays possible for a blocked account. */
+/**
+ * Deleting one's data stays possible for a blocked account: the command, its
+ * buttons and its confirmation form. Setting Dealio up again afterwards does not.
+ */
 export function allowedWhileBlocked(interaction: Interaction): boolean {
   if (interaction.isChatInputCommand()) return interaction.commandName === 'delete-data';
-  if (interaction.isMessageComponent() || interaction.isModalSubmit()) return interaction.customId.startsWith('delete-v2:');
+  if (interaction.isMessageComponent()) {
+    return interaction.customId.startsWith('delete-v2:') && !interaction.customId.endsWith(':setup');
+  }
+  if (interaction.isModalSubmit()) return interaction.customId.startsWith('delete-confirm:');
   return false;
 }
 
@@ -88,6 +95,8 @@ export function registerBotEvents(options: BotEventOptions): void {
       safeLogger.error('Could not read the user block list', error);
     }
     if (blocked && !allowedWhileBlocked(interaction)) {
+      // Open panels and forms receive this interaction too; they must ignore it.
+      refuseInteraction(interaction);
       if (interaction.isRepliable()) {
         const language = languageFromDiscordLocale(interaction.locale);
         const t = localizer(language);
