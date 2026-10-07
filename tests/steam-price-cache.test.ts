@@ -67,3 +67,26 @@ it('never serves a price cached before Steam\'s daily price change after it', as
   expect(prices()).toBe(2);
   expect(afterChange[0]).toMatchObject({ onSale: true, price: { discountPercent: 50 } });
 });
+
+it('does not keep a price requested before the daily change that arrives after it', async () => {
+  let now = Date.parse('2026-10-07T16:59:58Z');
+  let discount = 0;
+  const fetch = routeSteam({
+    wishlist: () => wishlistResponse([10]),
+    prices: () => {
+      // Steam answers with the old price, but the response lands after 10:00 Pacific.
+      const response = jsonResponse({ '10': priceOverview('USD', 1000, 1000 - discount * 10, discount) });
+      now = Date.parse('2026-10-07T17:00:03Z');
+      return response;
+    },
+  });
+  const client = new SteamClient({ fetchImpl: fetch, now: () => now, maxRetries: 0 });
+  const prices = () => fetch.mock.calls.filter(call => isRoute(call, 'appdetails')).length;
+
+  expect((await client.getWishlist('76561198000000000', 'TR', 'en'))[0].onSale).toBe(false);
+  discount = 50;
+  now = Date.parse('2026-10-07T17:02:00Z');
+  const afterChange = await client.getWishlist('76561198000000000', 'TR', 'en');
+  expect(prices()).toBe(2);
+  expect(afterChange[0]).toMatchObject({ onSale: true, price: { discountPercent: 50 } });
+});

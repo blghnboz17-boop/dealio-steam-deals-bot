@@ -37,6 +37,12 @@ describe('Steam profile input parsing', () => {
     `http://steamcommunity.com/profiles/${steamId64}/`,
     `steamcommunity.com/profiles/${steamId64}`,
     `HTTPS://STEAMCOMMUNITY.COM/PROFILES/${steamId64}/?utm_source=test#profile`,
+    // Links users copy from other pages: a sub-page, the www host, the Store wishlist.
+    `https://steamcommunity.com/profiles/${steamId64}/wishlist/`,
+    `https://www.steamcommunity.com/profiles/${steamId64}`,
+    `www.steamcommunity.com/profiles/${steamId64}/games/?tab=all`,
+    `https://store.steampowered.com/wishlist/profiles/${steamId64}/#sort=order`,
+    `store.steampowered.com/wishlist/profiles/${steamId64}`,
   ])('normalizes a safe profiles URL without a network request: %s', (input) => {
     expect(parseSteamProfileInput(input)).toEqual({ type: 'steam-id', steamId64 });
   });
@@ -45,6 +51,8 @@ describe('Steam profile input parsing', () => {
     ['https://steamcommunity.com/id/Example_Name/', 'example_name'],
     ['steamcommunity.com/id/example-name?x=1#top', 'example-name'],
     ['Bare_Vanity', 'bare_vanity'],
+    ['https://steamcommunity.com/id/Example_Name/wishlist', 'example_name'],
+    ['https://store.steampowered.com/wishlist/id/Example_Name/', 'example_name'],
   ])('normalizes vanity input %s', (input, vanityName) => {
     expect(parseSteamProfileInput(input)).toEqual({ type: 'vanity', vanityName });
   });
@@ -63,6 +71,15 @@ describe('Steam profile input parsing', () => {
     'bad name',
     'https://steamcommunity.com/id/safe\nname',
     'a',
+    // 17 digits that are not a personal account cannot own a wishlist.
+    '12345678901234567',
+    '76561197960265728',
+    `https://steamcommunity.com/profiles/76561202255233024`,
+    'https://store.steampowered.com/app/220/',
+    `https://store.steampowered.com/wishlist/profiles/${steamId64}/extra`,
+    `https://store.steampowered.com/profiles/${steamId64}`,
+    `https://steamcommunity.com/id/foo/bad.page`,
+    `https://help.steampowered.com/wishlist/profiles/${steamId64}`,
   ])('rejects unsafe or invalid input: %s', (input) => {
     expect(() => parseSteamProfileInput(input)).toThrowError(
       expect.objectContaining({ code: 'STEAM_PROFILE_INVALID' }),
@@ -198,6 +215,19 @@ describe('SteamIdentityResolver', () => {
       expectIdentityCode(error, 'STEAM_IDENTITY_CANCELLED');
     });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('releases the connection of an error response it does not read', async () => {
+    const failed = new Response('busy', { status: 503 });
+    const resolver = new SteamIdentityResolver({
+      apiKey: 'secret-api-key',
+      fetchImpl: fetchMock().mockResolvedValue(failed),
+    });
+
+    await resolver.resolve('valid-name').catch((error: unknown) => {
+      expectIdentityCode(error, 'STEAM_VANITY_UNAVAILABLE');
+    });
+    expect(failed.bodyUsed).toBe(true);
   });
 
   it('does not log API keys, vanity input, or request URLs', async () => {

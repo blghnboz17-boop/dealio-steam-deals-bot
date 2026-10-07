@@ -177,6 +177,52 @@ describe('IsThereAnyDeal client', () => {
     await expect(f.client.historicalLows(usd(220), 'TR')).resolves.toEqual(new Map());
   });
 
+  it('loads the histories of a currency-changed region a few at a time, not one by one', async () => {
+    // Turkey: every store low is from the TRY era, so each alerted game needs its history.
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetchImpl = vi.fn<PriceHistoryFetch>(async (input, init) => {
+      if (init.method === 'GET') {
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        inFlight -= 1;
+        return jsonResponse([historyEntry('2026-10-01T00:00:00+00:00', 1.15, 'USD', 80)]);
+      }
+      const body = JSON.parse(init.body!) as string[];
+      return input.includes('/lookup/')
+        ? jsonResponse(Object.fromEntries(body.map((key) => [key, `game-${key.slice(4)}`])))
+        : jsonResponse(body.map((id) => steamLow(id, 1.8, 'TRY')));
+    });
+    const client = new IsThereAnyDealClient({ apiKey: 'secret-key', fetchImpl });
+    const appIds = Array.from({ length: 10 }, (_, index) => index + 1);
+
+    const lows = await client.historicalLows(usd(...appIds), 'TR');
+
+    expect([...lows.keys()]).toEqual(appIds);
+    expect(fetchImpl.mock.calls.filter(([, init]) => init.method === 'GET')).toHaveLength(10);
+    expect(maxInFlight).toBe(4);
+  });
+
+  it('does not call a free giveaway the historical low of a paid game', async () => {
+    // The game was once given away on Steam; the detail panel ignores that, so must alerts.
+    const f = fixture(
+      (ids) => ids.map((id) => steamLow(id, 0)),
+      () => [
+        historyEntry('2026-10-01T00:00:00+00:00', 19.99, 'USD', 0),
+        historyEntry('2025-06-01T00:00:00+00:00', 0, 'USD', 100),
+        historyEntry('2024-06-01T00:00:00+00:00', 4.99, 'USD', 75),
+      ],
+    );
+    const lows = await f.client.historicalLows(usd(220), 'US');
+
+    expect([...lows]).toEqual([[220, {
+      currency: 'USD', amountMinor: 499, discountPercent: 75, recordedAt: '2024-06-01T00:00:00.000Z',
+    }]]);
+    await expect(f.client.gameHistory({ appId: 220, currency: 'USD' }, 'US'))
+      .resolves.toMatchObject({ low: { amountMinor: 499 } });
+  });
+
   it('loads one game history for the detail panel and shares it with alerts', async () => {
     const f = fixture(
       (ids) => ids.map((id) => steamLow(id, 1.8, 'TRY')),

@@ -4,7 +4,7 @@ import {
   globalSteamRequestLimiter,
   type SteamRequestLimiter,
 } from './request-limiter.js';
-import type { SteamFetch } from './steam-client.js';
+import { discardBody, type SteamFetch } from './steam-client.js';
 
 const resolveVanityEndpoint =
   'https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/';
@@ -29,9 +29,29 @@ function defaultFetch(input: string, init?: { readonly signal?: AbortSignal }): 
   return globalThis.fetch(input, init);
 }
 
+/** The SteamID64 range of individual (personal) accounts; other values cannot own a wishlist. */
+const firstIndividualSteamId = 76561197960265729n;
+const lastIndividualSteamId = 76561202255233023n;
+
+function isIndividualSteamId64(value: string): boolean {
+  if (!isSteamId64(value)) {
+    return false;
+  }
+  const id = BigInt(value);
+  return id >= firstIndividualSteamId && id <= lastIndividualSteamId;
+}
+
+/** Profile pages and the Store wishlist page, which users often paste instead of their profile. */
+const communityProfilePath = /^\/(profiles|id)\/([^/]+)(?:\/[\w-]+)*\/?$/iu;
+const profilePaths: ReadonlyMap<string, RegExp> = new Map([
+  ['steamcommunity.com', communityProfilePath],
+  ['www.steamcommunity.com', communityProfilePath],
+  ['store.steampowered.com', /^\/wishlist\/(profiles|id)\/([^/]+)\/?$/iu],
+]);
+
 export function parseSteamProfileInput(input: string): ParsedSteamProfile {
   const value = input.trim();
-  if (isSteamId64(value)) {
+  if (isIndividualSteamId64(value)) {
     return { type: 'steam-id', steamId64: value };
   }
   if (/^\d+$/.test(value)) {
@@ -45,7 +65,8 @@ export function parseSteamProfileInput(input: string): ParsedSteamProfile {
   }
 
   const hasSupportedPrefix = /^https?:\/\//i.test(value)
-    || /^steamcommunity\.com\//i.test(value);
+    || /^(?:www\.)?steamcommunity\.com\//i.test(value)
+    || /^store\.steampowered\.com\//i.test(value);
   if (!hasSupportedPrefix || value.includes('\\')) {
     throw invalidProfileError();
   }
@@ -60,9 +81,10 @@ export function parseSteamProfileInput(input: string): ParsedSteamProfile {
   } catch (_error: unknown) {
     throw invalidProfileError();
   }
+  const profilePath = profilePaths.get(url.hostname);
   if (
     (url.protocol !== 'https:' && url.protocol !== 'http:')
-    || url.hostname !== 'steamcommunity.com'
+    || !profilePath
     || url.port !== ''
     || url.username !== ''
     || url.password !== ''
@@ -70,14 +92,14 @@ export function parseSteamProfileInput(input: string): ParsedSteamProfile {
     throw invalidProfileError();
   }
 
-  const match = /^\/(profiles|id)\/([^/]+)\/?$/iu.exec(url.pathname);
+  const match = profilePath.exec(url.pathname);
   if (!match) {
     throw invalidProfileError();
   }
   const kind = match[1]?.toLowerCase();
   const identity = match[2] ?? '';
   if (kind === 'profiles') {
-    if (!isSteamId64(identity)) {
+    if (!isIndividualSteamId64(identity)) {
       throw invalidProfileError();
     }
     return { type: 'steam-id', steamId64: identity };
@@ -204,6 +226,7 @@ export class SteamIdentityResolver {
         cancellationPromise,
       ]);
       if (!response.ok) {
+        discardBody(response);
         throw unavailableIdentityError();
       }
       return await Promise.race([

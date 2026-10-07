@@ -52,6 +52,8 @@ const defaultFailurePauseMs = 5 * 60 * 1000;
 /** Full Steam history, so a region's whole current-currency period is covered. */
 const historyStart = '2000-01-01T00:00:00Z';
 const recentChangeCount = 5;
+/** History requests in flight at once for one lookup. */
+const historyConcurrency = 4;
 const maxCacheEntries = 20_000;
 
 interface CacheEntry<V> {
@@ -144,16 +146,24 @@ export class IsThereAnyDealClient implements HistoricalLowSource, GameHistorySou
           signal,
           chunk.map(({ gameId }) => gameId),
         ));
-        for (const { appId, gameId } of chunk) {
+        const chunkLows = new Map<number, HistoricalLow | null>();
+        // In a region that changed currency (Turkey) nearly every game needs its own
+        // history; one at a time, a few alerts would outlast the timeout and get none.
+        await forEachLimited(chunk, historyConcurrency, async ({ appId, gameId }) => {
           const currency = currencies.get(appId)!;
           const storeLow = lows.get(gameId);
           // A region that changed currency keeps its old-currency low; use the
           // current currency's own period instead of comparing across currencies.
-          const low = !storeLow || storeLow.currency === currency
+          // A free giveaway is not a sale either, so its 0 low falls back to the paid history.
+          const low = !storeLow || (storeLow.currency === currency && storeLow.amountMinor > 0)
             ? storeLow ?? null
             : (this.cached(this.histories, lowKey(country, appId, currency))
               ?? await this.fetchHistory(gameId, { appId, currency }, country, signal)).low;
           this.remember(this.lows, lowKey(country, appId, currency), low, this.now() + this.lowCacheTtlMs);
+          chunkLows.set(appId, low);
+        });
+        for (const { appId } of chunk) {
+          const low = chunkLows.get(appId);
           if (low) {
             result.set(appId, low);
           }
@@ -302,6 +312,29 @@ export class IsThereAnyDealClient implements HistoricalLowSource, GameHistorySou
     }
     cache.set(key, { value, expiresAt });
   }
+}
+
+/** Runs `worker` over `values`, at most `limit` at a time; the first failure stops new work. */
+async function forEachLimited<T>(
+  values: readonly T[],
+  limit: number,
+  worker: (value: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  let failed = false;
+  const consume = async (): Promise<void> => {
+    while (!failed && next < values.length) {
+      const value = values[next]!;
+      next += 1;
+      try {
+        await worker(value);
+      } catch (error: unknown) {
+        failed = true;
+        throw error;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, consume));
 }
 
 function lowKey(country: StoreCountryCode, appId: number, currency: string): string {
