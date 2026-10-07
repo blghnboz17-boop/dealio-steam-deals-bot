@@ -204,6 +204,13 @@ export class AssistantRepository {
   }
   cleanup(now=new Date()): void {
     preparedStatement(this.db,'DELETE FROM price_observation WHERE observed_at < ?').run(new Date(now.getTime()-90*86400000).toISOString());
+    // A Steam account or Store region change starts a new generation; nothing reads the
+    // earlier ones again. Their per-game state (with the old Steam ID) would otherwise stay
+    // forever and keep that generation's alert history from ever ageing out below.
+    for (const table of ['wishlist_item_state','game_rule','game_discount_threshold']) {
+      preparedStatement(this.db,`DELETE FROM ${table} WHERE NOT EXISTS (SELECT 1 FROM user_config AS config
+        WHERE config.discord_user_id=${table}.discord_user_id AND config.config_version=${table}.config_version)`).run();
+    }
     // Hide old history immediately, retain dedup for every active offer and all unresolved deliveries.
     preparedStatement(this.db,`DELETE FROM notification_batch WHERE status IN ('sent','expired','terminal_failed') AND created_at<?
       AND NOT EXISTS (SELECT 1 FROM notification_batch_item i JOIN notification_log n ON n.discord_user_id=i.discord_user_id
