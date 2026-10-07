@@ -17,6 +17,19 @@ export function hashDiscordUserId(discordUserId: string): string {
 }
 
 /**
+ * The owner's audit trail keeps its rows (one year), but a deleted user is named in
+ * them only by the same one-way hash the journal uses. With `upTo`, only rows written
+ * by then are changed (re-applying a deletion after a restore).
+ */
+export function pseudonymizeAuditUser(database: DatabaseSync, discordUserId: string, upTo?: string): void {
+  const hash = hashDiscordUserId(discordUserId);
+  database.prepare(`UPDATE admin_audit
+    SET target = CASE WHEN target = ? THEN ? ELSE target END, detail = replace(detail, ?, ?)
+    WHERE (target = ? OR instr(detail, ?) > 0) AND (? IS NULL OR occurred_at <= ?)`)
+    .run(discordUserId, hash, discordUserId, hash, discordUserId, discordUserId, upTo ?? null, upTo ?? null);
+}
+
+/**
  * `/delete-data` requests, kept in a small file beside the database instead of in it.
  * Restoring an older database file therefore cannot bring a deleted user back: at
  * startup every configuration created before its owner's recorded deletion is removed.
@@ -59,13 +72,15 @@ export class DeletionJournal {
       const removeEvents = database.prepare('DELETE FROM interaction_event WHERE discord_user_id = ? AND occurred_at <= ?');
       const seen = database.prepare(`SELECT DISTINCT discord_user_id FROM interaction_event
         UNION SELECT DISTINCT discord_user_id FROM broadcast_recipient
-        UNION SELECT DISTINCT CAST(named.value AS TEXT) FROM broadcast, json_each(broadcast.audience, '$.userIds') AS named`)
+        UNION SELECT DISTINCT CAST(named.value AS TEXT) FROM broadcast, json_each(broadcast.audience, '$.userIds') AS named
+        UNION SELECT DISTINCT target FROM admin_audit WHERE target IS NOT NULL`)
         .all() as Array<{ discord_user_id: string }>;
       for (const { discord_user_id: userId } of seen) {
         const at = deletedAt.get(hashDiscordUserId(userId));
         if (!at) continue;
         removeEvents.run(userId, at);
         deleteUserFromBroadcasts(database, userId, at);
+        pseudonymizeAuditUser(database, userId, at);
       }
     }
     for (const user of users) {

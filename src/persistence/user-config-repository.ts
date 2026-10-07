@@ -1,6 +1,7 @@
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
 import { rebaselineDiscountAlerts } from './alert-levels.js';
 import { deleteUserFromBroadcasts } from './broadcast-repository.js';
+import { pseudonymizeAuditUser } from './deletion-journal.js';
 import { randomUUID } from 'node:crypto';
 import { isLanguage, type Language, type UserConfig } from '../domain/user-config.js';
 import {
@@ -417,6 +418,7 @@ export class UserConfigRepository {
       // key (a visitor can use Dealio before setup), so they are removed here.
       this.database.prepare('DELETE FROM interaction_event WHERE discord_user_id = ?').run(discordUserId);
       deleteUserFromBroadcasts(this.database, discordUserId);
+      pseudonymizeAuditUser(this.database, discordUserId);
       const result = this.database
         .prepare('DELETE FROM user_config WHERE discord_user_id = ?')
         .run(discordUserId);

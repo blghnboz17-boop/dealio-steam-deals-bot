@@ -6,7 +6,7 @@ import { afterEach, expect, it } from 'vitest';
 import { AdminControlRepository } from '../src/persistence/admin-control-repository.js';
 import { BroadcastRepository } from '../src/persistence/broadcast-repository.js';
 import { createDatabase } from '../src/persistence/database.js';
-import { DeletionJournal } from '../src/persistence/deletion-journal.js';
+import { DeletionJournal, hashDiscordUserId } from '../src/persistence/deletion-journal.js';
 import { TelemetryRepository } from '../src/persistence/telemetry-repository.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
@@ -24,8 +24,8 @@ afterEach(() => {
 
 /** Every stored value that still holds the user's Discord or Steam ID, outside records the policy keeps. */
 function remainingReferences(database: DatabaseSync): string[] {
-  // The privacy policy keeps the block record and the owner's action audit trail.
-  const retained = new Set(['user_block', 'admin_audit']);
+  // The privacy policy keeps the block record until the block is lifted.
+  const retained = new Set(['user_block']);
   const tables = database.prepare("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
     .all() as Array<{ name: string }>;
   const found: string[] = [];
@@ -75,7 +75,9 @@ function seed(database: DatabaseSync): void {
     [{ discordUserId: user, language: 'en' }, { discordUserId: other, language: 'en' }], at);
   broadcasts.create('everyone', content, {},
     [{ discordUserId: user, language: 'en' }, { discordUserId: other, language: 'en' }], at);
-  new AdminControlRepository(database).audit('user.message', user, null, 'ok', at);
+  const controls = new AdminControlRepository(database);
+  controls.audit('user.message', user, 'en', 'ok', at);
+  controls.audit('broadcast.create', null, JSON.stringify({ userIds: [user, other] }), 'ok', at);
 }
 
 it('/delete-data leaves no trace of the user outside the records the policy keeps', () => {
@@ -93,6 +95,12 @@ it('/delete-data leaves no trace of the user outside the records the policy keep
     expect(broadcasts.recipients('named').map((row) => row.discordUserId)).toEqual([other]);
     expect(broadcasts.recipients('everyone').map((row) => row.discordUserId)).toEqual([other]);
     expect(new UserConfigRepository(database).findByDiscordUserId(other)).not.toBeNull();
+    // The owner's audit rows stay (one year), naming the user only by the journal's hash.
+    expect(new AdminControlRepository(database).auditEntries(10).map((entry) => [entry.action, entry.target, entry.detail]))
+      .toEqual([
+        ['broadcast.create', null, JSON.stringify({ userIds: [hashDiscordUserId(user), other] })],
+        ['user.message', hashDiscordUserId(user), 'en'],
+      ]);
   } finally {
     database.close();
   }
@@ -132,6 +140,21 @@ it('re-applies the announcement part of a deletion to a restored database', asyn
     expect(broadcasts.get('named')?.audience).toEqual({ userIds: [other] });
     expect(broadcasts.get('later')?.audience).toEqual({ userIds: [user] });
     expect(broadcasts.recipients('everyone').map((row) => row.discordUserId)).toEqual([other]);
+    expect(new AdminControlRepository(database).auditEntries(10, hashDiscordUserId(user)).map((entry) => entry.action))
+      .toEqual(['user.message']);
+    expect(remainingReferences(database).filter((reference) => reference.startsWith('admin_audit'))).toEqual([]);
+  } finally {
+    database.close();
+  }
+});
+
+it('records a completed owner deletion without the deleted Discord ID', () => {
+  const database = createDatabase(':memory:');
+  try {
+    const controls = new AdminControlRepository(database);
+    controls.audit('user.delete', user, null, 'ok', at);
+    controls.audit('user.delete', other, null, 'failed', at);
+    expect(controls.auditEntries(10).map((entry) => entry.target)).toEqual([other, hashDiscordUserId(user)]);
   } finally {
     database.close();
   }
