@@ -136,6 +136,39 @@ describe.skipIf(bash === null)('deploy/switch-release.sh', () => {
     expect(existsSync(join(backups, backup!, 'wishlist.db'))).toBe(true);
   }, 60_000);
 
+  it('deletes database copies of releases older than seven days only after a successful switch', () => {
+    const backups = join(home, 'dealio-backups');
+    const day = (daysAgo: number): string => new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10).replace(/-/g, '');
+    const folders = { old: `${day(30)}-1111111`, recent: `${day(2)}-2222222`, unrelated: 'manual-copy' };
+    for (const folder of Object.values(folders)) {
+      mkdirSync(join(backups, folder, 'dist'), { recursive: true });
+      for (const file of ['wishlist.db', 'wishlist.db-wal', 'restore-test.db', join('dist', 'index.js')]) {
+        writeFileSync(join(backups, folder, file), 'copy');
+      }
+    }
+
+    expect(run(sha, { STUB_BOT: 'migrate' }).status).not.toBe(0);
+    expect(existsSync(join(backups, folders.old, 'wishlist.db'))).toBe(true);
+
+    rmSync(`${log}.starts`, { force: true });
+    const result = run(sha);
+    expect(result.status, result.output).toBe(0);
+    for (const file of ['wishlist.db', 'wishlist.db-wal', 'restore-test.db']) {
+      expect(existsSync(join(backups, folders.old, file)), file).toBe(false);
+    }
+    expect(readFileSync(join(backups, folders.old, 'dist', 'index.js'), 'utf8')).toBe('copy');
+    expect(existsSync(join(backups, folders.recent, 'wishlist.db'))).toBe(true);
+    expect(existsSync(join(backups, folders.unrelated, 'wishlist.db'))).toBe(true);
+    // The failed attempt and the rerun keep separate folders; neither nests a dist.
+    const releases = readdirSync(backups).filter((name) => name.includes(`-${sha}`));
+    expect(releases).toHaveLength(2);
+    for (const release of releases) {
+      expect(existsSync(join(backups, release, 'wishlist.db'))).toBe(true);
+      expect(readFileSync(join(backups, release, 'dist', 'index.js'), 'utf8')).toBe('old build');
+      expect(existsSync(join(backups, release, 'dist', 'dist'))).toBe(false);
+    }
+  }, 60_000);
+
   it('changes nothing when the archive does not match the manifest or the argument is not a sha', () => {
     writeManifest('0'.repeat(64));
     const mismatch = run(sha);

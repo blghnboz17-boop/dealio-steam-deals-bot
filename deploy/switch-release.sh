@@ -19,7 +19,10 @@ APP=~/steam-wishlist-discord-bot
 CAND=~/dealio-candidate-$SHA
 MANIFEST=$CAND/manifest-$SHA.json
 ARCHIVE=$CAND/dist-$SHA.tar.gz
-B=~/dealio-backups/$(date -u +%Y%m%d)-$SHA
+BACKUPS=~/dealio-backups
+B=$BACKUPS/$(date -u +%Y%m%d)-$SHA
+# A rerun after a rollback must not move the live dist into the earlier dist copy.
+[ ! -e "$B" ] || B=$B-$(date -u +%H%M%S)
 HEALTH_TIMEOUT=${DEALIO_SWITCH_HEALTH_TIMEOUT:-180}
 [[ $HEALTH_TIMEOUT =~ ^[0-9]+$ ]] || { echo "DEALIO_SWITCH_HEALTH_TIMEOUT must be whole seconds"; exit 1; }
 field() { grep -o "\"$1\": \"[0-9a-f]*\"" "$MANIFEST" | cut -d'"' -f4; }
@@ -27,6 +30,22 @@ schema_version() {
   node -e 'const { DatabaseSync } = require("node:sqlite");
 const db = new DatabaseSync(process.argv[1], { readOnly: true });
 console.log(db.prepare("PRAGMA user_version").get().user_version);' "$1" 2>/dev/null
+}
+# Database copies of earlier releases hold user data that /delete-data removed
+# later (the deletion journal keeps 35 days). After a successful switch, copies
+# from release folders older than seven days are deleted; this release's copy,
+# every dist and manifest stay for code rollback. Only <yyyymmdd>-<sha>[-hhmmss] folders
+# directly inside ~/dealio-backups are touched, never symlinks.
+prune_database_copies() {
+  local cutoff dir name
+  cutoff=$(date -u -d '7 days ago' +%Y%m%d)
+  for dir in "$BACKUPS"/*; do
+    name=${dir##*/}
+    [[ $name =~ ^([0-9]{8})-[0-9a-f]{7,40}(-[0-9]{6})?$ ]] || continue
+    [ -d "$dir" ] && [ ! -L "$dir" ] && [ "$dir" != "$B" ] || continue
+    [[ ${BASH_REMATCH[1]} < $cutoff ]] || continue
+    rm -f -- "$dir/wishlist.db" "$dir/wishlist.db-wal" "$dir/wishlist.db-shm" "$dir/restore-test.db"
+  done
 }
 TREE=$(field sourceTree)
 test -n "$TREE" || { echo "manifest has no sourceTree"; exit 1; }
@@ -111,4 +130,5 @@ done
 systemctl is-active --quiet dealio
 trap - ERR
 rm -rf "$VERIFIED"
+prune_database_copies || echo "!! could not prune old database copies in $BACKUPS"
 echo "HEAD now $(git log --oneline -1); backup in $B"
