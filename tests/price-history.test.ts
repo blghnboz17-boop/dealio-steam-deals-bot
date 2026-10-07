@@ -177,6 +177,25 @@ describe('IsThereAnyDeal client', () => {
     await expect(f.client.historicalLows(usd(220), 'TR')).resolves.toEqual(new Map());
   });
 
+  it('does not call a free giveaway the historical low of a paid game', async () => {
+    // The game was once given away on Steam; the detail panel ignores that, so must alerts.
+    const f = fixture(
+      (ids) => ids.map((id) => steamLow(id, 0)),
+      () => [
+        historyEntry('2026-10-01T00:00:00+00:00', 19.99, 'USD', 0),
+        historyEntry('2025-06-01T00:00:00+00:00', 0, 'USD', 100),
+        historyEntry('2024-06-01T00:00:00+00:00', 4.99, 'USD', 75),
+      ],
+    );
+    const lows = await f.client.historicalLows(usd(220), 'US');
+
+    expect([...lows]).toEqual([[220, {
+      currency: 'USD', amountMinor: 499, discountPercent: 75, recordedAt: '2024-06-01T00:00:00.000Z',
+    }]]);
+    await expect(f.client.gameHistory({ appId: 220, currency: 'USD' }, 'US'))
+      .resolves.toMatchObject({ low: { amountMinor: 499 } });
+  });
+
   it('loads one game history for the detail panel and shares it with alerts', async () => {
     const f = fixture(
       (ids) => ids.map((id) => steamLow(id, 1.8, 'TRY')),

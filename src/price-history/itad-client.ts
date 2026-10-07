@@ -149,7 +149,8 @@ export class IsThereAnyDealClient implements HistoricalLowSource, GameHistorySou
           const storeLow = lows.get(gameId);
           // A region that changed currency keeps its old-currency low; use the
           // current currency's own period instead of comparing across currencies.
-          const low = !storeLow || storeLow.currency === currency
+          // A free giveaway is not a sale either, so its 0 low falls back to the paid history.
+          const low = !storeLow || (storeLow.currency === currency && storeLow.amountMinor > 0)
             ? storeLow ?? null
             : (this.cached(this.histories, lowKey(country, appId, currency))
               ?? await this.fetchHistory(gameId, { appId, currency }, country, signal)).low;
