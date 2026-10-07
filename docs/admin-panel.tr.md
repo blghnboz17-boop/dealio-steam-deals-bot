@@ -94,17 +94,20 @@ Engellenen hesap Dealio'nun komut ve düğmelerini kullanamaz; yalnız
 
 ## Toplanan kullanım verisi
 
-Gizlilik politikasında (`docs/privacy*.html`, 6 Ekim 2026) açıklandığı gibi:
+Gizlilik politikasında (`docs/privacy*.html`, 7 Ekim 2026) açıklandığı gibi:
 
 - `interaction_event`: kullanıcı, sunucu (DM'de boş), bağlam, kurulum türü,
   komut/düğme adı (girdi metni değil), Discord dili, zaman. 90 gün.
 - `guild_event`: botun eklendiği/çıkarıldığı sunucu, ad, üye sayısı, zaman.
-- `admin_audit`: panel işlemleri, 1 yıl.
-- `broadcast`, `broadcast_recipient`: duyurular ve teslim durumu, 90 gün.
+- `admin_audit`: panel işlemleri, hedef hesabın Discord kimliği ve ayrıntı, 1 yıl.
+- `broadcast`, `broadcast_recipient`: duyuru/mesaj metni, hedef kitle (doğrudan mesajda
+  alıcı kimliği) ve teslim durumu; oluşturulmasından 90 gün sonra (gönderim bitmişse) silinir.
 - `user_block`, `guild_block`, `runtime_setting`.
 
 `/delete-data` kullanım ve teslim kayıtlarını da siler; silme günlüğü yedekten
-dönen eski kullanım kayıtlarını da temizler. Engel kaydı korunur.
+dönen eski kullanım kayıtlarını da temizler. Engel kaydı, `admin_audit` satırları ve
+doğrudan mesajın `broadcast.audience` alanındaki alıcı kimliği korunur; gizlilik
+politikası bunu açıkça yazar.
 
 ## Güvenlik
 
