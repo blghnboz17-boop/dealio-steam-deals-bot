@@ -30,6 +30,8 @@ export interface SteamIdentityReader {
 
 export interface ConfigureUserOptions {
   readonly resetPricingContext?: boolean;
+  /** Runs synchronously just before saving, after the Steam reads; throwing aborts the save. */
+  readonly beforeSave?: () => void;
 }
 
 export interface PreparedUserConfiguration {
@@ -113,6 +115,7 @@ export class UserConfigurationService {
         throw new InvalidUserConfigurationError('Resolved SteamID64 is invalid');
       }
       await this.wishlistAccessValidator.validateWishlistAccess(steamId64);
+      options.beforeSave?.();
       return this.repository.upsert(
         discordUserId,
         steamId64,
@@ -224,7 +227,9 @@ export class UserConfigurationService {
   public deleteData(discordUserId: string): Promise<boolean> {
     return this.coordinator.runExclusive(discordUserId, () => {
       const deleted = this.repository.deleteByDiscordUserId(discordUserId);
-      if (deleted && this.deletionJournal) {
+      // Usage records are deleted even without a setup (the /delete-data command
+      // itself is one), so the restore protection is recorded for every deletion.
+      if (this.deletionJournal) {
         try {
           this.deletionJournal.record(discordUserId, this.now().toISOString());
         } catch (error: unknown) {

@@ -148,8 +148,8 @@ interface BatchCache<V> {
 interface BatchSource<V> {
   readonly cache: BatchCache<V>;
   readonly ttlMs: number;
-  /** An instant after which a value fetched now may be wrong, whatever the TTL says. */
-  readonly validUntil?: (fetchedAtMs: number) => number;
+  /** An instant after which a value requested at this time may be wrong, whatever the TTL says. */
+  readonly validUntil?: (requestedAtMs: number) => number;
   readonly key: (appId: number) => string;
   readonly fetch: (appIds: readonly number[]) => Promise<Map<number, V | SteamWishlistError>>;
   readonly cacheable: (value: V) => boolean;
@@ -296,7 +296,7 @@ export class SteamClient {
       cache: this.priceCache,
       ttlMs: this.cacheTtlMs,
       // A price read just before Steam's daily change must not hide a sale that starts at it.
-      validUntil: (fetchedAtMs) => nextSteamPriceChange(new Date(fetchedAtMs)).getTime(),
+      validUntil: (requestedAtMs) => nextSteamPriceChange(new Date(requestedAtMs)).getTime(),
       key: (appId) => `${storeCountryCode}:${appId}`,
       // Unpriced/unavailable products are not reusable successful prices.
       cacheable: (price) => price !== null,
@@ -404,6 +404,9 @@ export class SteamClient {
     appIds: readonly number[],
     source: BatchSource<V>,
   ): Promise<Map<number, Lookup<V>>> {
+    // Steam may have answered with the price from before its daily change even when
+    // the response (after queueing or a rate-limit retry) arrives after it.
+    const requestedAtMs = this.now();
     let parsed: Map<number, V | SteamWishlistError>;
     try {
       parsed = await source.fetch(appIds);
@@ -416,7 +419,7 @@ export class SteamClient {
 
     const fetchedAtMs = this.now();
     const observedAt = new Date(fetchedAtMs).toISOString();
-    const expiresAt = Math.min(fetchedAtMs + source.ttlMs, source.validUntil?.(fetchedAtMs) ?? Number.POSITIVE_INFINITY);
+    const expiresAt = Math.min(fetchedAtMs + source.ttlMs, source.validUntil?.(requestedAtMs) ?? Number.POSITIVE_INFINITY);
     const lookups = new Map<number, Lookup<V>>();
     for (const appId of appIds) {
       const value = parsed.get(appId)!;
@@ -584,6 +587,8 @@ export class SteamClient {
 
       return await Promise.race([response.json(), timeoutPromise, cancellationPromise]) as unknown;
     } catch (error: unknown) {
+      // An unread error body keeps its connection busy; during a 429 storm that piles up.
+      discardBody(response);
       if (error instanceof SteamWishlistError) {
         throw error;
       }
@@ -616,6 +621,13 @@ const freePrice = {
   discountPercent: 0,
   isFree: true,
 } as const;
+
+/** Releases the connection behind a response whose body will not be read. */
+export function discardBody(response: Response): void {
+  if (!response.bodyUsed) {
+    response.body?.cancel().catch(() => undefined);
+  }
+}
 
 function cancelledError(): SteamWishlistError {
   return new SteamWishlistError('STEAM_CANCELLED', 'Steam request cancelled');

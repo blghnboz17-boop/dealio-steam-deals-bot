@@ -381,7 +381,7 @@ describe('NotificationService', () => {
     services.database.close();
   });
 
-  it('waits instead of expiring or sending a candidate from a different active episode', async () => {
+  it('retires a candidate whose sale ended and restarted as a different episode', async () => {
     const sender = createSender();
     const services = createService('en', sender);
     services.database.prepare(
@@ -411,11 +411,11 @@ describe('NotificationService', () => {
       failedCount: 0,
     });
     expect(sender.send).not.toHaveBeenCalled();
-    expect(services.repository.findNotificationStatus(services.candidate)).toBe('candidate');
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('expired');
     services.database.close();
   });
 
-  it('waits instead of expiring or retrying a failed batch from a different active episode', async () => {
+  it('retires a failed batch whose sale ended and restarted as a different episode', async () => {
     const sender = createSender(
       vi.fn()
         .mockRejectedValueOnce(new Error('temporary Discord failure'))
@@ -458,9 +458,9 @@ describe('NotificationService', () => {
       failedCount: 0,
     });
     expect(sender.send).toHaveBeenCalledOnce();
-    expect(services.repository.findNotificationStatus(services.candidate)).toBe('failed');
+    expect(services.repository.findNotificationStatus(services.candidate)).toBe('expired');
     expect(services.database.prepare('SELECT status FROM notification_batch').get())
-      .toEqual({ status: 'failed' });
+      .toEqual({ status: 'expired' });
     services.database.close();
   });
 

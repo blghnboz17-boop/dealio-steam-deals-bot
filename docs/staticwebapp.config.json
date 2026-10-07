@@ -9,6 +9,12 @@
     {
       "route": "/",
       "rewrite": "/index.html"
+    },
+    {
+      "route": "/open.html",
+      "headers": {
+        "Content-Security-Policy": "default-src 'none'; style-src 'self'; script-src 'sha256-BUH7GBg0kzX6AYDRa5izSp63iBqmv8aB0gbNtooCaWw='; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+      }
     }
   ]
 }

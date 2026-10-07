@@ -34,6 +34,7 @@ import {
 } from '../ui/components-v2.js';
 import { uiCopy } from '../ui/copy.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
+import { isFromUser } from '../ui/refused-interactions.js';
 
 export const deleteDataCommand = new SlashCommandBuilder()
   .setName('delete-data')
@@ -69,7 +70,7 @@ export async function handleDeleteData(
   );
   const collector = message.createMessageComponentCollector({
     time: dealioUiSessionTimeoutMs,
-    filter: (component) => component.user.id === interaction.user.id
+    filter: (component) => isFromUser(component, interaction.user.id)
       && component.customId.startsWith(`delete-v2:${sessionId}:`),
   });
   let sessionActive = true;
@@ -133,7 +134,7 @@ export async function handleDeleteData(
         component.awaitModalSubmit({
           time: dealioUiSessionTimeoutMs,
           filter: (submission) => submission.customId === modalId
-            && submission.user.id === interaction.user.id,
+            && isFromUser(submission, interaction.user.id),
         }).catch(() => null),
         sessionClosed.then(() => null),
       ]);
@@ -168,10 +169,10 @@ export async function handleDeleteData(
                 fr: 'J’ai supprimé définitivement ta connexion Steam, tes réglages d’alertes et ton historique Dealio. Je suis là si tu veux revenir.',
               })
             : t({
-                tr: 'Bu hesaba ait bir Dealio kaydı bulamadım.',
-                en: 'I couldn’t find any Dealio data for your account.',
-                de: 'Ich habe zu deinem Konto keine Dealio-Daten gefunden.',
-                fr: 'Je n’ai trouvé aucune donnée Dealio pour ton compte.',
+                tr: 'Bu hesaba ait bir Dealio kurulumu bulamadım. Kalan kullanım kayıtları varsa onları da sildim.',
+                en: 'I couldn’t find a Dealio setup for your account. Any remaining usage records are deleted too.',
+                de: 'Ich habe zu deinem Konto keine Dealio-Einrichtung gefunden. Eventuell verbliebene Nutzungsdaten habe ich ebenfalls gelöscht.',
+                fr: 'Je n’ai trouvé aucune configuration Dealio pour ton compte. J’ai aussi supprimé les éventuelles données d’utilisation restantes.',
               }),
           setupService
             ? { button: { customId: `delete-v2:${sessionId}:setup`, label: text.setupAgain, emoji: '✨' } }

@@ -29,6 +29,20 @@ interface LockMetadata {
   readonly pid: number;
   readonly token: string;
   readonly startedAt: string;
+  /** Linux boot the owner ran in; a lock from an earlier boot has no live owner. */
+  readonly bootId?: string;
+}
+
+/** Tokens of the locks this process holds, to tell them from a previous run's lock with our PID. */
+const heldTokens = new Set<string>();
+
+function readBootId(): string | null {
+  try {
+    const value = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim();
+    return value === '' ? null : value;
+  } catch (_error: unknown) {
+    return null;
+  }
 }
 
 export class ProcessLock {
@@ -45,9 +59,11 @@ export class ProcessLock {
   public static acquire(
     databasePath: string,
     fileSystem: ProcessLockFileSystem = defaultFileSystem,
+    bootId: () => string | null = readBootId,
   ): ProcessLock {
     const lockPath = lockPathForDatabase(databasePath);
     const token = randomUUID();
+    const currentBootId = bootId();
     let descriptor: number;
 
     try {
@@ -57,7 +73,7 @@ export class ProcessLock {
         throw error;
       }
 
-      reclaimStaleLock(lockPath, databasePath);
+      reclaimStaleLock(lockPath, databasePath, currentBootId);
       try {
         descriptor = openSync(lockPath, 'wx');
       } catch (retryError: unknown) {
@@ -71,7 +87,12 @@ export class ProcessLock {
     try {
       writeFileSync(
         descriptor,
-        JSON.stringify({ pid: process.pid, token, startedAt: new Date().toISOString() }),
+        JSON.stringify({
+          pid: process.pid,
+          token,
+          startedAt: new Date().toISOString(),
+          ...(currentBootId ? { bootId: currentBootId } : {}),
+        }),
         'utf8',
       );
     } catch (error: unknown) {
@@ -80,6 +101,7 @@ export class ProcessLock {
       throw error;
     }
 
+    heldTokens.add(token);
     return new ProcessLock(lockPath, descriptor, token, fileSystem);
   }
 
@@ -119,6 +141,7 @@ export class ProcessLock {
       this.fileSystem.unlinkSync(this.lockPath);
     }
     this.released = true;
+    heldTokens.delete(this.token);
   }
 }
 
@@ -154,7 +177,8 @@ function readMetadata(
         parsed.token,
       ) ||
       typeof parsed.startedAt !== 'string' ||
-      !isCanonicalIsoTimestamp(parsed.startedAt)
+      !isCanonicalIsoTimestamp(parsed.startedAt) ||
+      (parsed.bootId !== undefined && typeof parsed.bootId !== 'string')
     ) {
       if (strict) {
         throw new ProcessLockError(`Invalid process lock metadata at ${lockPath}.`);
@@ -182,9 +206,24 @@ function processState(pid: number): ProcessState {
   }
 }
 
-function reclaimStaleLock(lockPath: string, databasePath: string): void {
+/**
+ * Whether a lock's owner can still be running. After a crash or an unclean reboot
+ * the recorded PID can belong to an unrelated process, or to this very process;
+ * neither may keep the bot from starting again.
+ */
+function ownerState(owner: LockMetadata, currentBootId: string | null): ProcessState {
+  if (owner.pid === process.pid) {
+    return heldTokens.has(owner.token) ? 'live' : 'dead';
+  }
+  if (owner.bootId !== undefined && currentBootId !== null && owner.bootId !== currentBootId) {
+    return 'dead';
+  }
+  return processState(owner.pid);
+}
+
+function reclaimStaleLock(lockPath: string, databasePath: string, currentBootId: string | null): void {
   const observed = readMetadata(lockPath);
-  if (!observed || processState(observed.pid) !== 'dead') {
+  if (!observed || ownerState(observed, currentBootId) !== 'dead') {
     throw lockExistsError(lockPath, databasePath);
   }
 
@@ -211,7 +250,7 @@ function reclaimStaleLock(lockPath: string, databasePath: string): void {
       'utf8',
     );
     const current = readMetadata(lockPath);
-    if (!current || !sameMetadata(observed, current) || processState(current.pid) !== 'dead') {
+    if (!current || !sameMetadata(observed, current) || ownerState(current, currentBootId) !== 'dead') {
       throw new ProcessLockError(
         `Process lock ownership changed during stale-lock recovery for database ${databasePath}.`,
       );

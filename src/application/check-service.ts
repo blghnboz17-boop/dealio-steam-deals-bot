@@ -134,6 +134,9 @@ export class CheckService {
         !runOptions.bypassCooldown
         && this.cooldownMs > 0
         && Number.isFinite(elapsed)
+        // A check "completed in the future" means the clock moved back; it must
+        // not hold every automatic check off until the clock catches up.
+        && elapsed >= 0
         && elapsed < this.cooldownMs
       ) {
         return {

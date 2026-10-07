@@ -8,9 +8,17 @@ export interface AdminRouteDependencies {
 }
 
 const discordId = /^\d{5,25}$/;
+const broadcastId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** The UI asks in chunks of 50; a longer list would only queue Discord API calls. */
+const maximumProfileIds = 50;
 
 export function requireDiscordId(value: string | undefined): string {
   if (value === undefined || !discordId.test(value)) throw new AdminHttpError(400, 'Invalid Discord ID');
+  return value;
+}
+
+export function requireBroadcastId(value: string | undefined): string {
+  if (value === undefined || !broadcastId.test(value)) throw new AdminHttpError(400, 'Invalid announcement ID');
   return value;
 }
 
@@ -31,7 +39,8 @@ export function readRoutes({ query, logs }: AdminRouteDependencies): AdminRoute[
       method: 'GET',
       path: '/api/profiles',
       handler: async ({ query: search }) => {
-        const ids = (search.get('ids') ?? '').split(',').filter((id) => discordId.test(id));
+        const ids = [...new Set((search.get('ids') ?? '').split(',').filter((id) => discordId.test(id)))]
+          .slice(0, maximumProfileIds);
         return { json: { profiles: await query.profiles(ids) } };
       },
     },

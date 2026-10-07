@@ -42,6 +42,7 @@ import { uiCopy } from '../ui/copy.js';
 import { countryDisplay } from '../ui/design.js';
 import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
+import { isFromUser } from '../ui/refused-interactions.js';
 
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
 
@@ -104,7 +105,7 @@ export async function handleStatus(
   );
   const collector = message.createMessageComponentCollector({
     time: dealioUiSessionTimeoutMs,
-    filter: (component) => component.user.id === interaction.user.id
+    filter: (component) => isFromUser(component, interaction.user.id)
       && (component.customId.startsWith(`status-v2:${interaction.id}:`)
         || component.customId.startsWith(`country:${interaction.id}:`)),
   });
@@ -228,7 +229,7 @@ export async function handleStatus(
         await measureDiscordOperation(component, 'status-v2.modal', () => component.showModal(buildCountrySearchModal(modalId, current.language)));
         const modal = await component.awaitModalSubmit({
           time: Math.max(1, sessionExpiresAt - Date.now()),
-          filter: (submission) => submission.customId === modalId && submission.user.id === interaction.user.id,
+          filter: (submission) => submission.customId === modalId && isFromUser(submission, interaction.user.id),
         }).catch(() => null);
         if (!modal) return;
         if (!sessionActive) {
@@ -293,7 +294,7 @@ export async function handleStatus(
           })));
         const modal = await component.awaitModalSubmit({
           time: Math.max(1, sessionExpiresAt - Date.now()),
-          filter: (submission) => submission.customId === modalId && submission.user.id === interaction.user.id,
+          filter: (submission) => submission.customId === modalId && isFromUser(submission, interaction.user.id),
         }).catch(() => null);
         if (!modal) return;
         if (!sessionActive) {
@@ -384,7 +385,7 @@ export async function handleStatus(
         const modal = await component.awaitModalSubmit({
           time: Math.max(1, sessionExpiresAt - Date.now()),
           filter: (submission) => submission.customId === modalId
-            && submission.user.id === interaction.user.id,
+            && isFromUser(submission, interaction.user.id),
         }).catch(() => null);
         if (!modal) return;
         if (!sessionActive) {
@@ -395,11 +396,13 @@ export async function handleStatus(
           return;
         }
         const language = modal.fields.getRadioGroup('notification-language', true);
-        await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate());
-        if (isLanguage(language)) {
-          await userConfigurationService.setLanguage(interaction.user.id, language);
-        }
-        await refresh();
+        // In the panel's queue: a failure gets the same notice as any other action.
+        await operations.enqueue(measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate()), async () => {
+          if (isLanguage(language)) {
+            await userConfigurationService.setLanguage(interaction.user.id, language);
+          }
+          await refresh();
+        });
       })().catch((error: unknown) => safeLogger.error('Discord status language update failed', error));
       return;
     }
@@ -411,7 +414,7 @@ export async function handleStatus(
         const modal = await component.awaitModalSubmit({
           time: Math.max(1, sessionExpiresAt - Date.now()),
           filter: (submission) => submission.customId === modalId
-            && submission.user.id === interaction.user.id,
+            && isFromUser(submission, interaction.user.id),
         }).catch(() => null);
         if (!modal) return;
         if (!sessionActive) {
@@ -431,9 +434,10 @@ export async function handleStatus(
           }));
           return;
         }
-        await measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate());
-        await thresholdService.setGlobal(interaction.user.id, value, configurationId);
-        await refresh();
+        await operations.enqueue(measureDiscordOperation(modal, 'status-v2.modal-submit-ack', () => modal.deferUpdate()), async () => {
+          await thresholdService.setGlobal(interaction.user.id, value, configurationId);
+          await refresh();
+        });
       })().catch((error: unknown) => safeLogger.error('Discord status threshold update failed', error));
       return;
     }

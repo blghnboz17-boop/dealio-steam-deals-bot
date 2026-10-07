@@ -459,6 +459,18 @@ describe('SteamClient', () => {
     });
   });
 
+  it('releases the connection of an error or rejected response it does not read', async () => {
+    const failed = new Response('<html>busy</html>', { status: 503 });
+    const privateWishlist = jsonResponse({ response: {} }, 200, '15');
+    const fetchMock = createFetchMock().mockResolvedValueOnce(failed).mockResolvedValueOnce(privateWishlist);
+    const client = new SteamClient({ fetchImpl: fetchMock });
+
+    await expect(client.getWishlist('76561198000000000', 'TR', 'tr')).rejects.toBeInstanceOf(SteamWishlistError);
+    await expect(client.validateWishlistAccess('76561198000000000')).rejects.toBeInstanceOf(SteamWishlistError);
+    expect(failed.bodyUsed).toBe(true);
+    expect(privateWishlist.bodyUsed).toBe(true);
+  });
+
   it('maps a network failure', async () => {
     const fetchMock = createFetchMock().mockRejectedValueOnce(new Error('offline'));
 

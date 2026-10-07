@@ -6,7 +6,7 @@ import { InvalidSettingError } from '../application/admin/runtime-settings.js';
 import type { AdminQueryService } from '../application/admin/admin-query-service.js';
 import { TestNotificationCooldownError } from '../application/test-notification-service.js';
 import { InvalidUserConfigurationError } from '../application/user-configuration-service.js';
-import { requireDiscordId } from './admin-routes.js';
+import { requireBroadcastId, requireDiscordId } from './admin-routes.js';
 import { AdminHttpError, type AdminRequest, type AdminResponse, type AdminRoute } from './admin-server.js';
 
 export interface AdminActionRouteDependencies {
@@ -76,7 +76,7 @@ export function actionRoutes({ actions, query, broadcasts }: AdminActionRouteDep
       method: 'GET',
       path: '/api/broadcasts/:id',
       handler: async ({ params }) => {
-        const broadcast = await query.broadcastDetail(params.id ?? '');
+        const broadcast = await query.broadcastDetail(requireBroadcastId(params.id));
         if (!broadcast) throw new AdminHttpError(404, 'Announcement not found');
         return { json: broadcast };
       },
@@ -102,7 +102,7 @@ export function actionRoutes({ actions, query, broadcasts }: AdminActionRouteDep
       handler: (request) => run(async () => {
         const status = body(request).status;
         if (status !== 'sending' && status !== 'paused' && status !== 'cancelled') throw new AdminHttpError(400, 'Invalid status');
-        return actions.setBroadcastStatus(request.params.id ?? '', status);
+        return actions.setBroadcastStatus(requireBroadcastId(request.params.id), status);
       }),
     },
     userAction('pause', (id) => actions.pauseUser(id)),

@@ -147,4 +147,19 @@ describe('unreleased and unavailable games', () => {
     expect((parsed.get(1) as { code?: string }).code).toBe('STEAM_APP_REGION_UNAVAILABLE');
     expect((parsed.get(2) as { code?: string }).code).toBe('STEAM_APP_NOT_FOUND');
   });
+
+  it('never calls a game removed when Steam was only busy or answered without a result', () => {
+    const parsed = parseStoreItemsResponse({ response: { store_items: [
+      { id: 1, success: 20, name: '' },
+      { id: 2, success: 84 },
+      { id: 3, success: 16 },
+      { id: 4, name: 'Game 4' },
+      { id: 5, success: '1', name: 'Game 5' },
+    ] } }, [1, 2, 3, 4, 5]);
+    const codes = [1, 2, 3, 4, 5].map((appId) => (parsed.get(appId) as { code?: string }).code);
+    expect(codes).toEqual([
+      'STEAM_UPSTREAM_ERROR', 'STEAM_UPSTREAM_ERROR', 'STEAM_UPSTREAM_ERROR',
+      'STEAM_SCHEMA_INVALID', 'STEAM_SCHEMA_INVALID',
+    ]);
+  });
 });

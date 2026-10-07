@@ -36,6 +36,7 @@ import {
   dealioEphemeralV2Flags,
 } from './ui/components-v2.js';
 import { dealioUiSessions } from './ui/session-manager.js';
+import { isRefusedInteraction } from './ui/refused-interactions.js';
 import { PanelOperationQueue } from './ui/operation-queue.js';
 import { measureDiscordOperation } from './interaction-timing.js';
 
@@ -276,6 +277,11 @@ export class DiscordNotificationSender implements NotificationSender, InitialWis
     action: { readonly sessionId: string; readonly action: 'previous' | 'next' },
   ): Promise<void> {
     if (!interaction.isButton()) {
+      return;
+    }
+    // The block check answers in a listener that may run after this one.
+    await Promise.resolve();
+    if (isRefusedInteraction(interaction)) {
       return;
     }
     const session = this.initialSummarySessions.get(action.sessionId);

@@ -131,6 +131,48 @@ describe('admin server', () => {
     expect(mutations).toEqual([{ a: 1 }]);
   });
 
+  it('signs in through a single-use login code so the token never travels in a URL', async () => {
+    const wrong = await call(port, '/api/login-code', { method: 'POST', body: { token: 'nope' } });
+    expect(wrong.status).toBe(401);
+    const issued = await call(port, '/api/login-code', { method: 'POST', body: { token } });
+    expect(issued.status).toBe(200);
+    expect(issued.headers['set-cookie']).toBeUndefined();
+    const { code } = JSON.parse(issued.body) as { code: string };
+    expect(code).toMatch(/^[\w-]{43}$/);
+    expect(code).not.toContain(token);
+
+    const redeemed = await call(port, '/api/login', { method: 'POST', body: { code } });
+    expect(redeemed.status).toBe(200);
+    expect(String(redeemed.headers['set-cookie'])).toMatch(/HttpOnly; SameSite=Strict/);
+    const again = await call(port, '/api/login', { method: 'POST', body: { code } });
+    expect(again.status).toBe(401);
+    expect(again.headers['set-cookie']).toBeUndefined();
+    // A code is not a token, and the token is not a code.
+    expect((await call(port, '/api/login', { method: 'POST', body: { token: code } })).status).toBe(401);
+    expect((await call(port, '/api/login', { method: 'POST', body: { code: token } })).status).toBe(401);
+    // Cross-site pages cannot mint codes either.
+    const crossSite = await call(port, '/api/login-code', {
+      method: 'POST', body: { token }, headers: { Origin: 'https://evil.example' },
+    });
+    expect(crossSite.status).toBe(403);
+  });
+
+  it('answers a malformed path parameter with 400, not an internal error', async () => {
+    const errors: unknown[] = [];
+    const strict = new AdminServer({
+      port: 0, sessions: new AdminSessions(token), staticDirectory: null, failedLoginDelayMs: 1,
+      logger: { log: () => undefined, error: (...values: unknown[]) => { errors.push(values); } },
+      routes: [{ method: 'GET', path: '/api/things/:id', handler: ({ params }) => ({ json: { id: params.id } }) }],
+    });
+    const strictPort = await strict.start();
+    try {
+      const { cookie } = await signIn(strictPort);
+      const reply = await call(strictPort, '/api/things/%E0%A4%A', { headers: { Cookie: cookie } });
+      expect(reply.status).toBe(400);
+      expect(errors).toEqual([]);
+    } finally { await strict.stop(); }
+  });
+
   it('signs out', async () => {
     const { cookie, csrf } = await signIn(port);
     await call(port, '/api/logout', { method: 'POST', body: {}, headers: { Cookie: cookie, 'X-CSRF-Token': csrf } });
@@ -157,5 +199,26 @@ describe('admin sessions', () => {
     expect(sessions.get(id)).not.toBeNull();
     now = 12 * 3600_000;
     expect(sessions.get(id)).toBeNull();
+  });
+
+  it('issue login codes only for the token, valid once and for one minute', () => {
+    let now = 0;
+    const sessions = new AdminSessions(token, () => now);
+    expect(sessions.issueLoginCode('wrong').status).toBe('invalid');
+    const first = sessions.issueLoginCode(token);
+    const second = sessions.issueLoginCode(token);
+    if (first.status !== 'ok' || second.status !== 'ok') throw new Error('expected codes');
+    expect(sessions.redeemLoginCode(first.code).status).toBe('ok');
+    expect(sessions.redeemLoginCode(first.code).status).toBe('invalid');
+    now = 60_000;
+    expect(sessions.redeemLoginCode(second.code).status).toBe('invalid');
+    expect(sessions.redeemLoginCode('').status).toBe('invalid');
+  });
+
+  it('count wrong tokens for codes toward the same lockout', () => {
+    const sessions = new AdminSessions(token, () => 0);
+    for (let attempt = 0; attempt < 10; attempt += 1) sessions.issueLoginCode('wrong');
+    expect(sessions.issueLoginCode(token).status).toBe('locked');
+    expect(sessions.login(token).status).toBe('locked');
   });
 });

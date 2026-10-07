@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
+import { deleteUserFromBroadcasts } from './broadcast-repository.js';
 
 /** Longer than the backup retention, so every restorable backup predates a kept entry. */
 export const deletionJournalRetentionMs = 35 * 24 * 60 * 60 * 1000;
@@ -13,6 +14,19 @@ interface DeletionEntry {
 
 export function hashDiscordUserId(discordUserId: string): string {
   return createHash('sha256').update(`dealio-deletion:${discordUserId}`).digest('hex');
+}
+
+/**
+ * The owner's audit trail keeps its rows (one year), but a deleted user is named in
+ * them only by the same one-way hash the journal uses. With `upTo`, only rows written
+ * by then are changed (re-applying a deletion after a restore).
+ */
+export function pseudonymizeAuditUser(database: DatabaseSync, discordUserId: string, upTo?: string): void {
+  const hash = hashDiscordUserId(discordUserId);
+  database.prepare(`UPDATE admin_audit
+    SET target = CASE WHEN target = ? THEN ? ELSE target END, detail = replace(detail, ?, ?)
+    WHERE (target = ? OR instr(detail, ?) > 0) AND (? IS NULL OR occurred_at <= ?)`)
+    .run(discordUserId, hash, discordUserId, hash, discordUserId, discordUserId, upTo ?? null, upTo ?? null);
 }
 
 /**
@@ -56,15 +70,17 @@ export class DeletionJournal {
       "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'interaction_event'").get() !== undefined;
     if (hasTelemetry) {
       const removeEvents = database.prepare('DELETE FROM interaction_event WHERE discord_user_id = ? AND occurred_at <= ?');
-      const removeDeliveries = database.prepare(`DELETE FROM broadcast_recipient WHERE discord_user_id = ?
-        AND broadcast_id IN (SELECT broadcast_id FROM broadcast WHERE created_at <= ?)`);
       const seen = database.prepare(`SELECT DISTINCT discord_user_id FROM interaction_event
-        UNION SELECT DISTINCT discord_user_id FROM broadcast_recipient`).all() as Array<{ discord_user_id: string }>;
+        UNION SELECT DISTINCT discord_user_id FROM broadcast_recipient
+        UNION SELECT DISTINCT CAST(named.value AS TEXT) FROM broadcast, json_each(broadcast.audience, '$.userIds') AS named
+        UNION SELECT DISTINCT target FROM admin_audit WHERE target IS NOT NULL`)
+        .all() as Array<{ discord_user_id: string }>;
       for (const { discord_user_id: userId } of seen) {
         const at = deletedAt.get(hashDiscordUserId(userId));
         if (!at) continue;
         removeEvents.run(userId, at);
-        removeDeliveries.run(userId, at);
+        deleteUserFromBroadcasts(database, userId, at);
+        pseudonymizeAuditUser(database, userId, at);
       }
     }
     for (const user of users) {

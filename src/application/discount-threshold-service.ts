@@ -5,6 +5,7 @@ import {
 import { DiscountThresholdRepository } from '../persistence/discount-threshold-repository.js';
 import { UserConfigRepository } from '../persistence/user-config-repository.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
+import { assertAccountNotBlocked, type BlockedAccountCheck } from './account-block.js';
 
 export class InvalidDiscountThresholdError extends Error {}
 
@@ -21,6 +22,8 @@ export class DiscountThresholdService {
     private readonly thresholdRepository: DiscountThresholdRepository,
     private readonly coordinator = new UserOperationCoordinator(),
     private readonly now: () => Date = () => new Date(),
+    /** Accounts the owner blocked cannot change their discount rules. */
+    private readonly isBlocked?: BlockedAccountCheck,
   ) {}
 
   public setGlobal(
@@ -29,14 +32,15 @@ export class DiscountThresholdService {
     expectedConfigurationId?: string,
   ): Promise<UserConfig | null> {
     this.validatePercent(percent);
-    return this.coordinator.runExclusive(discordUserId, () =>
-      this.userConfigRepository.setMinimumDiscountPercent(
+    return this.coordinator.runExclusive(discordUserId, () => {
+      assertAccountNotBlocked(this.isBlocked, discordUserId);
+      return this.userConfigRepository.setMinimumDiscountPercent(
         discordUserId,
         percent,
         this.now().toISOString(),
         expectedConfigurationId,
-      ),
-    );
+      );
+    });
   }
 
   public setGame(
@@ -54,6 +58,7 @@ export class DiscountThresholdService {
     }
 
     return this.coordinator.runExclusive(discordUserId, () => {
+      assertAccountNotBlocked(this.isBlocked, discordUserId);
       const config = this.userConfigRepository.findByDiscordUserId(discordUserId);
       if (!config) {
         return null;

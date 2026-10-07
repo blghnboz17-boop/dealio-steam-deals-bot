@@ -10,7 +10,7 @@ import {DefaultAzureCredential} from '@azure/identity';
 import {pathToFileURL} from 'node:url';
 
 export async function verifyDatabase(path){
- const db=new DatabaseSync(path,{readOnly:true});
+ const db=new DatabaseSync(path,{readOnly:true,timeout:2000});
  try{
   const integrity=db.prepare('PRAGMA integrity_check').all();
   if(integrity.length!==1||integrity[0].integrity_check!=='ok')throw new Error('SQLite integrity check failed');
@@ -20,7 +20,7 @@ export async function verifyDatabase(path){
  }finally{db.close();}
 }
 export async function createConsistentBackup(source,destination){
- const db=new DatabaseSync(source,{readOnly:true});
+ const db=new DatabaseSync(source,{readOnly:true,timeout:2000});
  try{await backup(db,destination);}finally{db.close();}
  await chmod(destination,0o600);
  const verification=await verifyDatabase(destination);

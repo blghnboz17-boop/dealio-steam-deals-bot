@@ -15,6 +15,7 @@ import {
   InvalidUserConfigurationError,
   type PreparedUserConfiguration,
 } from '../../application/user-configuration-service.js';
+import { AccountBlockedError } from '../../application/account-block.js';
 import { SetupAlreadyCompletedError, SetupCapacityReachedError } from '../../application/setup-service.js';
 import type { SetupService } from '../../application/setup-service.js';
 import { SteamWishlistError } from '../../domain/steam.js';
@@ -48,6 +49,7 @@ import {
 import { buildCountryListPanel, buildCountryRangePanel, buildCountrySearchModal, buildCountrySearchPanel } from '../ui/country-picker.js';
 import { handOffPanel, type PanelNavigation } from '../ui/tab-bar.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
+import { isFromUser } from '../ui/refused-interactions.js';
 
 const setupSessionTimeoutMs = 5 * 60 * 1_000;
 const lookingUp = {
@@ -129,7 +131,7 @@ export async function handleSetup(
   );
   const collector = response.createMessageComponentCollector({
     time: setupSessionTimeoutMs,
-    filter: (component) => component.user.id === interaction.user.id
+    filter: (component) => isFromUser(component, interaction.user.id)
       && (canUseSetupComponent(component.customId, component.user.id, interaction.user.id, interaction.id)
         || component.customId.startsWith(`country:${interaction.id}:`)),
   });
@@ -214,7 +216,7 @@ export async function handleSetup(
         const modal = await Promise.race([
           component.awaitModalSubmit({
             time: setupSessionTimeoutMs,
-            filter: (submission) => submission.customId === searchId && submission.user.id === interaction.user.id,
+            filter: (submission) => submission.customId === searchId && isFromUser(submission, interaction.user.id),
           }).catch(() => null),
           sessionClosed.then(() => null),
         ]);
@@ -379,7 +381,7 @@ export async function handleSetup(
           component.awaitModalSubmit({
             time: setupSessionTimeoutMs,
             filter: (submission) => submission.customId === modalId
-              && submission.user.id === interaction.user.id,
+              && isFromUser(submission, interaction.user.id),
           }).catch(() => null),
           sessionClosed.then(() => null),
         ]);
@@ -700,6 +702,14 @@ export function setupErrorMessage(error: unknown, language: Language): string {
   const messages = messagesFor(language);
   if (error instanceof SetupAlreadyCompletedError) {
     return messages.setupWizardAlreadyCompletedDescription;
+  }
+  if (error instanceof AccountBlockedError) {
+    return localizer(language)({
+      tr: 'Bu hesabın Dealio erişimi kapatıldı. Verilerini /delete-data ile yine de silebilirsin.',
+      en: 'Dealio access has been turned off for this account. You can still delete your data with /delete-data.',
+      de: 'Der Dealio-Zugang für dieses Konto wurde deaktiviert. Deine Daten kannst du trotzdem mit /delete-data löschen.',
+      fr: 'L’accès à Dealio a été désactivé pour ce compte. Tu peux toujours supprimer tes données avec /delete-data.',
+    });
   }
   if (error instanceof SetupCapacityReachedError) {
     return localizer(language)({

@@ -30,6 +30,7 @@ import {
 } from '../ui/components-v2.js';
 import { PanelOperationQueue } from '../ui/operation-queue.js';
 import { dealioUiSessions } from '../ui/session-manager.js';
+import { isFromUser } from '../ui/refused-interactions.js';
 import { handOffPanel, parseTabAction, type Navigate, type PanelNavigation } from '../ui/tab-bar.js';
 import { handleCheck } from './check.js';
 import { handleSetup } from './setup.js';
@@ -156,7 +157,7 @@ export async function handleDealio(
   );
   const collector = message.createMessageComponentCollector({
     time: dealioUiSessionTimeoutMs,
-    filter: (component) => component.user.id === interaction.user.id
+    filter: (component) => isFromUser(component, interaction.user.id)
       && component.customId.startsWith(`dealio:${interaction.id}:`),
   });
   const operations = new PanelOperationQueue(async (error) => {

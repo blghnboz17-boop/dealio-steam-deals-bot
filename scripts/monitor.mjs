@@ -13,7 +13,7 @@ const data={TimeGenerated:new Date(now).toISOString(),Application:process.env.DI
  ScanAgeSeconds:0,QueueAgeSeconds:0,BackupAgeSeconds:age(savedBackup?.at),BackupOk:savedBackup?.ok===true};
 let db;
 try{
- db=new DatabaseSync(process.env.DATABASE_PATH??'./data/wishlist.db',{readOnly:true});
+ db=new DatabaseSync(process.env.DATABASE_PATH??'./data/wishlist.db',{readOnly:true,timeout:2000});
  const check=db.prepare(`SELECT MIN(COALESCE(last_success_completed_at,config.created_at)) at FROM user_config config
    LEFT JOIN check_state state ON state.discord_user_id=config.discord_user_id WHERE config.enabled=1`).get();
  const queue=db.prepare(`SELECT MIN(n.created_at) at FROM notification_log n JOIN user_config u ON u.discord_user_id=n.discord_user_id

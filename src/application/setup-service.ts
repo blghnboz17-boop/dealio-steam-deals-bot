@@ -7,6 +7,7 @@ import {
   type PreparedUserConfiguration,
 } from './user-configuration-service.js';
 import { UserOperationCoordinator } from './user-operation-coordinator.js';
+import { assertAccountNotBlocked, type BlockedAccountCheck } from './account-block.js';
 
 export interface SetupResult {
   readonly config: UserConfig;
@@ -39,6 +40,8 @@ export interface SetupServiceOptions {
   readonly signupsOpen?: () => boolean;
   /** Setup funnel telemetry; a failing sink never affects setup. */
   readonly onStep?: (discordUserId: string, step: SetupStep, code?: string) => void;
+  /** Accounts the owner blocked can neither set up nor change their Steam account. */
+  readonly isBlocked?: BlockedAccountCheck;
 }
 
 function errorCode(error: unknown): string {
@@ -56,6 +59,7 @@ export class SetupService {
   private readonly maxUsers?: number | (() => number);
   private readonly signupsOpen: () => boolean;
   private readonly onStep: (discordUserId: string, step: SetupStep, code?: string) => void;
+  private readonly isBlocked?: BlockedAccountCheck;
 
   public constructor(
     private readonly userConfigurationService: UserConfigurationService,
@@ -66,6 +70,7 @@ export class SetupService {
     this.maxUsers = options.maxUsers;
     this.signupsOpen = options.signupsOpen ?? (() => true);
     this.onStep = options.onStep ?? (() => undefined);
+    this.isBlocked = options.isBlocked;
   }
 
   private step(discordUserId: string, step: SetupStep, error?: unknown): void {
@@ -83,6 +88,7 @@ export class SetupService {
     storeCountryInput?: string,
   ): Promise<SetupResult> {
     return this.coordinator.runExclusive(discordUserId, async () => {
+      assertAccountNotBlocked(this.isBlocked, discordUserId);
       this.assertNotConfigured(discordUserId);
       this.assertCapacity();
       const config = await this.userConfigurationService.configureWithinUserOperation(
@@ -90,7 +96,14 @@ export class SetupService {
         profileInput,
         language,
         storeCountryInput,
-        { resetPricingContext: true },
+        {
+          resetPricingContext: true,
+          // Other users' setups ran during the Steam reads; check the limit again with the save.
+          beforeSave: () => {
+            this.assertNotConfigured(discordUserId);
+            this.assertCapacity();
+          },
+        },
       );
       const summary = await this.initialSummaryService.sendWithinUserOperation(discordUserId);
       if (summary.status === 'dm-blocked') {
@@ -108,6 +121,7 @@ export class SetupService {
     storeCountryInput: string,
   ): Promise<PreparedUserConfiguration> {
     try {
+      assertAccountNotBlocked(this.isBlocked, discordUserId);
       this.assertNotConfigured(discordUserId);
       this.assertCapacity();
       const prepared = await this.userConfigurationService.prepare(
@@ -136,6 +150,7 @@ export class SetupService {
 
   private confirmExclusive(prepared: PreparedUserConfiguration): Promise<SetupResult> {
     return this.coordinator.runExclusive(prepared.discordUserId, async () => {
+      assertAccountNotBlocked(this.isBlocked, prepared.discordUserId);
       this.assertNotConfigured(prepared.discordUserId);
       this.assertCapacity();
       const config = this.userConfigurationService.configurePreparedWithinUserOperation(
@@ -162,6 +177,11 @@ export class SetupService {
     language: Language,
     storeCountryInput: string,
   ): Promise<PreparedUserConfiguration> {
+    try {
+      assertAccountNotBlocked(this.isBlocked, discordUserId);
+    } catch (error: unknown) {
+      return Promise.reject(error);
+    }
     if (!this.hasExistingConfiguration(discordUserId)) {
       return Promise.reject(new InvalidUserConfigurationError('Dealio is not set up for this user'));
     }
@@ -175,6 +195,7 @@ export class SetupService {
    */
   public changeAccount(prepared: PreparedUserConfiguration): Promise<AccountChangeResult> {
     return this.coordinator.runExclusive(prepared.discordUserId, async () => {
+      assertAccountNotBlocked(this.isBlocked, prepared.discordUserId);
       if (!this.hasExistingConfiguration(prepared.discordUserId)) {
         throw new InvalidUserConfigurationError('Dealio is not set up for this user');
       }
