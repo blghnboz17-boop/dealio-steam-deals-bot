@@ -246,7 +246,8 @@ export class WishlistScheduler {
 
     let nextUserIndex = 0;
     const processNextUser = async (): Promise<void> => {
-      while (nextUserIndex < users.length) {
+      // Shutdown waits for this run: finish the users in progress, start no more.
+      while (nextUserIndex < users.length && !this.stopping) {
         const index = nextUserIndex;
         nextUserIndex += 1;
         const user = users[index];

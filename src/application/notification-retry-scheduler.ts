@@ -154,7 +154,7 @@ export class NotificationRetryScheduler {
     let nextUserIndex = 0;
 
     const processNextUser = async (): Promise<void> => {
-      while (nextUserIndex < users.length) {
+      while (nextUserIndex < users.length && !this.stopping) {
         const user = users[nextUserIndex];
         nextUserIndex += 1;
 
