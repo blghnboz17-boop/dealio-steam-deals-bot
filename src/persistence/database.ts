@@ -14,7 +14,16 @@ export class DatabaseInitializationError extends Error {
   }
 }
 
+/**
+ * How long a write waits for another connection's lock (the backup, health ping and
+ * monitor scripts read the same file) instead of failing at once with "database is
+ * locked". Kept below Discord's three-second interaction deadline, since the wait
+ * blocks the event loop.
+ */
+export const databaseBusyTimeoutMs = 2000;
+
 const legacySchema = `
+  PRAGMA busy_timeout = ${databaseBusyTimeoutMs};
   PRAGMA foreign_keys = ON;
   PRAGMA secure_delete = ON;
 

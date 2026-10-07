@@ -1,4 +1,5 @@
 import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
+import { hashDiscordUserId } from './deletion-journal.js';
 import { preparedStatement } from './prepared-statement.js';
 
 /** Owner controls: blocks, runtime settings and the admin audit trail. */
@@ -83,8 +84,10 @@ export class AdminControlRepository {
   }
 
   public audit(action: string, target: string | null, detail: string | null, outcome: 'ok' | 'failed', at: string): void {
+    // The record of a completed deletion names the user only by the deletion journal's hash.
+    const storedTarget = action === 'user.delete' && outcome === 'ok' && target !== null ? hashDiscordUserId(target) : target;
     preparedStatement(this.database, `INSERT INTO admin_audit (action, target, detail, outcome, occurred_at)
-      VALUES (?, ?, ?, ?, ?)`).run(action, target, detail?.slice(0, 500) ?? null, outcome, at);
+      VALUES (?, ?, ?, ?, ?)`).run(action, storedTarget, detail?.slice(0, 500) ?? null, outcome, at);
   }
 
   public auditEntries(limit: number, target?: string): AuditEntry[] {
