@@ -253,9 +253,14 @@ export class AdminServer {
       const match = compiled.pattern.exec(url.pathname);
       if (!match) continue;
       const params: Record<string, string> = {};
-      compiled.names.forEach((name, index) => {
-        params[name] = decodeURIComponent(match[index + 1]!);
-      });
+      try {
+        compiled.names.forEach((name, index) => {
+          params[name] = decodeURIComponent(match[index + 1]!);
+        });
+      } catch {
+        sendJson(response, 400, { error: 'Bad path' });
+        return;
+      }
       try {
         const adminRequest: AdminRequest = {
           method,

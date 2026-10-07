@@ -131,6 +131,22 @@ describe('admin server', () => {
     expect(mutations).toEqual([{ a: 1 }]);
   });
 
+  it('answers a malformed path parameter with 400, not an internal error', async () => {
+    const errors: unknown[] = [];
+    const strict = new AdminServer({
+      port: 0, sessions: new AdminSessions(token), staticDirectory: null, failedLoginDelayMs: 1,
+      logger: { log: () => undefined, error: (...values: unknown[]) => { errors.push(values); } },
+      routes: [{ method: 'GET', path: '/api/things/:id', handler: ({ params }) => ({ json: { id: params.id } }) }],
+    });
+    const strictPort = await strict.start();
+    try {
+      const { cookie } = await signIn(strictPort);
+      const reply = await call(strictPort, '/api/things/%E0%A4%A', { headers: { Cookie: cookie } });
+      expect(reply.status).toBe(400);
+      expect(errors).toEqual([]);
+    } finally { await strict.stop(); }
+  });
+
   it('signs out', async () => {
     const { cookie, csrf } = await signIn(port);
     await call(port, '/api/logout', { method: 'POST', body: {}, headers: { Cookie: cookie, 'X-CSRF-Token': csrf } });
