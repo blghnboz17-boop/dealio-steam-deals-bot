@@ -34,11 +34,12 @@ Windows'ta:
 powershell -ExecutionPolicy Bypass -File scripts/admin-tunnel.ps1
 ```
 
-Betik `ssh -N -L 127.0.0.1:8787:127.0.0.1:8787 dealiobot@20.240.162.55` tünelini
+Betik `ssh -N -L 127.0.0.1:8787:127.0.0.1:8787 <SshTarget>` tünelini (`dealiobot@<VM genel IP>`;
+varsayılanı betiğin `-SshTarget` parametresindedir)
 açar ve tarayıcıda `http://localhost:8787` adresini başlatır. Masaüstündeki
 **Dealio Yönetim** kısayolu aynı betiği çalıştırır; pencereyi kapatmak tüneli kapatır.
 
-Anahtar `%USERPROFILE%\.dealiodmin-token` dosyasındaysa panel giriş yapmış
+Anahtar `%USERPROFILE%\.dealio\admin-token` dosyasındaysa panel giriş yapmış
 olarak açılır: anahtar URL'nin `#` kısmında taşınır (sunucuya gönderilmez) ve
 sayfa onu adres çubuğundan ve geçmişten hemen siler. Dosya yoksa giriş ekranına
 `DEALIO_ADMIN_TOKEN` değerini yazın. Oturum 12 saat sürer, bot yeniden başlayınca
