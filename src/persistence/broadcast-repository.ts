@@ -208,7 +208,10 @@ export class BroadcastRepository {
 
   public cleanup(now: Date = new Date()): void {
     const cutoff = new Date(now.getTime() - broadcastRetentionMs).toISOString();
-    preparedStatement(this.database, `DELETE FROM broadcast WHERE created_at < ? AND status IN ('completed', 'cancelled')`).run(cutoff);
+    // A paused announcement left for the whole retention period goes too: its delivery
+    // records (Discord IDs) would otherwise stay forever.
+    preparedStatement(this.database, `DELETE FROM broadcast WHERE created_at < ?
+      AND status IN ('completed', 'cancelled', 'paused')`).run(cutoff);
   }
 
   private completeIfDone(broadcastId: string, at: string): void {
