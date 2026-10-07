@@ -30,6 +30,8 @@ export interface SteamIdentityReader {
 
 export interface ConfigureUserOptions {
   readonly resetPricingContext?: boolean;
+  /** Runs synchronously just before saving, after the Steam reads; throwing aborts the save. */
+  readonly beforeSave?: () => void;
 }
 
 export interface PreparedUserConfiguration {
@@ -113,6 +115,7 @@ export class UserConfigurationService {
         throw new InvalidUserConfigurationError('Resolved SteamID64 is invalid');
       }
       await this.wishlistAccessValidator.validateWishlistAccess(steamId64);
+      options.beforeSave?.();
       return this.repository.upsert(
         discordUserId,
         steamId64,

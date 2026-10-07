@@ -90,7 +90,14 @@ export class SetupService {
         profileInput,
         language,
         storeCountryInput,
-        { resetPricingContext: true },
+        {
+          resetPricingContext: true,
+          // Other users' setups ran during the Steam reads; check the limit again with the save.
+          beforeSave: () => {
+            this.assertNotConfigured(discordUserId);
+            this.assertCapacity();
+          },
+        },
       );
       const summary = await this.initialSummaryService.sendWithinUserOperation(discordUserId);
       if (summary.status === 'dm-blocked') {
