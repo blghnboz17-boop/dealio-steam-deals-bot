@@ -5,8 +5,9 @@
 #   powershell -ExecutionPolicy Bypass -File scripts/admin-tunnel.ps1
 #
 # If %USERPROFILE%\.dealio\admin-token holds the panel token, the browser opens
-# already signed in (the token travels in the URL fragment, which never leaves
-# this computer, and the page removes it at once). Otherwise the sign-in form asks.
+# already signed in: the script trades the token over the tunnel for a one-minute,
+# single-use code and only that code goes into the URL fragment, so the token never
+# reaches browser history or a command line. Otherwise the sign-in form asks.
 param(
   [string]$SshTarget = 'dealiobot@20.240.162.55',
   [int]$LocalPort = 8787,
@@ -20,7 +21,16 @@ function Open-Panel {
   $url = "http://localhost:$LocalPort/"
   if (Test-Path $TokenFile) {
     $token = (Get-Content -Raw $TokenFile).Trim()
-    if ($token) { $url += '#login=' + [uri]::EscapeDataString($token) }
+    if ($token) {
+      try {
+        $body = @{ token = $token } | ConvertTo-Json -Compress
+        $reply = Invoke-RestMethod -Method Post -Uri "http://localhost:$LocalPort/api/login-code" `
+          -ContentType 'application/json' -Body $body -TimeoutSec 15
+        $url += '#login=' + [uri]::EscapeDataString($reply.code)
+      } catch {
+        Write-Host 'Automatic sign-in was not possible; the sign-in form will ask for the token.'
+      }
+    }
   }
   Start-Process $url
 }

@@ -228,6 +228,10 @@ export class AdminServer {
       await this.login(request, response);
       return;
     }
+    if (url.pathname === '/api/login-code' && method === 'POST') {
+      await this.loginCode(request, response);
+      return;
+    }
 
     const session = this.options.sessions.get(readCookie(request, cookieName));
     if (!session) {
@@ -253,9 +257,14 @@ export class AdminServer {
       const match = compiled.pattern.exec(url.pathname);
       if (!match) continue;
       const params: Record<string, string> = {};
-      compiled.names.forEach((name, index) => {
-        params[name] = decodeURIComponent(match[index + 1]!);
-      });
+      try {
+        compiled.names.forEach((name, index) => {
+          params[name] = decodeURIComponent(match[index + 1]!);
+        });
+      } catch {
+        sendJson(response, 400, { error: 'Bad path' });
+        return;
+      }
       try {
         const adminRequest: AdminRequest = {
           method,
@@ -285,21 +294,48 @@ export class AdminServer {
     sendJson(response, 404, { error: 'Not found' });
   }
 
-  private async login(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    let token = '';
+  private async readCredentials(request: IncomingMessage, response: ServerResponse)
+    : Promise<{ readonly token?: string; readonly code?: string } | null> {
     try {
       const body = await readBody(request);
-      if (typeof body === 'object' && body !== null && typeof (body as { token?: unknown }).token === 'string') {
-        token = (body as { token: string }).token;
-      }
+      const record = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
+      return {
+        ...(typeof record.token === 'string' ? { token: record.token } : {}),
+        ...(typeof record.code === 'string' ? { code: record.code } : {}),
+      };
     } catch (error: unknown) {
       if (error instanceof AdminHttpError) {
         sendJson(response, error.status, { error: error.message });
-        return;
+        return null;
       }
       throw error;
     }
-    const result = this.options.sessions.login(token);
+  }
+
+  /** Trades the token for a one-minute, single-use code that `#login=<code>` redeems. */
+  private async loginCode(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const credentials = await this.readCredentials(request, response);
+    if (!credentials) return;
+    const result = this.options.sessions.issueLoginCode(credentials.token ?? '');
+    if (result.status === 'locked') {
+      sendJson(response, 429, { error: 'Too many attempts', retryAfterMs: result.retryAfterMs });
+      return;
+    }
+    if (result.status === 'invalid') {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, this.options.failedLoginDelayMs ?? 750));
+      this.logger.log(`${new Date().toISOString()} [admin] Rejected an admin panel sign-in.`);
+      sendJson(response, 401, { error: 'Invalid token' });
+      return;
+    }
+    sendJson(response, 200, { code: result.code });
+  }
+
+  private async login(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const credentials = await this.readCredentials(request, response);
+    if (!credentials) return;
+    const result = credentials.code !== undefined && credentials.token === undefined
+      ? this.options.sessions.redeemLoginCode(credentials.code)
+      : this.options.sessions.login(credentials.token ?? '');
     if (result.status === 'locked') {
       sendJson(response, 429, { error: 'Too many attempts', retryAfterMs: result.retryAfterMs });
       return;
