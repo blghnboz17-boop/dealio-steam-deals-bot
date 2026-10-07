@@ -227,7 +227,9 @@ export class UserConfigurationService {
   public deleteData(discordUserId: string): Promise<boolean> {
     return this.coordinator.runExclusive(discordUserId, () => {
       const deleted = this.repository.deleteByDiscordUserId(discordUserId);
-      if (deleted && this.deletionJournal) {
+      // Usage records are deleted even without a setup (the /delete-data command
+      // itself is one), so the restore protection is recorded for every deletion.
+      if (this.deletionJournal) {
         try {
           this.deletionJournal.record(discordUserId, this.now().toISOString());
         } catch (error: unknown) {
