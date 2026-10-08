@@ -5,7 +5,6 @@ on:
     - cron: '47 5 1 * *'
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: restore-rehearsal
   cancel-in-progress: false
@@ -21,22 +20,25 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
-      - name: Find most recent completed backup
-        id: latest
+      - name: Fetch the most recent encrypted backup
         env:
-          GH_TOKEN: ${{ github.token }}
+          BACKUP_REPO_SSH_KEY: ${{ secrets.BACKUP_REPO_SSH_KEY }}
+          BACKUP_REPO_KNOWN_HOSTS: ${{ secrets.BACKUP_REPO_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -euo pipefail
-          run_id=$(gh run list --workflow offsite-backup.yml --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-          test -n "$run_id"
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: dealio-encrypted-backup
-          path: ${{ runner.temp }}/recovery
-          github-token: ${{ github.token }}
-          run-id: ${{ steps.latest.outputs.run_id }}
+          umask 077
+          mkdir -p "$RUNNER_TEMP/dealio-ssh" "$RUNNER_TEMP/recovery"
+          printf '%s\n' "$BACKUP_REPO_SSH_KEY" > "$RUNNER_TEMP/dealio-ssh/repo-key"
+          printf '%s\n' "$BACKUP_REPO_KNOWN_HOSTS" > "$RUNNER_TEMP/dealio-ssh/repo-known-hosts"
+          export GIT_SSH_COMMAND="ssh -F /dev/null -i $RUNNER_TEMP/dealio-ssh/repo-key -o IdentityAgent=none -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/dealio-ssh/repo-known-hosts"
+          git init -q "$RUNNER_TEMP/backup-repo"
+          cd "$RUNNER_TEMP/backup-repo"
+          timeout 120 git fetch -q --depth 1 git@github.com:blghnboz17-boop/dealio-backups.git '+refs/heads/daily-*:refs/remotes/backup/daily-*'
+          latest=$(git for-each-ref --sort=-committerdate --count=1 --format='%(refname)' refs/remotes/backup/)
+          test -n "$latest"
+          git show "$latest:wishlist.encrypted.json" > "$RUNNER_TEMP/recovery/wishlist.encrypted.json"
+          test -s "$RUNNER_TEMP/recovery/wishlist.encrypted.json"
       # No dependency install scripts in the job that later holds the private key.
       - run: npm ci --ignore-scripts
       - run: npm run build
@@ -59,3 +61,6 @@ jobs:
         env:
           RESTORE_PING_URL: ${{ secrets.HEALTHCHECKS_RESTORE_PING_URL }}
         run: curl --fail --silent --show-error --max-time 15 --output /dev/null "$RESTORE_PING_URL/fail"
+      - name: Remove temporary files
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/dealio-ssh" "$RUNNER_TEMP/backup-repo" "$RUNNER_TEMP/recovery"

@@ -14,13 +14,13 @@
 </p>
 
 <p align="center">
-  <a href="https://blghnboz17-boop.github.io/dealio-public-pages/index-en.html"><img src="https://img.shields.io/badge/Join_the_beta-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Join the beta"></a>
+  <a href="https://discord.com/oauth2/authorize?client_id=1540325119690412172"><img src="https://img.shields.io/badge/Add_to_Discord-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Add to Discord"></a>
   <a href="#a-look-inside"><img src="https://img.shields.io/badge/See_it_in_Discord-1B2838?style=for-the-badge&amp;logo=steam&amp;logoColor=white" alt="See it in Discord"></a>
   <a href="#latest-updates"><img src="https://img.shields.io/badge/What%E2%80%99s_new-8B5CF6?style=for-the-badge" alt="What's new"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/latest"><img src="https://img.shields.io/badge/Release-v0.2.0-8B5CF6?style=flat-square" alt="Release v0.2.0"></a>
+  <a href="https://github.com/blghnboz17-boop/dealio-steam-deals-bot/releases/latest"><img src="https://img.shields.io/badge/Release-v1.0.0-8B5CF6?style=flat-square" alt="Release v1.0.0"></a>
   <a href="#whats-inside"><img src="https://img.shields.io/badge/Languages-TR_%C2%B7_EN_%C2%B7_DE_%C2%B7_FR-2980B9?style=flat-square" alt="Languages: Turkish, English, German, French"></a>
   <a href="#start-in-discord"><img src="https://img.shields.io/badge/Setup-no_Steam_password-238636?style=flat-square" alt="Setup: no Steam password"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2980B9?style=flat-square" alt="MIT license"></a>
@@ -71,31 +71,31 @@ Set a different target for each game, or use one discount threshold across your 
 - 🔔 **Alerts on your schedule.** On detection, with quiet hours, or as a daily digest. Waiting alerts are re-checked before they're sent.
 - 📬 **A record of your alerts.** See pending and sent DMs, and send a test message if delivery isn't working.
 - 👤 **Switch accounts without starting over.** Change your Steam account from ⚙️ Settings; your default discount, alert timing and language stay.
-- 🌍 **Turkish, English, German and French.** Setup, panels and notifications in all four, using Steam's own words for the wishlist in each language. German and French are new and haven't had real-user trials yet.
+- 🌍 **Turkish, English, German and French.** Setup, panels and notifications in all four, using Steam's own words for the wishlist in each language.
 
 <a name="latest-updates"></a>
 
 ## ✨ Latest updates
 
+> **9 October 2026 · v1.0.0: open to everyone**
+>
+> Dealio is now available to everyone. Add it to your Discord apps or to a server, run `/setup`, and it starts watching your wishlist. It's free, and the source code is open under the MIT license.
+
 > **6 October 2026 · v0.2.0: one panel, richer alerts**
 >
-> Everything now lives in one `/dealio` panel with Home, Wishlist, Alerts and Settings tabs. Sale alerts and game details show Steam's review score, Steam Deck status, platforms and when the sale ends, next to the historical low. You can set a target at the lowest price in one tap, open a game straight in the Steam app, and see upcoming games with their release date. Setup now starts with a language choice and shows your Steam name and avatar before you confirm. [Read the v0.2.0 notes →](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/tag/v0.2.0)
+> Everything now lives in one `/dealio` panel with Home, Wishlist, Alerts and Settings tabs. Sale alerts and game details show Steam's review score, Steam Deck status, platforms and when the sale ends, next to the historical low. You can set a target at the lowest price in one tap, open a game straight in the Steam app, and see upcoming games with their release date. Setup now starts with a language choice and shows your Steam name and avatar before you confirm. [Read the v0.2.0 notes →](https://github.com/blghnboz17-boop/dealio-steam-deals-bot/releases/tag/v0.2.0)
 
 > **4 October 2026 · Account switch and steadier alerts**
 >
-> You can now change your Steam account from ⚙️ Settings without deleting your data. If Steam briefly leaves a game out of your wishlist, Dealio no longer treats it as a new sale when the game comes back, so you won't get duplicate alerts. Sale DMs now carry only the panel button; the optional support link moved to the Home panel. New sign-ups are capped while the beta runs on a single server.
-
-> **30 September 2026 · Limited beta, first users**
->
-> Three desktop users completed setup with the Türkiye store and Turkish menus. They reported no problems with the commands they tried. We're now watching how notifications hold up in everyday use.
+> You can now change your Steam account from ⚙️ Settings without deleting your data. If Steam briefly leaves a game out of your wishlist, Dealio no longer treats it as a new sale when the game comes back, so you won't get duplicate alerts. Sale DMs now carry only the panel button; the optional support link moved to the Home panel.
 
 <a name="start-in-discord"></a>
 
 ## 🚀 Start in Discord
 
-Dealio is being tested with a small group. If you'd like to join, get in touch through the [beta page](https://blghnboz17-boop.github.io/dealio-public-pages/index-en.html). It's free to use; the general invite will open after acceptance testing. The beta has a limited number of places; when they're full, `/setup` says so and saves nothing.
+Dealio is free. All you need is a Discord account and a public Steam wishlist.
 
-1. **Join a server with the bot.** We'll share access details when you join the beta.
+1. **[Add Dealio to Discord](https://discord.com/oauth2/authorize?client_id=1540325119690412172).** Choose *Add to My Apps* to use it anywhere, or add it to a server you manage.
 2. **Run `/setup`.** Pick your language, enter your Steam profile link, custom URL name or SteamID64, confirm your Steam Store country, then explicitly enable sale DMs.
 3. **Open `/dealio`.** Browse your wishlist, choose a game, and set the price you want.
 
@@ -121,21 +121,6 @@ Everything else is in the `/dealio` panel: browse and search your wishlist, set 
 
 Panels are private and bound to the person who opened them. After a timeout or bot restart, open a fresh command to continue.
 
-<a name="beta-status"></a>
-
-## 🧪 Beta status
-
-Dealio runs on a single server as a **limited beta**. Three users reported successful Turkish desktop setup and command trials; general-release acceptance is still pending.
-
-- [x] First Turkish desktop setup and command trials
-- [x] Encrypted offsite backup, restore, and independent alarm exercises
-- [x] Published help, privacy, and terms pages
-- [ ] At least seven days of real-world use
-- [ ] Real sale alerts, scheduled delivery, and duplicate checks
-- [ ] English, German, French and mobile trials, and a consented data-deletion trial
-
-[Public launch checklist, TR →](docs/public-launch-checklist.tr.md)
-
 ## 🔒 Privacy & control
 
 Dealio stores your account identifiers, preferences, game rules, observed wishlist prices, and delivery records. It also keeps usage records (which command or button was used, never what you typed) for 90 days. It does not collect ordinary Discord message content or Steam credentials.
@@ -158,7 +143,7 @@ Give it a moment, then try the command once more. If a cooldown is shown, wait f
 <details>
 <summary><strong>The bot works, but I'm not getting DMs. What should I check?</strong></summary>
 
-Start with **Test DM** in `/dealio` → ⚙️ Settings. If the sample doesn't arrive either, check that you haven't blocked the bot and that you allow DMs from your shared server. If tracking was paused because DMs were blocked, press **Resume tracking** in ⚙️ Settings after fixing the setting.
+Start with **Test DM** in `/dealio` → ⚙️ Settings. If the sample doesn't arrive either, check that you haven't blocked the bot and that Discord allows DMs from Dealio (added to your apps, or through a shared server). If tracking was paused because DMs were blocked, press **Resume tracking** in ⚙️ Settings after fixing the setting.
 
 If the test arrives but a sale alert doesn't, check your notification status in `/dealio` → ⚙️ Settings, the game's target or discount threshold, its mute setting, and your quiet hours or daily digest. A test DM confirms you can receive messages; it doesn't mean every game currently qualifies for an alert.
 
@@ -216,7 +201,7 @@ TypeScript · discord.js Components V2 · `node:sqlite` · IsThereAnyDeal API ·
 - [Architecture](docs/architecture.md) — pricing, rules, delivery, and persistence
 - [Current operations setup, TR](deploy/FREE-OPERATIONS.tr.md) — free backups, alerts, and recovery
 - [Admin panel, TR](docs/admin-panel.tr.md) — the owner's private web panel, reached only over an SSH tunnel
-- [CI runs](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml) — current verification
+- [CI runs](https://github.com/blghnboz17-boop/dealio-steam-deals-bot/actions/workflows/ci.yml) — current verification
 
 Dealio stays focused on Steam wishlists. Payments, a user-facing web dashboard, other stores, and estimated currency conversion are outside its scope.
 
@@ -243,6 +228,6 @@ Prices stay in Steam's reported currency, with no estimated exchange-rate conver
 ---
 
 <p align="center">
-  Made by <a href="https://github.com/blghnboz17-boop">Bilgehan</a>. Still growing. 💙 · <a href="LICENSE">MIT license</a><br>
+  Made by <a href="https://github.com/blghnboz17-boop">Bilgehan</a>. Issues and ideas are welcome. 💙 · <a href="LICENSE">MIT license</a><br>
   <sub>Dealio is an independent project, not affiliated with Valve, Discord or IsThereAnyDeal.</sub>
 </p>

@@ -8,14 +8,23 @@
 # already signed in: the script trades the token over the tunnel for a one-minute,
 # single-use code and only that code goes into the URL fragment, so the token never
 # reaches browser history or a command line. Otherwise the sign-in form asks.
+#
+# The VM address is not kept in the repository: pass -SshTarget dealiobot@<vm-ip>
+# or put that value in %USERPROFILE%\.dealio\ssh-target.
 param(
-  [string]$SshTarget = 'dealiobot@20.240.162.55',
+  [string]$SshTarget = '',
   [int]$LocalPort = 8787,
   [int]$RemotePort = 8787,
   [string]$TokenFile = (Join-Path $env:USERPROFILE '.dealio\admin-token')
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $SshTarget) {
+  $targetFile = Join-Path $env:USERPROFILE '.dealio\ssh-target'
+  if (Test-Path $targetFile) { $SshTarget = (Get-Content -Raw $targetFile).Trim() }
+  if (-not $SshTarget) { throw "No SSH target: pass -SshTarget dealiobot@<vm-ip> or write it to $targetFile." }
+}
 
 function Open-Panel {
   $url = "http://localhost:$LocalPort/"

@@ -60,10 +60,10 @@ const lookingUp = {
 } as const;
 
 const capacityTitle = {
-  tr: 'Beta şu an dolu',
-  en: 'The beta is full right now',
-  de: 'Die Beta ist gerade voll',
-  fr: 'La bêta est complète pour le moment',
+  tr: 'Dealio şu an dolu',
+  en: 'Dealio is full right now',
+  de: 'Dealio ist gerade voll',
+  fr: 'Dealio est complet pour le moment',
 } as const;
 
 export const setupCommand = new SlashCommandBuilder()

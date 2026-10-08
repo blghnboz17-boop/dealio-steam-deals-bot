@@ -12,8 +12,8 @@ describe('GitHub Actions workflows', () => {
   });
 
   it.each(workflows)('$file pins every action to a full commit SHA', ({ text }) => {
+    // The backup job uses no actions at all: its ciphertext never touches an artifact.
     const uses = [...text.matchAll(/^\s*(?:-\s*)?uses:\s*(\S+)/gm)].map((match) => match[1]!);
-    expect(uses.length).toBeGreaterThan(0);
     for (const action of uses) expect(action, action).toMatch(/^[\w.-]+\/[\w.\/-]+@[0-9a-f]{40}$/);
   });
 
@@ -22,6 +22,13 @@ describe('GitHub Actions workflows', () => {
     expect(text).not.toMatch(/^\s+[\w-]+: write\s*$/m);
     expect(text).not.toContain('pull_request_target');
     expect(text).not.toContain('workflow_run');
+  });
+
+  it('never uploads the encrypted backup as a workflow artifact of this public repository', () => {
+    const backup = workflows.find(({ file }) => file === 'offsite-backup.yml')!.text;
+    expect(backup).not.toContain('upload-artifact');
+    expect(backup).toContain('dealio-backups.git');
+    expect(backup).not.toContain('vars.');
   });
 
   it.each(workflows)('$file never expands event data or secrets inside a shell script', ({ text }) => {

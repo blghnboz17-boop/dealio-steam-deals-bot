@@ -18,7 +18,7 @@ jobs:
         env:
           BACKUP_SSH_KEY: ${{ secrets.BACKUP_SSH_KEY }}
           BACKUP_KNOWN_HOSTS: ${{ secrets.BACKUP_KNOWN_HOSTS }}
-          BACKUP_SSH_TARGET: ${{ vars.BACKUP_SSH_TARGET }}
+          BACKUP_SSH_TARGET: ${{ secrets.BACKUP_SSH_TARGET }}
         shell: bash
         run: |
           set -euo pipefail
@@ -29,12 +29,27 @@ jobs:
           timeout 150 ssh -T -i "$RUNNER_TEMP/dealio-ssh/key" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/dealio-ssh/known_hosts" "$BACKUP_SSH_TARGET" > "$RUNNER_TEMP/wishlist.encrypted.json"
           test -s "$RUNNER_TEMP/wishlist.encrypted.json"
           test "$(stat -c %s "$RUNNER_TEMP/wishlist.encrypted.json")" -le 24117248
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: dealio-encrypted-backup
-          path: ${{ runner.temp }}/wishlist.encrypted.json
-          retention-days: 7
-          if-no-files-found: error
+      # The source repository is public, so the ciphertext never becomes a workflow
+      # artifact. It goes to a private repository, one branch per weekday; each
+      # push replaces the copy from a week earlier.
+      - name: Store the snapshot in the private backup repository
+        env:
+          BACKUP_REPO_SSH_KEY: ${{ secrets.BACKUP_REPO_SSH_KEY }}
+          BACKUP_REPO_KNOWN_HOSTS: ${{ secrets.BACKUP_REPO_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s\n' "$BACKUP_REPO_SSH_KEY" > "$RUNNER_TEMP/dealio-ssh/repo-key"
+          printf '%s\n' "$BACKUP_REPO_KNOWN_HOSTS" > "$RUNNER_TEMP/dealio-ssh/repo-known-hosts"
+          export GIT_SSH_COMMAND="ssh -F /dev/null -i $RUNNER_TEMP/dealio-ssh/repo-key -o IdentityAgent=none -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/dealio-ssh/repo-known-hosts"
+          slot="daily-$(date -u +%a | tr '[:upper:]' '[:lower:]')"
+          git init -q -b "$slot" "$RUNNER_TEMP/backup-repo"
+          cp "$RUNNER_TEMP/wishlist.encrypted.json" "$RUNNER_TEMP/backup-repo/wishlist.encrypted.json"
+          cd "$RUNNER_TEMP/backup-repo"
+          git add wishlist.encrypted.json
+          git -c user.name='Dealio backup' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -q -m "Encrypted backup $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          timeout 120 git push -q --force git@github.com:blghnboz17-boop/dealio-backups.git "HEAD:refs/heads/$slot"
       - name: Confirm offsite storage to independent monitor
         env:
           BACKUP_PING_URL: ${{ secrets.HEALTHCHECKS_BACKUP_PING_URL }}
@@ -46,4 +61,4 @@ jobs:
         run: curl --fail --silent --show-error --max-time 15 --output /dev/null "$BACKUP_PING_URL/fail"
       - name: Remove temporary files
         if: always()
-        run: rm -f "$RUNNER_TEMP/dealio-ssh/key" "$RUNNER_TEMP/wishlist.encrypted.json"
+        run: rm -rf "$RUNNER_TEMP/dealio-ssh" "$RUNNER_TEMP/wishlist.encrypted.json" "$RUNNER_TEMP/backup-repo"

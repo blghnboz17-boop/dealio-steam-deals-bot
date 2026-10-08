@@ -50,13 +50,13 @@ Use one process per test application. Discord component sessions are in memory, 
 
 ## Production modes
 
-The existing Azure VM is the sole production host. The current limited-beta rollout uses `DEALIO_PRODUCTION=true` and an explicitly pinned `DEALIO_SINGLE_HOST_MACHINE_ID`. Startup checks `/etc/machine-id`; a local application-ID lock also rejects a second process using a different database under the same OS user.
+The existing Azure VM is the sole production host. Production uses `DEALIO_PRODUCTION=true` and an explicitly pinned `DEALIO_SINGLE_HOST_MACHINE_ID`. Startup checks `/etc/machine-id`; a local application-ID lock also rejects a second process using a different database under the same OS user.
 
 This is **not** a distributed lock. Cloned machine identities or separate OS users are outside that guarantee.
 
 An optional cloud mode uses `AZURE_LEASE_CONTAINER_URL` and a pre-provisioned application lock blob; uncertain lease renewal disconnects the bot. It is implemented but **not provisioned**, because the project uses no paid cloud resources.
 
-Backups, restore rehearsal, independent alerts, and the public legal pages are already running; see [free operations](../deploy/FREE-OPERATIONS.tr.md), [the deployment guide](../deploy/README.tr.md) (build locally, never on the 1 GiB VM), and [deployment evidence](../deploy/IMPLEMENTATION-STATUS.tr.md). Restore matching code **and database** when rolling back across a schema migration. Do not include `.env` in backup archives.
+Backups, restore rehearsal, independent alerts, and the public legal pages are already running; see [free operations](../deploy/FREE-OPERATIONS.tr.md), [the deployment guide](../deploy/README.tr.md) (build locally, never on the 1 GiB VM). Restore matching code **and database** when rolling back across a schema migration. Do not include `.env` in backup archives.
 
 Useful scripts: `npm run release:check <evidence.json>` (release gate), `npm run metrics:report` (anonymous latency summary), `npm run monitor:preview` (read-only monitor preview), `npm run backup` / `npm run restore:test` (local backup and restore test), and `npm run test:capacity` (capacity check).
 

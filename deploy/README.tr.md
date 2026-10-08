@@ -35,8 +35,8 @@ tar -czf /c/tmp/dist-<sha>.tar.gz dist
 `distArchiveSha256`, `ci`, `previousCommit`, `schemaChange`. Sonra:
 
 ```bash
-ssh dealiobot@20.240.162.55 'mkdir -p ~/dealio-candidate-<sha>'
-scp dist-<sha>.tar.gz manifest-<sha>.json deploy/switch-release.sh dealiobot@20.240.162.55:dealio-candidate-<sha>/
+ssh dealiobot@<vm-ip> 'mkdir -p ~/dealio-candidate-<sha>'
+scp dist-<sha>.tar.gz manifest-<sha>.json deploy/switch-release.sh dealiobot@<vm-ip>:dealio-candidate-<sha>/
 ```
 
 Arşivi elle açmayın: betik SHA-256'sını doğruladığı arşivi kendisi açar ve canlıya
@@ -45,7 +45,7 @@ yalnız o kopyayı koyar.
 `main` CI'ı geçtikten sonra geçiş:
 
 ```bash
-ssh dealiobot@20.240.162.55 'bash ~/dealio-candidate-<sha>/switch-release.sh <sha>'
+ssh dealiobot@<vm-ip> 'bash ~/dealio-candidate-<sha>/switch-release.sh <sha>'
 ```
 
 [`switch-release.sh`](switch-release.sh) şunları yapar:
@@ -70,7 +70,7 @@ durur; yeni `main`'den yeniden derleyin. Ardından sağlık kaydını
 Windows CMD veya PowerShell'den sunucuya bağlantı:
 
 ```bash
-ssh dealiobot@20.240.162.55
+ssh dealiobot@<vm-ip>
 ```
 
 ### VM'de kısa geçiş
@@ -213,6 +213,6 @@ Discord bağlantısının tamamlandığını kanıtlamaz.
   `wishlist.db` değiştirilmelidir. Başlangıç günlüğündeki
   `Re-applied N data deletion(s)` satırı yeniden uygulanan silmeleri gösterir.
 - Yeni kayıtlar `DEALIO_MAX_USERS` ile sınırlanır (varsayılan 200). Mevcut
-  kullanıcılar etkilenmez; sınır dolduğunda `/setup` "beta dolu" der ve bir şey
+  kullanıcılar etkilenmez; sınır dolduğunda `/setup` "Dealio şu an dolu" der ve bir şey
   kaydetmez. Sınırı yalnızca üretim sunucusunda kapasite ölçümü yapıldıktan
   sonra artırın.
