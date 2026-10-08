@@ -1,8 +1,8 @@
-> Güncel ücretsiz beta kurulumu için `../FREE-OPERATIONS.tr.md` kullanılır.
-> Buradaki Azure Monitor/Blob şablonu ücretli alternatiftir; mevcut beta için uygulanmaz.
+> Güncel ücretsiz kurulum için `../FREE-OPERATIONS.tr.md` kullanılır.
+> Buradaki Azure Monitor/Blob şablonu ücretli alternatiftir; mevcut kurulumda uygulanmaz.
 
 
-# Azure açık beta kurulumu
+# Azure ücretli kurulum seçeneği
 
 Bu dosyalar hazırlanmış altyapıyı içerir; bulunmaları kaynakların oluşturulduğu veya alarmların çalıştığı anlamına gelmez. Üretim mevcut Azure VM'de kalır. WSL'de üretim token'ıyla bot başlatılmaz.
 

@@ -35,7 +35,7 @@ powershell -ExecutionPolicy Bypass -File scripts/admin-tunnel.ps1
 ```
 
 Betik `ssh -N -L 127.0.0.1:8787:127.0.0.1:8787 <SshTarget>` tünelini (`dealiobot@<VM genel IP>`;
-varsayılanı betiğin `-SshTarget` parametresindedir)
+`-SshTarget` parametresiyle ya da `%USERPROFILE%\.dealio\ssh-target` dosyasından okunur)
 açar ve tarayıcıda `http://localhost:8787` adresini başlatır. Masaüstündeki
 **Dealio Yönetim** kısayolu aynı betiği çalıştırır; pencereyi kapatmak tüneli kapatır.
 

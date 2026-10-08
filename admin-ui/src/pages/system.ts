@@ -34,7 +34,7 @@ function SettingsForm(props: { settings: RuntimeSettings; userCount: number | nu
     <div class="settings">
       <div class="setting-row">
         <div><strong>Yeni kayıtlar</strong>
-          <p class="muted small">Kapalıyken /setup “beta şu an dolu” der; mevcut kullanıcılar etkilenmez.</p></div>
+          <p class="muted small">Kapalıyken /setup “Dealio şu an dolu” der; mevcut kullanıcılar etkilenmez.</p></div>
         <button class=${`switch ${props.settings.signupsOpen ? 'on' : ''}`} role="switch" aria-checked=${props.settings.signupsOpen} disabled=${busy !== null}
           onClick=${() => save({ signupsOpen: !props.settings.signupsOpen }, props.settings.signupsOpen ? 'Kayıtlar kapatıldı' : 'Kayıtlar açıldı')}>
           ${props.settings.signupsOpen ? 'Açık' : 'Kapalı'}<span class="switch-track" aria-hidden="true"></span></button>

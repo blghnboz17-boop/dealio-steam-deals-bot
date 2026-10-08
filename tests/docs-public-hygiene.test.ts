@@ -52,8 +52,8 @@ describe('public site hygiene', () => {
   it('keeps the Turkish and English privacy policies in the same shape and date', () => {
     const sections = (text: string): number => (text.match(/<h2>/g) ?? []).length;
     expect(sections(read('docs/privacy-tr.html'))).toBe(sections(read('docs/privacy.html')));
-    expect(read('docs/privacy-tr.html')).toContain('Son güncelleme: 7 Ekim 2026');
-    expect(read('docs/privacy.html')).toContain('Last updated: October 7, 2026');
+    expect(read('docs/privacy-tr.html')).toContain('Son güncelleme: 9 Ekim 2026');
+    expect(read('docs/privacy.html')).toContain('Last updated: October 9, 2026');
   });
 
   it('names the services Dealio is not affiliated with', () => {

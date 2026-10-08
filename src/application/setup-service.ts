@@ -22,7 +22,7 @@ export class SetupAlreadyCompletedError extends Error {
   }
 }
 
-/** New sign-ups are closed: the beta already has as many users as it can carry. */
+/** New sign-ups are closed: Dealio already has as many users as it can carry. */
 export class SetupCapacityReachedError extends Error {
   public readonly name = 'SetupCapacityReachedError';
 

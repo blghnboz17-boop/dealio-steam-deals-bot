@@ -14,13 +14,13 @@
 </p>
 
 <p align="center">
-  <a href="https://blghnboz17-boop.github.io/dealio-public-pages/"><img src="https://img.shields.io/badge/Beta%E2%80%99ya_kat%C4%B1l-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Beta’ya katıl"></a>
+  <a href="https://discord.com/oauth2/authorize?client_id=1540325119690412172"><img src="https://img.shields.io/badge/Discord%E2%80%99a_ekle-5865F2?style=for-the-badge&amp;logo=discord&amp;logoColor=white" alt="Discord’a ekle"></a>
   <a href="#discordda-nasil-gorunuyor"><img src="https://img.shields.io/badge/Discord%E2%80%99da_g%C3%B6r-1B2838?style=for-the-badge&amp;logo=steam&amp;logoColor=white" alt="Discord’da gör"></a>
   <a href="#son-gelismeler"><img src="https://img.shields.io/badge/Yenilikler-8B5CF6?style=for-the-badge" alt="Yenilikler"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/latest"><img src="https://img.shields.io/badge/S%C3%BCr%C3%BCm-v0.2.0-8B5CF6?style=flat-square" alt="Sürüm v0.2.0"></a>
+  <a href="https://github.com/blghnboz17-boop/dealio-steam-deals-bot/releases/latest"><img src="https://img.shields.io/badge/S%C3%BCr%C3%BCm-v1.0.0-8B5CF6?style=flat-square" alt="Sürüm v1.0.0"></a>
   <a href="#icerikte-neler-var"><img src="https://img.shields.io/badge/Diller-TR_%C2%B7_EN_%C2%B7_DE_%C2%B7_FR-2980B9?style=flat-square" alt="Diller: Türkçe, İngilizce, Almanca, Fransızca"></a>
   <a href="#discordda-basla"><img src="https://img.shields.io/badge/Kurulum-Steam_%C5%9Fifresi_gerekmez-238636?style=flat-square" alt="Kurulum: Steam şifresi gerekmez"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/Lisans-MIT-2980B9?style=flat-square" alt="MIT lisansı"></a>
@@ -71,31 +71,31 @@ Her oyun için ayrı hedef belirleyebilir ya da tüm listene tek bir indirim eş
 - 🔔 **Bildirimler senin zamanında.** Tespit edilince, sessiz saatlerle ya da günlük özet olarak. Bekleyen bildirimler gönderilmeden önce yeniden kontrol edilir.
 - 📬 **Bildirimini takip et.** Bekleyen ve gönderilen DM’leri gör; mesaj alamıyorsan test bildirimiyle kontrol et.
 - 👤 **Baştan başlamadan hesap değiştir.** Steam hesabını ⚙️ Ayarlar’dan değiştir; genel indirim oranın, bildirim zamanlaman ve dilin aynı kalır.
-- 🌍 **Türkçe, İngilizce, Almanca ya da Fransızca.** Kurulum, paneller ve bildirimler dört dilde; her dilde Steam’in kendi terimleriyle (ör. istek listesi). Almanca ve Fransızca yeni; henüz gerçek kullanıcı denemesinden geçmedi.
+- 🌍 **Türkçe, İngilizce, Almanca ya da Fransızca.** Kurulum, paneller ve bildirimler dört dilde; her dilde Steam’in kendi terimleriyle (ör. istek listesi).
 
 <a name="son-gelismeler"></a>
 
 ## ✨ Son gelişmeler
 
+> **9 Ekim 2026 · v1.0.0: herkese açık**
+>
+> Dealio artık herkesin kullanımına açık. Discord uygulamalarına ya da bir sunucuya ekle, `/setup` yaz; istek listeni izlemeye başlasın. Ücretsiz ve kaynak kodu MIT lisansıyla açık.
+
 > **6 Ekim 2026 · v0.2.0: tek panel, daha zengin bildirimler**
 >
-> Her şey artık Ana sayfa, İstek listem, Bildirimler ve Ayarlar sekmeleriyle tek bir `/dealio` panelinde. İndirim bildirimleri ve oyun detayı, en düşük fiyatın yanında Steam inceleme puanını, Steam Deck durumunu, platformları ve indirimin ne zaman bittiğini gösteriyor. En düşük fiyatı tek dokunuşla hedef yapabilir, oyunu doğrudan Steam uygulamasında açabilir ve yakında çıkacak oyunları çıkış tarihleriyle görebilirsin. Kurulum artık dil seçimiyle başlıyor ve onaylamadan önce Steam adını ve avatarını gösteriyor. [v0.2.0 sürüm notları →](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/releases/tag/v0.2.0)
+> Her şey artık Ana sayfa, İstek listem, Bildirimler ve Ayarlar sekmeleriyle tek bir `/dealio` panelinde. İndirim bildirimleri ve oyun detayı, en düşük fiyatın yanında Steam inceleme puanını, Steam Deck durumunu, platformları ve indirimin ne zaman bittiğini gösteriyor. En düşük fiyatı tek dokunuşla hedef yapabilir, oyunu doğrudan Steam uygulamasında açabilir ve yakında çıkacak oyunları çıkış tarihleriyle görebilirsin. Kurulum artık dil seçimiyle başlıyor ve onaylamadan önce Steam adını ve avatarını gösteriyor. [v0.2.0 sürüm notları →](https://github.com/blghnboz17-boop/dealio-steam-deals-bot/releases/tag/v0.2.0)
 
 > **4 Ekim 2026 · Hesap değiştirme ve daha sağlam bildirimler**
 >
-> Steam hesabını artık verilerini silmeden ⚙️ Ayarlar’dan değiştirebilirsin. Steam bir oyunu istek listenden kısa süreliğine düşürürse, oyun geri geldiğinde Dealio bunu yeni indirim saymıyor; böylece aynı indirim için ikinci DM gelmiyor. İndirim DM’lerinde artık yalnızca panel butonu var; isteğe bağlı destek bağlantısı ana panele taşındı. Beta tek sunucuda çalıştığı için yeni kayıt sayısı sınırlı.
-
-> **30 Eylül 2026 · Sınırlı beta, ilk kullanıcılar**
->
-> Üç kişi bilgisayarda, Türkiye mağazası ve Türkçe menülerle kurulumu tamamladı. Denedikleri komutlarda sorun bildirmediler. Şimdi günlük kullanımda bildirimleri ve olası aksaklıkları takip ediyoruz.
+> Steam hesabını artık verilerini silmeden ⚙️ Ayarlar’dan değiştirebilirsin. Steam bir oyunu istek listenden kısa süreliğine düşürürse, oyun geri geldiğinde Dealio bunu yeni indirim saymıyor; böylece aynı indirim için ikinci DM gelmiyor. İndirim DM’lerinde artık yalnızca panel butonu var; isteğe bağlı destek bağlantısı ana panele taşındı.
 
 <a name="discordda-basla"></a>
 
 ## 🚀 Discord’da başla
 
-Dealio şu an küçük bir grupla deneniyor. Katılmak istersen [beta sayfasından](https://blghnboz17-boop.github.io/dealio-public-pages/) ulaşabilirsin. Kullanım ücretsiz; genel daveti testler tamamlandığında açacağız. Betada yer sınırlı; yerler dolduğunda `/setup` bunu söyler ve hiçbir şey kaydetmez.
+Dealio ücretsiz. Bir Discord hesabı ve herkese açık bir Steam istek listesi yeterli.
 
-1. **Botun bulunduğu sunucuya katıl.** Davet bilgilerini beta katılımı sırasında paylaşacağız.
+1. **[Dealio’yu Discord’a ekle](https://discord.com/oauth2/authorize?client_id=1540325119690412172).** Her yerde kullanmak için *Uygulamalarıma Ekle*’yi seç ya da yönettiğin bir sunucuya ekle.
 2. **`/setup` yaz.** Dilini seç; Steam profil bağlantını, özel URL adını veya SteamID64’ünü gir; gerçek Steam Store ülkeni doğrula, ardından indirim DM’lerini açıkça onayla.
 3. **`/dealio` aç.** Wishlist’ini incele, bir oyun seç ve istediğin fiyatı belirle.
 
@@ -121,21 +121,6 @@ Geri kalan her şey `/dealio` panelinde: istek listende gezin ve ara, hedef koy 
 
 Paneller sana özeldir; düğmeler paneli açan kullanıcıya bağlıdır. Süre dolunca veya bot yeniden başlayınca yeni bir komut açarak devam edebilirsin.
 
-<a name="beta-durumu"></a>
-
-## 🧪 Beta durumu
-
-Dealio tek sunucuda **sınırlı beta** olarak çalışıyor. Üç kişi Türkçe masaüstü kurulumu ve komut denemelerini sorunsuz tamamladığını bildirdi; genel kullanım kabulü henüz tamamlanmadı.
-
-- [x] İlk kullanıcılarla Türkçe masaüstü kurulumu ve komut denemeleri
-- [x] Şifreli uzak yedek, geri yükleme ve bağımsız alarmın denenmesi
-- [x] Yardım, gizlilik ve kullanım koşullarının yayımlanması
-- [ ] En az yedi günlük gerçek kullanım gözlemi
-- [ ] Gerçek indirim, zamanlanmış teslim ve tekrar bildirim kontrolleri
-- [ ] İngilizce, Almanca, Fransızca ve mobil denemeler; onaylı veri silme denemesi
-
-[Genel yayın kontrol listesi →](docs/public-launch-checklist.tr.md)
-
 ## 🔒 Verilerin ve kontrolün
 
 Dealio hesap kimliklerini, tercihlerini, oyun kurallarını, gözlemlenen wishlist fiyatlarını ve teslimat kayıtlarını tutar. Ayrıca 90 gün boyunca kullanım kayıtları (hangi komutu veya düğmeyi kullandığın; ne yazdığın değil) saklanır. Normal Discord mesajlarının içeriğini veya Steam giriş bilgilerini toplamaz.
@@ -158,7 +143,7 @@ Biraz bekleyip komutu bir kez daha dene; bekleme süresi gösteriliyorsa dolmas�
 <details>
 <summary><strong>Bot çalışıyor ama DM gelmiyor. Neyi kontrol etmeliyim?</strong></summary>
 
-Önce `/dealio` → ⚙️ Ayarlar’daki **Test DM** ile bir örnek mesaj iste. O da gelmiyorsa botu engellemediğini ve ortak sunucudan DM almaya izin verdiğini kontrol et. Takip DM engeli nedeniyle durdurulduysa ayarı düzelttikten sonra ⚙️ Ayarlar’da **Takibi sürdür**’e bas.
+Önce `/dealio` → ⚙️ Ayarlar’daki **Test DM** ile bir örnek mesaj iste. O da gelmiyorsa botu engellemediğini ve Discord’un Dealio’dan DM almana izin verdiğini (uygulamalarına eklenmişse ya da ortak bir sunucu üzerinden) kontrol et. Takip DM engeli nedeniyle durdurulduysa ayarı düzelttikten sonra ⚙️ Ayarlar’da **Takibi sürdür**’e bas.
 
 Test mesajı geliyor ama indirim bildirimi gelmiyorsa `/dealio` → ⚙️ Ayarlar içindeki bildirim durumuna, oyunun hedef fiyatına veya indirim eşiğine, susturma seçeneğine ve sessiz saat/günlük özet ayarlarına bak. Test DM’si mesaj alabileceğini gösterir; her oyunun o anda bildirim koşulunu karşıladığı anlamına gelmez.
 
@@ -216,7 +201,7 @@ TypeScript · discord.js Components V2 · `node:sqlite` · IsThereAnyDeal API ·
 - [Mimari](docs/architecture.md) — fiyatlar, kurallar, teslimat ve veri
 - [Mevcut işletim düzeni](deploy/FREE-OPERATIONS.tr.md) — ücretsiz yedek, alarm ve kurtarma
 - [Yönetim paneli](docs/admin-panel.tr.md) — yalnızca SSH tüneliyle erişilen, sahibine özel web paneli
-- [GitHub kontrolleri](https://github.com/blghnboz17-boop/steam-wishlist-discord-bot/actions/workflows/ci.yml) — güncel doğrulamalar
+- [GitHub kontrolleri](https://github.com/blghnboz17-boop/dealio-steam-deals-bot/actions/workflows/ci.yml) — güncel doğrulamalar
 
 Dealio Steam wishlist’lerine odaklanır. Ödeme sistemi, kullanıcılara açık bir web paneli, diğer mağazalar ve tahmini para birimi dönüşümü kapsam dışındadır.
 

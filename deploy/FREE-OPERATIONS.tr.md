@@ -1,7 +1,6 @@
-# Ücretsiz beta işletimi
+# Ücretsiz işletim
 
-Bu dosya kurulum ve kurtarma talimatıdır; her adımın canlı kabulü ayrıca kaydedilir.
-Canlı kabul kaydı: `docs/phase3-acceptance.tr.md`.
+Bu dosya kurulum ve kurtarma talimatıdır.
 
 ## Sınırlar ve maliyet
 
@@ -17,7 +16,7 @@ kurulumda kullanılmaz.
   Önceki `Standard_B2ts_v2` kotada değildi ve ayda yaklaşık 7,4 USD tutuyordu.
 - İşletim sistemi diski 64 GiB Premium SSD (P6): ücretsiz kotada. Önceki 30 GiB
   (P4) kotaya girmiyordu, ayda yaklaşık 5,4 USD. Disk küçültülemez.
-- Standard sabit genel IP (`20.240.162.55`) kotada yoktur, ayda yaklaşık 3,5 USD.
+- Standard sabit genel IP kotada yoktur, ayda yaklaşık 3,5 USD.
   VM durdurulup başlatıldığında değişmez.
 - Beklenen aylık maliyet yaklaşık 3,5 USD (önce yaklaşık 17,4 USD); bu hızla
   kredi bitiş tarihine kadar yeter. Cost Management'ta free services kullanımı
@@ -31,7 +30,7 @@ kurulumda kullanılmaz.
 - VM boyutu çalışırken B2ats v2'ye çevrilemez ("Unsupported hardware"); önce
   durdurulup serbest bırakılır (deallocate), sonra boyut ve disk değiştirilir. GitHub Actions hesabındaki 0 USD bütçe ve Stop usage
 koruması korunur. Kota dolması yedek işini durdurabilir; Healthchecks sinyal
-kesilmesini dışarıdan izler. Günlük şifreli artifact yedi gün tutulur;
+kesilmesini dışarıdan izler. Günlük şifreli yedek özel `dealio-backups` deposunda haftanın gününe göre bir dalda tutulur; her kopya yedi gün sonra yenisiyle değiştirilir;
 veritabanı üst sınırı 16 MiB, şifreli çıktı üst sınırı 23 MiB'dir. Bu sınırlar
 GitHub hesabının diğer projelerle paylaşılan ücretsiz kotasını garanti etmez.
 
@@ -59,8 +58,11 @@ Derleme/test VM dışında yapılır; test edilen commit ve dist birlikte aktar�
 - Sunucu anahtarı önceden doğrulanmış known_hosts kaydından sabitlenir;
   yalnız `ssh-keyscan` çıktısına güvenilmez. StrictHostKeyChecking kapatılmaz.
 - GitHub deposunun Actions sırlarında `BACKUP_SSH_KEY`, `BACKUP_KNOWN_HOSTS`,
-  `DEALIO_BACKUP_PRIVATE_KEY`, `HEALTHCHECKS_BACKUP_PING_URL`,
-  `HEALTHCHECKS_RESTORE_PING_URL` sırları; `BACKUP_SSH_TARGET` değişkeni gerekir.
+  `BACKUP_SSH_TARGET`, `DEALIO_BACKUP_PRIVATE_KEY`, `HEALTHCHECKS_BACKUP_PING_URL`
+  ve `HEALTHCHECKS_RESTORE_PING_URL` gerekir. Bot deposu public olduğu için
+  şifreli yedek workflow artifact'i olarak yüklenmez: `BACKUP_REPO_SSH_KEY` yalnız
+  özel `dealio-backups` deposuna write yetkili deploy key, `BACKUP_REPO_KNOWN_HOSTS`
+  GitHub'ın `/meta` SSH anahtarlarıdır. VM adresi de bu yüzden değişken değil sırdır.
 - VM .env: `DEALIO_BACKUP_PUBLIC_KEY_FILE`, `HEALTHCHECKS_BOT_PING_URL`.
   Ping URL'leri sırlıdır; ekran görüntüsü, günlük veya Git'e yazılmaz.
 
@@ -82,8 +84,8 @@ başlatılır ve iyileşme doğrulanır. Prova başarısız olsa da timer geri a
 ## Yedek ve geri yükleme kabulü
 
 1. GitHub `Encrypted offsite backup` işi elle tetiklenir; işin başarılı olması
-   ve şifreli artifact'in mevcut olması doğrulanır.
-2. `Offsite restore rehearsal` işi aynı uzak artifact'i indirir, ayrı geçici
+   ve `dealio-backups` deposunda o günün dalının güncellendiği doğrulanır.
+2. `Offsite restore rehearsal` işi en yeni dalın şifreli yedeğini alır, ayrı geçici
    kopyada şifre çözer, SQLite integrity/foreign-key kontrolü yapar ve mevcut
    şema geçişlerini uygular. Üretim DB'sine ve Discord'a bağlanmaz.
 3. İş kimlikleri, kaynak commit, saat ve kişisel veri içermeyen restore raporu
@@ -101,10 +103,10 @@ Kurtarma provası bu üretim değiştirme işlemini otomatik yapmaz.
 ## Yayın
 
 Sadece izin verilen on statik dosya yayımlanır; repo, .env, kanıtlar ve DB
-siteye dahil edilmez. Sayfalar sınırlı beta der ve genel Discord daveti açmaz.
-Gizlilik/koşullar/yardım HTTPS bağlantıları ve Discord uygulama bağlantıları
-ayrıca doğrulanır. Masaüstü/mobil beta ve bir haftalık gözlem dördüncü aşamadır;
-yayın kapısında bu kanıtlar gerçek denemeler yapılmadan geçti işaretlenmez.
+siteye dahil edilmez. Ana sayfanın düğmesi Discord'un varsayılan kurulum
+bağlantısını açar. Gizlilik/koşullar/yardım HTTPS bağlantıları ve Discord
+uygulama bağlantıları ayrıca doğrulanır; yayın kapısında kanıtlar gerçek
+denemeler yapılmadan geçti işaretlenmez.
 
 ### Site sağlayıcısı
 
@@ -112,7 +114,7 @@ Azure öğrenci politikası yalnız Switzerland North, Germany West Central,
 Sweden Central, Italy North ve Austria East bölgelerine izin verdiği için
 Static Web Apps kurulumu reddedildi; desteklenen beş SWA bölgesiyle kesişim yok.
 Ücretli kaynak açılmadı. Site GitHub Free ile ayrı `dealio-public-pages`
-public deposundan yayımlanır; bot deposu private kalır. Yayın işi yalnız
+public deposundan yayımlanır. Yayın işi yalnız
 onaylı statik çıktıyı kopyalar. `PUBLIC_PAGES_SSH_KEY` sadece site deposuna
 write yetkili deploy key, `PUBLIC_PAGES_KNOWN_HOSTS` GitHub'ın TLS ile alınan
 resmî `/meta` SSH anahtarlarıdır. Kullanıcı yedeği bu public depoya gitmez.
