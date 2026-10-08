@@ -1,9 +1,12 @@
 import type { AdminControlRepository } from '../../persistence/admin-control-repository.js';
 
 export interface RuntimeSettingsSnapshot {
-  readonly maxUsers: number;
+  /** The cap in force; null means no cap. */
+  readonly maxUsers: number | null;
+  /** A cap the owner set in the panel, for example to pause growth in an emergency. */
   readonly maxUsersOverride: number | null;
-  readonly defaultMaxUsers: number;
+  /** DEALIO_MAX_USERS; null when unset. */
+  readonly defaultMaxUsers: number | null;
   readonly signupsOpen: boolean;
   readonly presenceText: string | null;
 }
@@ -20,16 +23,17 @@ export class InvalidSettingError extends Error {
 
 /**
  * Settings the owner changes from the admin panel without a restart. The
- * environment's DEALIO_MAX_USERS stays the default; an override lives in SQLite.
+ * environment's DEALIO_MAX_USERS stays the default (no cap when unset); an
+ * override lives in SQLite.
  */
 export class RuntimeSettings {
   public constructor(
     private readonly repository: Pick<AdminControlRepository, 'setting' | 'setSetting'>,
-    private readonly defaultMaxUsers: number,
+    private readonly defaultMaxUsers: number | null,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  public maxUsers(): number {
+  public maxUsers(): number | null {
     return this.maxUsersOverride() ?? this.defaultMaxUsers;
   }
 

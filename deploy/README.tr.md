@@ -212,7 +212,17 @@ Discord bağlantısının tamamlandığını kanıtlamaz.
   yedekten geri yüklerken bu dosyayı **silmeyin ve üzerine yazmayın**; yalnızca
   `wishlist.db` değiştirilmelidir. Başlangıç günlüğündeki
   `Re-applied N data deletion(s)` satırı yeniden uygulanan silmeleri gösterir.
-- Yeni kayıtlar `DEALIO_MAX_USERS` ile sınırlanır (varsayılan 200). Mevcut
-  kullanıcılar etkilenmez; sınır dolduğunda `/setup` "Dealio şu an dolu" der ve bir şey
-  kaydetmez. Sınırı yalnızca üretim sunucusunda kapasite ölçümü yapıldıktan
-  sonra artırın.
+- 9 Ekim 2026'dan beri yeni kayıtlarda varsayılan sınır yok. Yönetim panelinin
+  Sistem sayfasından (ya da `DEALIO_MAX_USERS` ile) bir sınır konursa kayıtlar o
+  sayıda durur; mevcut kullanıcılar etkilenmez ve `/setup` "Dealio şu an dolu" der,
+  bir şey kaydetmez. Sınır yokken Genel bakış VM belleğini gösterir; bellek
+  dolmaya başlarsa önce panelden sınır koyun.
+- Dayanak: her kullanıcının 500 oyununun aynı anda indirime girdiği sentetik en
+  kötü durum (`npm run test:capacity`, `node --optimize-for-size`, 450 MB heap).
+  500 kullanıcı: 250.000 bildirim, tepe bellek 203 MB
+  ([kayıt](../docs/evidence/capacity-2026-10-09-500-users.json)). 1000 kullanıcı:
+  500.000 bildirim, tepe bellek 289 MB, kayıp ve çift mesaj yok, teslim 19 dakika
+  ([kayıt](../docs/evidence/capacity-2026-10-09-1000-users.json)). Gerçek
+  kullanıcılarda ortalama 12 oyun var. En büyük teslim dalgasında olay döngüsü
+  bir kez 2,7 sn durdu; komut yanıtları için 3 sn sınırına yakın, büyük indirim
+  günlerinde günlükleri izleyin.

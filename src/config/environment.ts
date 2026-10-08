@@ -8,7 +8,8 @@ export interface EnvironmentConfig {
   readonly pollIntervalHours: number;
   readonly notificationRetryIntervalSeconds: number;
   /** Most users who can complete setup; existing users are never removed. */
-  readonly maxUsers: number;
+  /** Sign-up cap; null means no cap. */
+  readonly maxUsers: number | null;
   readonly steamWebApiKey?: string;
   readonly isThereAnyDealApiKey?: string;
   readonly dealioBannerUrl?: string;
@@ -30,8 +31,6 @@ export const minAdminTokenLength = 32;
 const defaultDatabasePath = './data/wishlist.db';
 export const defaultPollIntervalHours = 0.5;
 const defaultNotificationRetryIntervalSeconds = 60;
-/** Sign-up limit for one 1 GiB host until a larger capacity test proves more. */
-export const defaultMaxUsers = 200;
 export const minPollIntervalHours = 0.25;
 export const maxPollIntervalHours = 24 * 7;
 
@@ -123,9 +122,10 @@ export function loadEnvironment(
       )
     : defaultNotificationRetryIntervalSeconds;
 
+  // Unset means no cap: the 9 October 2026 capacity check covers well past real use.
   const maxUsers = environment.DEALIO_MAX_USERS?.trim()
     ? boundedInteger(environment.DEALIO_MAX_USERS.trim(), 'DEALIO_MAX_USERS', 1, 1_000_000)
-    : defaultMaxUsers;
+    : null;
 
   const adminToken = environment.DEALIO_ADMIN_TOKEN?.trim() || undefined;
   if (adminToken !== undefined && adminToken.length < minAdminTokenLength) {

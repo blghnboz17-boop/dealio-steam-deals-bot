@@ -44,6 +44,8 @@ export interface ProcessInfo {
   readonly heapUsedBytes: number;
   readonly heapTotalBytes: number;
   readonly externalBytes: number;
+  /** The whole VM, not just the bot: with no user cap this is the capacity signal. */
+  readonly hostMemory: { readonly totalBytes: number; readonly availableBytes: number };
 }
 
 export interface DiscordStatus {
@@ -84,7 +86,8 @@ export interface Overview extends TelemetryCoverage {
     readonly rules: number;
     readonly priceObservations: number;
   };
-  readonly maxUsers: number;
+  /** Null means sign-ups have no cap. */
+  readonly maxUsers: number | null;
   readonly activity: { readonly active24h: number; readonly active7d: number; readonly active30d: number };
   readonly settings: RuntimeSettings;
   readonly scheduler: SchedulerInfo;
@@ -292,7 +295,7 @@ export interface SystemInfo {
   readonly runtimeSettings: RuntimeSettings;
   readonly blockedUsers: Array<{ discordUserId: string; reason: string | null; blockedAt: string }>;
   readonly settings: {
-    readonly maxUsers: number;
+    readonly maxUsers: number | null;
     readonly pollIntervalHours: number;
     readonly notificationRetryIntervalSeconds: number;
     readonly priceHistoryEnabled: boolean;
@@ -309,9 +312,9 @@ export interface LogEntry {
 }
 
 export interface RuntimeSettings {
-  readonly maxUsers: number;
+  readonly maxUsers: number | null;
   readonly maxUsersOverride: number | null;
-  readonly defaultMaxUsers: number;
+  readonly defaultMaxUsers: number | null;
   readonly signupsOpen: boolean;
   readonly presenceText: string | null;
 }

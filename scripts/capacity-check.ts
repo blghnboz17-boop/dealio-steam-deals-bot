@@ -8,7 +8,8 @@ import { steamBatchSize } from '../src/steam/steam-client.js';
 import { maximumGamesPerMessage } from '../src/discord/notification-sender.js';
 
 // This is a controlled local profile, never a live Steam/Discord load generator.
-// CAPACITY_USERS=200 checks the full sign-up cap; the recorded evidence uses 50.
+// Every user has 500 wishlist games that all go on sale at once: a worst case, far above
+// real use. Set CAPACITY_USERS to the user count to check.
 const userCount = Number(process.env.CAPACITY_USERS ?? 50);
 assert.ok(Number.isSafeInteger(userCount) && userCount > 0, 'CAPACITY_USERS must be a positive integer');
 const gamesPerUser = 500;

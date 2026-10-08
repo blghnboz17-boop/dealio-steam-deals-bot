@@ -16,8 +16,14 @@ describe('loadEnvironment', () => {
       databasePath: './data/wishlist.db',
       pollIntervalHours: 0.5,
       notificationRetryIntervalSeconds: 60,
-      maxUsers: 200,
+      maxUsers: null,
     });
+  });
+
+  it('has no sign-up cap unless DEALIO_MAX_USERS sets one', () => {
+    expect(loadEnvironment({ ...validEnvironment, DEALIO_MAX_USERS: '' }).maxUsers).toBeNull();
+    expect(loadEnvironment({ ...validEnvironment, DEALIO_MAX_USERS: '5000' }).maxUsers).toBe(5000);
+    expect(() => loadEnvironment({ ...validEnvironment, DEALIO_MAX_USERS: '0' })).toThrow();
   });
 
   it('accepts an explicit half-hour polling interval', () => {
@@ -37,7 +43,7 @@ describe('loadEnvironment', () => {
       databasePath: './data/wishlist.db',
       pollIntervalHours: 0.5,
       notificationRetryIntervalSeconds: 60,
-      maxUsers: 200,
+      maxUsers: null,
     });
   });
 

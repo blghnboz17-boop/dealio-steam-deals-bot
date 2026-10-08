@@ -1,4 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
+import { freemem, totalmem } from 'node:os';
 import type { DiscordDirectory, DirectoryGuild, DirectoryUser } from '../../admin/discord-directory.js';
 import type { AdminRepository } from '../../persistence/admin-repository.js';
 import type { AssistantRepository } from '../../persistence/assistant-repository.js';
@@ -298,6 +299,8 @@ export class AdminQueryService {
       heapUsedBytes: memory.heapUsed,
       heapTotalBytes: memory.heapTotal,
       externalBytes: memory.external,
+      // On Linux, freemem() is MemAvailable: page cache the kernel can reclaim counts as free.
+      hostMemory: { totalBytes: totalmem(), availableBytes: freemem() },
     };
   }
 }
