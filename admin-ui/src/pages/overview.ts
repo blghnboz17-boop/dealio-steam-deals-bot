@@ -92,6 +92,7 @@ export function OverviewPage(): VNode {
   }
   const { counts, charts } = data;
   const app = data.application;
+  const host = data.process.hostMemory;
   const guildLevels = carryForward(charts.guilds, 30).map((row) => row.count);
   const growth = userGrowth(counts.users, charts.signups);
   const active = fillDays(charts.activeUsers, 30).map((row) => row.count);
@@ -111,7 +112,7 @@ export function OverviewPage(): VNode {
         ${Stat({ label: 'Sunucular', icon: 'server', value: num(data.guilds.count),
           trend: levelTrend(guildLevels), sub: `30 günde · ${compact(data.guilds.members)} üye`,
           spark: Sparkline({ values: guildLevels, label: 'Son 30 günde sunucu sayısı' }) })}
-        ${Stat({ label: 'Kayıtlı kullanıcı', icon: 'users', value: html`${num(counts.users)}<small> / ${num(data.maxUsers)}</small>`,
+        ${Stat({ label: 'Kayıtlı kullanıcı', icon: 'users', value: data.maxUsers === null ? num(counts.users) : html`${num(counts.users)}<small> / ${num(data.maxUsers)}</small>`,
           tone: data.settings.signupsOpen ? undefined : 'warn',
           trend: { text: `+${num(counts.newUsers7d)}`, direction: counts.newUsers7d > 0 ? 'up' : 'flat' },
           sub: data.settings.signupsOpen ? `bu hafta · bugün +${num(counts.newUsers24h)}` : 'bu hafta · kayıtlar kapalı',
@@ -140,8 +141,11 @@ export function OverviewPage(): VNode {
       <div class="grid-3">
         ${Card({ title: 'Durum', subtitle: 'Kapasite, izleme ve bildirim kuyruğu', children: html`
           <div class="goals">
-            ${Meter({ label: 'Kullanıcı kapasitesi', value: counts.users, max: data.maxUsers,
-              left: `${num(counts.users)} kayıtlı`, right: `sınır ${num(data.maxUsers)}` })}
+            ${data.maxUsers === null
+              ? Meter({ label: 'Sunucu belleği', value: host.totalBytes - host.availableBytes, max: host.totalBytes,
+                left: `bot ${bytes(data.process.rssBytes)} · ${bytes(host.availableBytes)} boş`, right: 'kayıt sınırı yok' })
+              : Meter({ label: 'Kullanıcı kapasitesi', value: counts.users, max: data.maxUsers,
+                left: `${num(counts.users)} kayıtlı`, right: `sınır ${num(data.maxUsers)}` })}
             ${Meter({ label: 'İzleme açık', value: counts.enabled, max: Math.max(1, counts.users), tone: 'good',
               left: `${num(counts.enabled)} kullanıcı`, right: `${num(counts.paused)} duraklatıldı · ${num(counts.dmBlocked)} DM engelli` })}
             ${Meter({ label: 'Şu an indirimde', value: counts.gamesOnSale, max: Math.max(1, counts.trackedGames), tone: 'info',

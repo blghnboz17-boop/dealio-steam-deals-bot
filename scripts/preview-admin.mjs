@@ -143,7 +143,7 @@ const logs = new LogBuffer();
 logs.install();
 const wishlistState = new WishlistStateRepository(database);
 const adminRepository = new AdminRepository(database);
-const settings = new RuntimeSettings(controls, 200);
+const settings = new RuntimeSettings(controls, null);
 const broadcastService = new BroadcastService({
   repository: broadcasts,
   users: () => adminRepository.users(),

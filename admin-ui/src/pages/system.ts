@@ -41,10 +41,13 @@ function SettingsForm(props: { settings: RuntimeSettings; userCount: number | nu
       </div>
       <div class="setting-row">
         <div><strong>Kullanıcı sınırı</strong>
-          <p class="muted small">Şu an ${num(props.settings.maxUsers)}${props.userCount !== null ? ` (${num(props.userCount)} kayıtlı)` : ''}.
-            Boş bırakırsan ortam değeri (${num(props.settings.defaultMaxUsers)}) geçerli. Artırmadan önce VM kapasitesini kontrol et.</p></div>
+          <p class="muted small">${[
+            `${props.settings.maxUsers === null ? 'Şu an sınır yok' : `Şu an ${num(props.settings.maxUsers)}`}${props.userCount !== null ? ` (${num(props.userCount)} kayıtlı)` : ''}.`,
+            props.settings.defaultMaxUsers === null ? 'Boş bırakırsan sınır olmaz.' : `Boş bırakırsan ortam değeri (${num(props.settings.defaultMaxUsers)}) geçerli.`,
+            'Bir sayı girersen kayıtlar o sayıda durur; bellek dolmaya başlarsa acil fren olarak kullan.',
+          ].join(' ')}</p></div>
         <div class="inline-form">
-          <input class="input narrow" inputMode="numeric" placeholder=${String(props.settings.defaultMaxUsers)} value=${maxUsers}
+          <input class="input narrow" inputMode="numeric" placeholder=${props.settings.defaultMaxUsers === null ? 'sınırsız' : String(props.settings.defaultMaxUsers)} value=${maxUsers}
             aria-label="Kullanıcı sınırı" onInput=${(event: Event) => setMaxUsers((event.target as HTMLInputElement).value)} />
           <button class="btn" disabled=${busy !== null || !validLimit || parsed === props.settings.maxUsersOverride}
             onClick=${() => save({ maxUsers: parsed }, 'Kullanıcı sınırı kaydedildi')}>Kaydet</button>
@@ -93,7 +96,7 @@ function OwnerAccount(): VNode {
         <div><strong>Durum</strong>
           <p class="muted small">${current
             ? html`Giriş ekranı kullanıcı adı ve şifre ister. Kullanıcı adı: <code>${current}</code>.`
-            : 'Henüz şifre yok; giriş ekranı yönetici anahtarını ister.'}
+            : 'Henüz şifre yok; giriş ekranı yönetici anahtarını ister.'}${' '}
             Masaüstü kısayolu her durumda çalışır; şifreyi unutursan onunla girip yenisini belirle.</p></div>
         ${current ? html`<button class="btn" disabled=${busy !== null} onClick=${clear}>Şifreyi kaldır</button>` : null}
       </div>

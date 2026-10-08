@@ -34,8 +34,8 @@ export class SetupCapacityReachedError extends Error {
 export type SetupStep = 'prepare-ok' | 'prepare-failed' | 'confirm-ok' | 'confirm-failed';
 
 export interface SetupServiceOptions {
-  /** Most users Dealio accepts; existing users are never affected. Unlimited when omitted. */
-  readonly maxUsers?: number | (() => number);
+  /** Most users Dealio accepts; existing users are never affected. Unlimited when omitted or null. */
+  readonly maxUsers?: number | null | (() => number | null);
   /** The owner can close new sign-ups from the admin panel. Open when omitted. */
   readonly signupsOpen?: () => boolean;
   /** Setup funnel telemetry; a failing sink never affects setup. */
@@ -56,7 +56,7 @@ export interface AccountChangeResult {
 }
 
 export class SetupService {
-  private readonly maxUsers?: number | (() => number);
+  private readonly maxUsers?: number | null | (() => number | null);
   private readonly signupsOpen: () => boolean;
   private readonly onStep: (discordUserId: string, step: SetupStep, code?: string) => void;
   private readonly isBlocked?: BlockedAccountCheck;
@@ -213,7 +213,7 @@ export class SetupService {
   public acceptsNewUsers(): boolean {
     if (!this.signupsOpen()) return false;
     const maxUsers = typeof this.maxUsers === 'function' ? this.maxUsers() : this.maxUsers;
-    return maxUsers === undefined || this.userConfigurationService.countUsers() < maxUsers;
+    return maxUsers === undefined || maxUsers === null || this.userConfigurationService.countUsers() < maxUsers;
   }
 
   private assertCapacity(): void {

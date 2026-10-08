@@ -152,6 +152,22 @@ describe('setup with runtime settings', () => {
     return service;
   }
 
+  it('has no cap without a limit, and the owner can still set one as a brake', () => {
+    const stored = new Map<string, string>();
+    const settings = new RuntimeSettings({
+      setting: (key) => stored.get(key) ?? null,
+      setSetting: (key, value) => { if (value === null) stored.delete(key); else stored.set(key, value); },
+    }, null);
+    expect(settings.snapshot()).toMatchObject({ maxUsers: null, maxUsersOverride: null, defaultMaxUsers: null });
+    const service = setup({ maxUsers: () => settings.maxUsers() }, 5_000);
+    expect(service.acceptsNewUsers()).toBe(true);
+    settings.update({ maxUsers: 5_000 });
+    expect(service.acceptsNewUsers()).toBe(false);
+    settings.update({ maxUsers: null });
+    expect(settings.maxUsers()).toBeNull();
+    expect(service.acceptsNewUsers()).toBe(true);
+  });
+
   it('follows the owner’s limit and the sign-up switch', () => {
     let limit = 1;
     let open = true;
