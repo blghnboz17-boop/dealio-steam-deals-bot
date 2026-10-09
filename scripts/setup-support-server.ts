@@ -12,12 +12,12 @@ import { readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import {
-  ChannelType, MessageFlags, OverwriteType, REST, Routes, SnowflakeUtil,
+  ChannelType, MessageFlags, OverwriteType, PermissionFlagsBits, REST, Routes, SnowflakeUtil,
   type APIChannel, type APIGuild, type APIGuildForumTag, type APIExtendedInvite, type APIInvite, type APIMessage, type APIRole, type APIUser,
   type RESTPostAPIGuildChannelJSONBody,
 } from 'discord.js';
 import {
-  autoModerationRules, bannerFileName, categories, impersonationKeywords, onboardingDefaultChannels, onboardingPrompts, ownerRoles, everyonePermissions, guildSettings, infoMessages, roles, starterChannels,
+  autoModerationRules, bannerFileName, categories, dealioRoles, impersonationKeywords, thirdPartyBots, onboardingDefaultChannels, onboardingPrompts, ownerRoles, everyonePermissions, guildSettings, infoMessages, roles, starterChannels,
   welcomeScreen, type Audience, type ChannelKey, type ChannelSpec, type OverwriteSpec, type RoleKey,
 } from './support-server/blueprint.js';
 
@@ -105,7 +105,9 @@ const roleId = (key: RoleKey): string | undefined => roleIds[key];
 // Order: Dealio on top, then the list above. Dealio cannot raise its own role, so it is
 // only included when it already outranks everything it has to move.
 const botRole = existingRoles.find((role) => role.tags?.bot_id === clientId);
-const ordered = roles.flatMap((spec) => roleIds[spec.key] ? [roleIds[spec.key]!] : []);
+const otherBotRoles = existingRoles.filter((role) => role.tags?.bot_id && role.tags.bot_id !== clientId);
+const ordered = roles.flatMap((spec) => roleIds[spec.key]
+  ? [roleIds[spec.key]!, ...(spec.key === 'bots' ? otherBotRoles.map((role) => role.id) : [])] : []);
 if (!dryRun) {
   const positions = ordered.map((id, index) => ({ id, position: ordered.length - index }));
   await rest.patch(Routes.guildRoles(guildId), {
@@ -118,6 +120,22 @@ if (!dryRun) {
     ));
 } else {
   console.log('[dry-run] Order roles: Dealio, then staff, boosters and donators');
+}
+
+// Dealio wears its own all-permissions role; every other bot wears ⚙️ Bots.
+for (const key of dealioRoles) {
+  const id = roleIds[key];
+  if (!id) continue;
+  await change(`Give Dealio ${roles.find((spec) => spec.key === key)!.name}`,
+    () => rest.put(Routes.guildMemberRole(guildId, me.id, id), { reason: 'Dealio support server setup' }), undefined)
+    .catch((error: unknown) => console.warn(`  Could not give Dealio its role (${String(error)})`));
+}
+for (const role of otherBotRoles) {
+  const botsRole = roleIds.bots;
+  if (!botsRole) break;
+  await change(`Give the ${role.name} bot the ⚙️ Bots role`,
+    () => rest.put(Routes.guildMemberRole(guildId, role.tags!.bot_id!, botsRole), { reason: 'Dealio support server setup' }), undefined)
+    .catch((error: unknown) => console.warn(`  Could not tag the ${role.name} bot (${String(error)})`));
 }
 
 // The owner wears the crown and receives the ticket pings.
@@ -160,7 +178,9 @@ async function ensureChannel(spec: ChannelSpec, parentId: string, position: numb
   const body = {
     name: spec.name,
     type,
-    topic: spec.topic,
+    ...(spec.topic !== undefined ? { topic: spec.topic } : {}),
+    ...(spec.userLimit !== undefined ? { user_limit: spec.userLimit } : {}),
+    ...(spec.bitrate !== undefined ? { bitrate: spec.bitrate } : {}),
     parent_id: parentId,
     position,
     permission_overwrites: overwrites(spec.overwrites),
@@ -229,6 +249,8 @@ await change('Server description, system channel and rules/updates channels', ()
     description: guildSettings.description,
     system_channel_id: channelId('general'),
     system_channel_flags: guildSettings.system_channel_flags,
+    afk_channel_id: channelId('afk'),
+    afk_timeout: 300,
     rules_channel_id: channelId('rules'),
     public_updates_channel_id: channelId('discordUpdates'),
   },
@@ -280,6 +302,25 @@ await change(`${existingProfileRule ? 'Update' : 'Create'} AutoMod rule "${profi
   : rest.post(Routes.guildAutoModerationRules(guildId), { body: profileRule }), undefined)
   .catch((error: unknown) => console.warn(`  AutoMod rule "${profileRuleName}" skipped: ${String(error)}`));
 
+// --- Game bots stay in their own channels -----------------------------------------------
+const P = PermissionFlagsBits;
+const homeAllow = [P.ViewChannel, P.SendMessages, P.SendMessagesInThreads, P.EmbedLinks, P.AttachFiles,
+  P.ReadMessageHistory, P.AddReactions, P.UseExternalEmojis].reduce((all, flag) => all | flag, 0n).toString();
+const textLike = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum]);
+for (const bot of thirdPartyBots) {
+  if (!bot.homeChannels || !otherBotRoles.some((role) => role.tags?.bot_id === bot.clientId)) continue;
+  const specs = categories.filter((category) => category.name !== '🔒 Staff').flatMap((category) => category.channels)
+    .filter((spec) => textLike.has(spec.type));
+  await change(`Keep ${bot.name} in ${bot.homeChannels.join(', ')}`, async () => {
+    for (const spec of specs) {
+      const home = bot.homeChannels!.includes(spec.key);
+      await rest.put(Routes.channelPermission(channelId(spec.key), bot.clientId), {
+        body: { type: OverwriteType.Member, allow: home ? homeAllow : '0', deny: home ? '0' : P.ViewChannel.toString() },
+      });
+    }
+  }, undefined).catch((error: unknown) => console.warn(`  Could not limit ${bot.name} (${String(error)})`));
+}
+
 // --- Custom emoji -----------------------------------------------------------------------
 const emojis = dryRun ? [] : await rest.get(Routes.guildEmojis(guildId)) as Array<{ name: string }>;
 if (!emojis.some((emoji) => emoji.name === 'dealio') && me.avatar) {
@@ -325,7 +366,7 @@ await change('Onboarding: default channels, "What brings you here?" and the Upda
   .catch((error: unknown) => console.warn(`  Onboarding skipped: ${String(error)}`));
 
 // --- Info messages ----------------------------------------------------------------------
-for (const message of infoMessages(clientId, channelId, bannerPath, roleId)) {
+for (const message of infoMessages(clientId, channelId, bannerPath, roleId, guildId)) {
   const target = channelId(message.channel);
   const files = (message.files ?? []).map((path) => ({ name: path === bannerPath ? bannerFileName : basename(path), data: readFileSync(path) }));
   const body = {

@@ -7,6 +7,7 @@ import {
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   PermissionFlagsBits,
+  SectionBuilder,
   SeparatorBuilder,
   SeparatorSpacingSize,
   TextDisplayBuilder,
@@ -55,11 +56,13 @@ export const everyonePermissions = bits(
   P.ViewChannel, P.CreateInstantInvite, P.ChangeNickname, P.SendMessages, P.SendMessagesInThreads,
   P.EmbedLinks, P.AttachFiles, P.AddReactions, P.UseExternalEmojis, P.UseExternalStickers,
   P.ReadMessageHistory, P.UseApplicationCommands, P.Connect, P.Speak, P.Stream, P.UseVAD,
+  // Voice activities, soundboard, voice messages, polls and user-installed apps.
+  P.UseEmbeddedActivities, P.UseSoundboard, P.UseExternalSounds, P.SendVoiceMessages, P.SendPolls, P.UseExternalApps,
 );
 
 export type StaffRoleKey = 'owner' | 'admins' | 'moderators' | 'support';
 export type SupporterRoleKey = 'legend' | 'superDonator' | 'donator';
-export type RoleKey = StaffRoleKey | SupporterRoleKey | 'booster' | 'updates';
+export type RoleKey = 'dealioBot' | StaffRoleKey | 'bots' | SupporterRoleKey | 'booster' | 'updates';
 
 export interface RoleSpec {
   readonly key: RoleKey;
@@ -82,6 +85,9 @@ const moderation = [P.ManageMessages, P.ManageThreads, P.ModerateMembers, P.Mana
 
 /** Top to bottom, just below Dealio's own role. Every role is shown separately in the member list. */
 export const roles: readonly RoleSpec[] = [
+  // Dealio's own, separate from the role Discord manages for it: every permission, top of the list.
+  { key: 'dealioBot', name: '🤖 Dealio', icon: '🤖', color: dealioBrand.colors.primary,
+    gradient: [dealioBrand.colors.primary, dealioBrand.colors.accent], permissions: bits(P.Administrator) },
   { key: 'owner', name: '👑 Owner', icon: '👑', color: 0xf1c40f, gradient: [0xf1c40f, 0xff8c00], permissions: bits(P.Administrator) },
   { key: 'admins', name: '🛡️ Admins', aliases: ['Dealio Team'], icon: '🛡️', color: 0xe74c3c, gradient: [0xe74c3c, 0xff6b81],
     permissions: bits(P.Administrator) },
@@ -89,6 +95,8 @@ export const roles: readonly RoleSpec[] = [
     permissions: bits(...moderation, P.KickMembers, P.BanMembers, P.MuteMembers, P.MoveMembers, P.ManageEvents) },
   { key: 'support', name: '🎧 Support Team', aliases: ['Support Team'], icon: '🎧', color: dealioBrand.colors.accent,
     gradient: [dealioBrand.colors.accent, dealioBrand.colors.primary], permissions: bits(...moderation) },
+  // Every other bot gets this one; their own managed roles are placed right below it.
+  { key: 'bots', name: '⚙️ Bots', icon: '⚙️', color: 0x99aab5, permissions: '0' },
   { key: 'booster', name: '💎 Server Booster', icon: '💎', color: 0xf47fff, gradient: [0xf47fff, 0xb57edc], permissions: '0', managedBooster: true },
   { key: 'legend', name: '🌟 Legendary Donator', icon: '🌟', color: 0xffd166, gradient: [0xffd166, 0xff7eb3], permissions: '0' },
   { key: 'superDonator', name: '💖 Super Donator', icon: '💖', color: 0xff7eb3, gradient: [0xff7eb3, 0xc77dff], permissions: '0' },
@@ -100,6 +108,9 @@ export const roles: readonly RoleSpec[] = [
 /** The roles the guild owner gets: the crown, and the ticket pings. */
 export const ownerRoles: readonly RoleKey[] = ['owner', 'support'];
 
+/** The roles Dealio itself wears. */
+export const dealioRoles: readonly RoleKey[] = ['dealioBot'];
+
 export const buyMeACoffeeUrl = 'https://buymeacoffee.com/dealio';
 
 /** Who a channel rule is for: everyone, one of the roles above, or Dealio itself. */
@@ -108,15 +119,22 @@ export interface OverwriteSpec { readonly audience: Audience; readonly allow?: s
 
 export type ChannelKey =
   | 'welcome' | 'rules' | 'announcements' | 'faq' | 'supportDealio'
-  | 'general' | 'offTopic' | 'nowPlaying' | 'deals' | 'dealWins' | 'suggestions' | 'tryDealio' | 'lounge'
+  | 'general' | 'offTopic' | 'nowPlaying' | 'deals' | 'dealWins' | 'suggestions' | 'giveaways' | 'tryDealio' | 'lounge'
+  | 'turkish' | 'german' | 'french'
+  | 'owo' | 'dankMemer' | 'karuta' | 'lfg' | 'musicCommands' | 'bump'
+  | 'voiceLounge' | 'voiceGaming1' | 'voiceGaming2' | 'voiceMusic' | 'stage' | 'afk'
   | 'tickets'
-  | 'ticketLog' | 'staffChat' | 'discordUpdates';
+  | 'ticketLog' | 'modLog' | 'staffChat' | 'adminChat' | 'discordUpdates' | 'staffVoice';
 
 export interface ChannelSpec {
   readonly key: ChannelKey;
   readonly name: string;
-  readonly type: ChannelType.GuildText | ChannelType.GuildAnnouncement | ChannelType.GuildForum;
-  readonly topic: string;
+  readonly type: ChannelType.GuildText | ChannelType.GuildAnnouncement | ChannelType.GuildForum
+    | ChannelType.GuildVoice | ChannelType.GuildStageVoice;
+  /** Text-like channels only; voice channels have none. */
+  readonly topic?: string;
+  readonly userLimit?: number;
+  readonly bitrate?: number;
   readonly overwrites: readonly OverwriteSpec[];
   readonly rateLimitPerUser?: number;
   /** Forum tags; `moderated` ones only the team can apply. */
@@ -149,6 +167,17 @@ const staffOnly: readonly OverwriteSpec[] = [
   { audience: 'everyone', deny: bits(P.ViewChannel) },
   ...staff.map((audience): OverwriteSpec => ({ audience, allow: bits(P.ViewChannel, P.SendMessages, P.ReadMessageHistory) })),
   { audience: 'bot', allow: botPosting },
+];
+
+/** Only Administrator holders (Owner, Admins, Dealio) see it: no overwrite grants access. */
+const adminsOnly: readonly OverwriteSpec[] = [{ audience: 'everyone', deny: bits(P.ViewChannel) }];
+
+/** Members react; bots and the team post (giveaways). */
+const reactOnly: readonly OverwriteSpec[] = [
+  { audience: 'everyone', allow: bits(P.ViewChannel, P.ReadMessageHistory, P.AddReactions),
+    deny: bits(P.SendMessages, P.SendMessagesInThreads, ...threadCreation) },
+  ...staff.map((audience): OverwriteSpec => ({ audience, allow: bits(P.SendMessages) })),
+  { audience: 'bots', allow: bits(P.ViewChannel, P.SendMessages, P.EmbedLinks, P.AddReactions, P.ReadMessageHistory) },
 ];
 
 /** Supporters (boosters and donators) and the team. */
@@ -204,6 +233,10 @@ export const categories: readonly CategorySpec[] = [
         ],
       },
       {
+        key: 'giveaways', name: '🎉・giveaways', type: ChannelType.GuildText, overwrites: reactOnly,
+        topic: 'Steam game giveaways from the team. React with 🎉 to enter; the bot picks the winners.',
+      },
+      {
         key: 'tryDealio', name: '🤖・try-dealio', type: ChannelType.GuildText, overwrites: [],
         topic: 'Try /dealio here. Your panel is private: only you see it, and it doesn’t clutter the chat.',
       },
@@ -211,6 +244,48 @@ export const categories: readonly CategorySpec[] = [
         key: 'lounge', name: '💖・supporters-lounge', type: ChannelType.GuildText, overwrites: supportersOnly,
         topic: 'A cosy corner for Donators and Server Boosters. Thank you for keeping Dealio free!',
       },
+    ],
+  },
+  {
+    name: '🌍 International',
+    overwrites: [],
+    channels: [
+      { key: 'turkish', name: '🇹🇷・türkçe', type: ChannelType.GuildText, overwrites: [],
+        topic: 'Türkçe sohbet. Dealio, Steam ve oyunlar hakkında konuş; hesap sorunları için ticket aç.' },
+      { key: 'german', name: '🇩🇪・deutsch', type: ChannelType.GuildText, overwrites: [],
+        topic: 'Deutscher Chat über Dealio, Steam und Spiele. Für Kontoprobleme öffne ein Ticket.' },
+      { key: 'french', name: '🇫🇷・français', type: ChannelType.GuildText, overwrites: [],
+        topic: 'Discussion en français sur Dealio, Steam et les jeux. Pour un souci de compte, ouvre un ticket.' },
+    ],
+  },
+  {
+    name: '🎮 Games & Bots',
+    overwrites: [],
+    channels: [
+      { key: 'owo', name: '🎲・owo', type: ChannelType.GuildText, overwrites: [], topic: 'OwO hunting, battles and gambling: `owo help`. OwO only answers here.' },
+      { key: 'dankMemer', name: '🐸・dank-memer', type: ChannelType.GuildText, overwrites: [], topic: 'Dank Memer economy and games: `/help`. Dank Memer only answers here.' },
+      { key: 'karuta', name: '🃏・karuta', type: ChannelType.GuildText, overwrites: [], topic: 'Karuta card drops and trades: `kd` to drop. Karuta only answers here.' },
+      { key: 'lfg', name: '🔎・looking-for-group', type: ChannelType.GuildText, rateLimitPerUser: 60, overwrites: [],
+        topic: 'Find people to play with: game, platform, region and when. Then hop into a 🎮 Gaming voice channel.' },
+      { key: 'musicCommands', name: '🎵・music-commands', type: ChannelType.GuildText, overwrites: [],
+        topic: 'Music bot commands go here (Jockie Music: `m!help`). Join 🎵 Music to listen.' },
+      { key: 'bump', name: '🚀・bump', type: ChannelType.GuildText, overwrites: [],
+        topic: 'Run /bump every two hours so more people find Dealio Support on DISBOARD.' },
+    ],
+  },
+  {
+    name: '🔊 Voice',
+    overwrites: [],
+    channels: [
+      { key: 'voiceLounge', name: '🛋️ Lounge', type: ChannelType.GuildVoice, bitrate: 96_000, overwrites: [] },
+      { key: 'voiceGaming1', name: '🎮 Gaming 1', type: ChannelType.GuildVoice, userLimit: 5, bitrate: 96_000, overwrites: [] },
+      { key: 'voiceGaming2', name: '🎮 Gaming 2', type: ChannelType.GuildVoice, userLimit: 5, bitrate: 96_000, overwrites: [] },
+      { key: 'voiceMusic', name: '🎵 Music', type: ChannelType.GuildVoice, bitrate: 96_000, overwrites: [] },
+      // Stage: the team speaks, members listen and raise their hand (Q&As, launch events).
+      { key: 'stage', name: '🎙️ Events', type: ChannelType.GuildStageVoice, overwrites: [
+        ...staff.map((audience): OverwriteSpec => ({ audience, allow: bits(P.MuteMembers, P.MoveMembers, P.RequestToSpeak) })),
+      ] },
+      { key: 'afk', name: '😴 AFK', type: ChannelType.GuildVoice, overwrites: [{ audience: 'everyone', deny: bits(P.Speak, P.Stream) }] },
     ],
   },
   {
@@ -242,8 +317,17 @@ export const categories: readonly CategorySpec[] = [
         overwrites: [...staffOnly.filter((overwrite) => overwrite.audience !== 'bot'),
           { audience: 'bot', allow: bits(P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory, P.MentionEveryone) }],
       },
+      {
+        key: 'modLog', name: '📝・mod-log', type: ChannelType.GuildText, topic: 'Moderation and member logs from Carl-bot and ProBot.',
+        overwrites: [...staffOnly, { audience: 'bots', allow: bits(P.ViewChannel, P.SendMessages, P.EmbedLinks, P.AttachFiles, P.ReadMessageHistory) }],
+      },
       { key: 'staffChat', name: '🛡️・staff-chat', type: ChannelType.GuildText, topic: 'Team talk. AutoMod alerts land here too.', overwrites: staffOnly },
+      { key: 'adminChat', name: '🔐・admin-chat', type: ChannelType.GuildText, topic: 'Owner and Admins only.', overwrites: adminsOnly },
       { key: 'discordUpdates', name: '🔔・discord-updates', type: ChannelType.GuildText, topic: 'Discord sends Community server notices here.', overwrites: staffOnly },
+      { key: 'staffVoice', name: '🔒 Staff Voice', type: ChannelType.GuildVoice, overwrites: [
+        { audience: 'everyone', deny: bits(P.ViewChannel, P.Connect) },
+        ...staff.map((audience): OverwriteSpec => ({ audience, allow: bits(P.ViewChannel, P.Connect, P.Speak, P.Stream) })),
+      ] },
     ],
   },
 ];
@@ -338,6 +422,27 @@ export const onboardingPrompts: readonly OnboardingPromptSpec[] = [
     ],
   },
   {
+    title: 'Which languages do you chat in?',
+    singleSelect: false,
+    options: [
+      { title: 'English', description: 'The main chat', emoji: '🇬🇧', channels: ['general'] },
+      { title: 'Türkçe', description: 'Türkçe sohbet', emoji: '🇹🇷', channels: ['turkish'] },
+      { title: 'Deutsch', description: 'Deutscher Chat', emoji: '🇩🇪', channels: ['german'] },
+      { title: 'Français', description: 'Discussion en français', emoji: '🇫🇷', channels: ['french'] },
+    ],
+  },
+  {
+    title: 'Into games and bots?',
+    singleSelect: false,
+    options: [
+      { title: 'OwO', description: 'Hunt, battle and collect', emoji: '🎲', channels: ['owo'] },
+      { title: 'Dank Memer', description: 'Economy, memes and games', emoji: '🐸', channels: ['dankMemer'] },
+      { title: 'Karuta', description: 'Card drops and trades', emoji: '🃏', channels: ['karuta'] },
+      { title: 'Find teammates', description: 'Looking-for-group and voice', emoji: '🔎', channels: ['lfg'] },
+      { title: 'Music', description: 'Music bot and voice', emoji: '🎵', channels: ['musicCommands'] },
+    ],
+  },
+  {
     title: 'Want a ping when Dealio gets an update?',
     singleSelect: true,
     options: [
@@ -346,6 +451,70 @@ export const onboardingPrompts: readonly OnboardingPromptSpec[] = [
     ],
   },
 ];
+
+// ---------------------------------------------------------------------------------
+// Other bots. Only a person can add a bot (Discord asks them to authorize it), so the
+// owner adds them from the invite panel in staff chat; running this script afterwards
+// gives each the ⚙️ Bots role and keeps game bots in their own channels.
+
+const textBot = [P.ViewChannel, P.SendMessages, P.SendMessagesInThreads, P.EmbedLinks, P.AttachFiles,
+  P.ReadMessageHistory, P.AddReactions, P.UseExternalEmojis];
+
+export interface ThirdPartyBot {
+  readonly name: string;
+  /** Its application ID, checked against Discord's public application endpoint on 9 October 2026. */
+  readonly clientId: string;
+  readonly emoji: string;
+  readonly purpose: string;
+  /** What its role may do; never Administrator. */
+  readonly permissions: string;
+  /** When set, the bot sees only these text channels (game bots stay out of the chat). */
+  readonly homeChannels?: readonly ChannelKey[];
+}
+
+export const thirdPartyBots: readonly ThirdPartyBot[] = [
+  { name: 'Carl-bot', clientId: '235148962103951360', emoji: '🛡️', purpose: 'Reaction roles, logs, embeds and extra automod',
+    permissions: bits(...textBot, P.ManageRoles, P.ManageChannels, P.KickMembers, P.BanMembers, P.ModerateMembers,
+      P.ManageMessages, P.ManageNicknames, P.ManageWebhooks, P.ViewAuditLog, P.ManageThreads) },
+  { name: 'ProBot', clientId: '282859044593598464', emoji: '✨', purpose: 'Welcome images, levels and member logs',
+    permissions: bits(...textBot, P.ManageRoles, P.KickMembers, P.BanMembers, P.ModerateMembers, P.ManageMessages,
+      P.ManageNicknames, P.ViewAuditLog) },
+  { name: 'Jockie Music', clientId: '411916947773587456', emoji: '🎵', purpose: 'Music in voice channels',
+    permissions: bits(...textBot, P.Connect, P.Speak, P.UseVAD), homeChannels: ['musicCommands'] },
+  { name: 'OwO', clientId: '408785106942164992', emoji: '🎲', purpose: 'Hunting, battles and gambling game',
+    permissions: bits(...textBot), homeChannels: ['owo'] },
+  { name: 'Dank Memer', clientId: '270904126974590976', emoji: '🐸', purpose: 'Economy, memes and mini-games',
+    permissions: bits(...textBot), homeChannels: ['dankMemer'] },
+  { name: 'Karuta', clientId: '646937666251915264', emoji: '🃏', purpose: 'Collectible card drops and trades',
+    permissions: bits(...textBot), homeChannels: ['karuta'] },
+  { name: 'GiveawayBot', clientId: '294882584201003009', emoji: '🎉', purpose: 'Giveaways with one command',
+    permissions: bits(...textBot) },
+  { name: 'DISBOARD', clientId: '302050872383242240', emoji: '🚀', purpose: 'Server listing: /bump brings new members',
+    permissions: bits(...textBot, P.CreateInstantInvite), homeChannels: ['bump'] },
+  { name: 'ServerStats', clientId: '458276816071950337', emoji: '📊', purpose: 'Live member and boost counters',
+    permissions: bits(P.ViewChannel, P.ManageChannels, P.Connect) },
+];
+
+export function botInviteUrl(bot: ThirdPartyBot, guildId: string): string {
+  return `https://discord.com/oauth2/authorize?client_id=${bot.clientId}&scope=bot%20applications.commands`
+    + `&permissions=${bot.permissions}&integration_type=0&guild_id=${guildId}`;
+}
+
+function botInvites(guildId: string, channel: (key: ChannelKey) => string): ContainerBuilder {
+  const container = new ContainerBuilder()
+    .setAccentColor(0x99aab5)
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(`${kicker('🧩', 'Staff')}\n## Recommended bots\n`
+      +'Add each one with its button (Discord asks you to authorize it). Then run `npm run support:setup` again: '
+      + `every bot gets the ⚙️ Bots role, logs can go to <#${channel('modLog')}>, and game bots only answer in their own channel.`));
+  for (const bot of thirdPartyBots) {
+    container.addSectionComponents(new SectionBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(`${bot.emoji} **${bot.name}** · ${bot.purpose}`
+        + (bot.homeChannels ? `\n-# Answers only in ${bot.homeChannels.map((key) => `<#${channel(key)}>`).join(', ')}` : '')))
+      .setButtonAccessory(new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(botInviteUrl(bot, guildId)).setLabel('Add')));
+  }
+  assertComponentsV2Limit([container]);
+  return container;
+}
 
 // ---------------------------------------------------------------------------------
 // Messages Dealio keeps in the info channels.
@@ -393,7 +562,10 @@ function welcome(clientId: string, channel: (key: ChannelKey) => string): Contai
         + `🤖 ${c('tryDealio')} · try /dealio right here\n`
         + `💡 ${c('suggestions')} · ideas for Dealio\n`
         + `💝 ${c('supportDealio')} · Donator roles and perks\n`
-        + `🔥 ${c('deals')} · share deals · 🏆 ${c('dealWins')} · show what you saved`),
+        + `🔥 ${c('deals')} · share deals · 🏆 ${c('dealWins')} · show what you saved\n`
+        + `🌍 ${c('turkish')} · ${c('german')} · ${c('french')} · chat in your language\n`
+        + `🎮 ${c('owo')} · ${c('lfg')} · games, bots and finding teammates\n`
+        + `🔊 ${c('voiceLounge')} · hang out in voice`),
     )
     .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(links.invite(clientId)).setEmoji('➕').setLabel('Add Dealio'),
@@ -410,7 +582,7 @@ const ruleList = [
   ['No spam or ads', 'No unsolicited promotion, server invites, referral or affiliate links, here or in members’ DMs.'],
   ['Protect your accounts', 'Never share passwords, tokens or login codes. The Dealio team will never ask for them, and never DMs you first.'],
   ['No piracy or shady trading', 'No cracks, cheats, account trading or grey-market key reselling.'],
-  ['Use the right place', `Account problems go in a ticket, ideas in suggestions, deals in deals. Please write in English in public channels.`],
+  ['Use the right place', 'Account problems go in a ticket, ideas in suggestions, deals in deals, bot games in 🎮 Games & Bots. Write in English in public channels; Türkçe, Deutsch and Français have their own channels under 🌍 International.'],
   ['Follow Discord’s rules', `Discord’s [Terms of Service](${links.discordTerms}) and [Community Guidelines](${links.discordGuidelines}) apply here.`],
 ] as const;
 
@@ -494,8 +666,10 @@ export function infoMessages(
   channel: (key: ChannelKey) => string,
   bannerPath: string,
   roleId: (key: RoleKey) => string | undefined = () => undefined,
+  guildId?: string,
 ): InfoMessage[] {
   return [
+    ...(guildId ? [{ channel: 'staffChat' as const, container: botInvites(guildId, channel) }] : []),
     { channel: 'welcome', container: welcome(clientId, channel), files: [bannerPath] },
     { channel: 'rules', container: rules(channel) },
     { channel: 'faq', container: faq(channel) },
