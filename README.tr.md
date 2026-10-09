@@ -43,7 +43,7 @@ Her oyun için ayrı hedef belirleyebilir ya da tüm listene tek bir indirim eş
 ## 👀 Discord’da nasıl görünüyor?
 
 <p align="center">
-  <a href="docs/assets/screenshots/sale-alert-dm.png"><img src="docs/assets/screenshots/sale-alert-dm.png" alt="Cortex Command için Dealio indirim DM’i: %80 indirim, Şubat 2024’ten beri en düşük fiyat, tasarruf, indirimin bitişi, Çok Olumlu incelemeler, Steam Deck durumu ve platformlar" width="760"></a><br>
+  <a href="docs/assets/screenshots/sale-alert-dm.png"><img src="docs/assets/screenshots/sale-alert-dm.png" alt="Red Dead Redemption 2 için Dealio indirim DM’i: %75 indirimle 14,99 $, tüm zamanların en düşük fiyatına eşit, tasarruf, indirimin bitişi, Çok Olumlu incelemeler, Steam Deck durumu ve platformlar" width="760"></a><br>
   <sub><strong>📬 İndirim geldiğinde DM kutunda</strong> · fiyat, tasarruf, en düşük fiyat, incelemeler, Steam Deck ve indirimin bitişi</sub>
 </p>
 

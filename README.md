@@ -43,7 +43,7 @@ Set a different target for each game, or use one discount threshold across your 
 ## 👀 A look inside Discord
 
 <p align="center">
-  <a href="docs/assets/screenshots/sale-alert-dm.png"><img src="docs/assets/screenshots/sale-alert-dm.png" alt="A Dealio sale alert DM for Cortex Command: 80% off, the lowest price since February 2024, savings, sale end time, Very Positive reviews, Steam Deck status and platforms" width="760"></a><br>
+  <a href="docs/assets/screenshots/sale-alert-dm.png"><img src="docs/assets/screenshots/sale-alert-dm.png" alt="A Dealio sale alert DM for Red Dead Redemption 2: 75% off at $14.99, matching its all-time low, savings, sale end time, Very Positive reviews, Steam Deck status and platforms" width="760"></a><br>
   <sub><strong>📬 A sale alert in your DMs</strong> · price, savings, historical low, reviews, Steam Deck and when the sale ends</sub>
 </p>
 
