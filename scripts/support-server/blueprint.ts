@@ -582,7 +582,8 @@ function welcome(clientId: string, channel: (key: ChannelKey) => string): Contai
       new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(links.help).setEmoji('📖').setLabel('Help center'),
     ))
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
-      `-# [Privacy policy](${links.privacy}) · [Terms](${links.terms}) · [Source code](${links.github})`)));
+      `-# Share it: **dsc.gg/dealio** adds the bot · **dsc.gg/dealiosupport** invites friends here\n`
+      + `-# [Privacy policy](${links.privacy}) · [Terms](${links.terms}) · [Source code](${links.github})`)));
 }
 
 const ruleList = [
@@ -605,7 +606,8 @@ function rules(channel: (key: ChannelKey) => string): ContainerBuilder {
     .addSeparatorComponents(divider())
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(
       'The team may remove messages, time out or remove members who break these rules. '
-      + `If you disagree with a moderation decision, open a ticket in <#${channel('tickets')}>.`)));
+      + `If you disagree with a moderation decision, open a ticket in <#${channel('tickets')}>.\n`
+      + '-# For moderation, Carl-bot logs deleted and edited messages, joins, leaves and role changes in a channel only the team can see.')));
 }
 
 const faqList: readonly (readonly [string, string])[] = [

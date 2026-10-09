@@ -126,6 +126,15 @@ export function openPanelButton(language: Language, style: ButtonStyle = ButtonS
     .setLabel(localizer(language)({ tr: 'Dealio paneli', en: 'Dealio panel', de: 'Dealio-Panel', fr: 'Panneau Dealio' }));
 }
 
+/** The Dealio support server; tickets are opened there. */
+export const supportServerUrl = 'https://dsc.gg/dealiosupport';
+
+/** "🛟 Get help": the support server, on the Home panel next to the coffee link, never in alert DMs. */
+export function helpButton(language: Language): ButtonBuilder {
+  return new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(supportServerUrl).setEmoji('🛟')
+    .setLabel(localizer(language)({ tr: 'Yardım', en: 'Get help', de: 'Hilfe', fr: 'Aide' }));
+}
+
 /** The optional "support Dealio" link; shown on the Home panel only, never in alert DMs. */
 export function supportButton(language: Language): ButtonBuilder {
   return new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://buymeacoffee.com/dealio').setEmoji('☕')

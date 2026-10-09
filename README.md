@@ -127,7 +127,7 @@ Dealio stores your account identifiers, preferences, game rules, observed wishli
 
 Notification history displays the last **30 days**; price observations are retained for **90 days**. Active deliveries and ongoing-offer deduplication records may be kept longer. `/delete-data` removes active account records. Existing backup copies are not rewritten, but a separate deletion record (a one-way hash of your Discord ID, kept for 35 days) makes sure a restore from backup can't bring your data back.
 
-[Privacy](https://blghnboz17-boop.github.io/dealio-public-pages/privacy.html) · [Terms](https://blghnboz17-boop.github.io/dealio-public-pages/terms.html) · [Help](https://blghnboz17-boop.github.io/dealio-public-pages/help.html)
+[Privacy](https://blghnboz17-boop.github.io/dealio-public-pages/privacy.html) · [Terms](https://blghnboz17-boop.github.io/dealio-public-pages/terms.html) · [Help](https://blghnboz17-boop.github.io/dealio-public-pages/help.html) · [Support server](https://dsc.gg/dealiosupport)
 
 ## ❓ A few useful answers
 
@@ -136,7 +136,7 @@ Notification history displays the last **30 days**; price observations are retai
 
 That message alone doesn't tell us the cause, and it doesn't necessarily mean you did anything wrong. Steam may not have returned prices, Discord may not have completed an action, or something may have gone wrong inside Dealio. Any extra detail in the message helps narrow it down.
 
-Give it a moment, then try the command once more. If a cooldown is shown, wait for it to finish. If an old panel's button isn't working, open a fresh panel with `/dealio`. Still stuck? Use the [help page](https://blghnboz17-boop.github.io/dealio-public-pages/help.html) to share the command, approximate time, and error text. Hide personal details in screenshots; you don't need to delete your setup and start over as a first step.
+Give it a moment, then try the command once more. If a cooldown is shown, wait for it to finish. If an old panel's button isn't working, open a fresh panel with `/dealio`. Still stuck? Open a ticket in the [support server](https://dsc.gg/dealiosupport) and share the command, approximate time, and error text. Hide personal details in screenshots; you don't need to delete your setup and start over as a first step.
 
 </details>
 
@@ -154,7 +154,7 @@ If the test arrives but a sale alert doesn't, check your notification status in 
 
 Check that the profile link is correct and your wishlist is visible to other people. Try opening your wishlist link in a browser window where you aren't signed into Steam; being able to see your profile alone may not be enough.
 
-If you've just changed your Steam privacy settings, give it a moment and try again. If the list opens while signed out but Dealio still can't read it, Steam may be temporarily unavailable. If another attempt doesn't help, [let us know](https://blghnboz17-boop.github.io/dealio-public-pages/help.html). Please don't share your Steam password or session details.
+If you've just changed your Steam privacy settings, give it a moment and try again. If the list opens while signed out but Dealio still can't read it, Steam may be temporarily unavailable. If another attempt doesn't help, [open a ticket in the support server](https://dsc.gg/dealiosupport). Please don't share your Steam password or session details.
 
 </details>
 
