@@ -12,10 +12,11 @@ kanalında yalnızca kullanıcının ve ekibin gördüğü özel bir thread olur
    sunucu oluşturamaz, bu adımı yalnızca sen yapabilirsin.)
 2. **Sunucu kimliğini al.** Ayarlar → Gelişmiş → *Geliştirici Modu* açık olsun; sunucu
    simgesine sağ tık → *Sunucu ID'sini kopyala*.
-3. **Dealio'yu kurulum yetkisiyle ekle.** `<SUNUCU_ID>` yerine kimliği yaz:
+3. **Dealio'yu kurulum yetkisiyle ekle.** Açılan sayfada "Sunucuya ekle" listesinden
+   yeni sunucuyu seç:
 
    ```
-   https://discord.com/oauth2/authorize?client_id=1540325119690412172&scope=bot%20applications.commands&permissions=360777370632&guild_id=<SUNUCU_ID>&disable_guild_select=true
+   https://discord.com/oauth2/authorize?client_id=1540325119690412172&scope=bot%20applications.commands&permissions=360777370632&integration_type=0
    ```
 
    İzinler: ticket'ların çalışması için gerekenler (kanalı görme, mesaj, thread içinde
