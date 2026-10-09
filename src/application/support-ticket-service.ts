@@ -1,4 +1,5 @@
 import {
+  type SupportScreenshot,
   supportTicketDailyLimit, supportTicketLimitWindowMs, supportTicketOpeningTimeoutMs,
   type SupportTicket, type SupportTicketCloser, type SupportTopic,
 } from '../domain/support-ticket.js';
@@ -18,6 +19,8 @@ export interface SupportTicketOpening {
   readonly userName: string;
   readonly description: string;
   readonly language: Language;
+  /** Images from the form, copied into the thread with the request. */
+  readonly screenshots?: readonly SupportScreenshot[];
 }
 
 /** What the ticket desk needs from Discord; `src/discord/support` implements it over REST. */
@@ -53,6 +56,7 @@ export interface OpenTicketRequest {
   readonly topic: SupportTopic;
   readonly description: string;
   readonly language: Language;
+  readonly screenshots?: readonly SupportScreenshot[];
 }
 
 /**
@@ -118,6 +122,7 @@ export class SupportTicketService {
       }
       const opening: SupportTicketOpening = {
         ticket, userName: request.userName, description: request.description, language: request.language,
+        ...(request.screenshots?.length ? { screenshots: request.screenshots } : {}),
       };
 
       let threadId: string;

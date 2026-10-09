@@ -41,6 +41,29 @@ export const supportTicketRetentionMs = 90 * 24 * 60 * 60 * 1000;
 /** The longest description a ticket form accepts. */
 export const supportDescriptionMaxLength = 1000;
 
+/** Screenshots a ticket form accepts; they are copied into the thread, never stored. */
+export const supportScreenshotLimit = 3;
+export const supportScreenshotMaxBytes = 8 * 1024 * 1024;
+
+/** An image the user attached to the ticket form, as Discord hosts it for the interaction. */
+export interface SupportScreenshot {
+  readonly url: string;
+  readonly name: string;
+  readonly size: number;
+  readonly contentType: string | null;
+}
+
+/** Only images within the size limit, at most three, renamed for the thread message. */
+export function acceptedScreenshots(files: readonly SupportScreenshot[]): SupportScreenshot[] {
+  return files
+    .filter((file) => (file.contentType ?? '').startsWith('image/') && file.size > 0 && file.size <= supportScreenshotMaxBytes)
+    .slice(0, supportScreenshotLimit)
+    .map((file, index) => {
+      const extension = /\.(png|jpe?g|gif|webp)$/i.exec(file.name)?.[1]?.toLowerCase() ?? 'png';
+      return { ...file, name: `screenshot-${index + 1}.${extension}` };
+    });
+}
+
 /** "#0042": how a ticket number is shown everywhere. */
 export function ticketNumber(ticketId: number): string {
   return `#${String(ticketId).padStart(4, '0')}`;

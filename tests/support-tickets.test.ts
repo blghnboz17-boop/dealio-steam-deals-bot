@@ -5,7 +5,8 @@ import {
   SupportTicketService, type SupportDesk, type SupportThreadState, type SupportTicketOpening,
 } from '../src/application/support-ticket-service.js';
 import { loadEnvironment } from '../src/config/environment.js';
-import { ticketNumber, type SupportTicket } from '../src/domain/support-ticket.js';
+import { acceptedScreenshots, ticketNumber, type SupportTicket } from '../src/domain/support-ticket.js';
+import { RestSupportDesk } from '../src/discord/support/support-desk.js';
 import { languages } from '../src/domain/user-config.js';
 import {
   buildSupportModal, buildSupportPanel, buildTicketClosedLog, buildTicketClosedNotice, buildTicketHeader,
@@ -13,7 +14,9 @@ import {
 } from '../src/discord/support/support-view.js';
 import { createDatabase } from '../src/persistence/database.js';
 import { SupportTicketRepository } from '../src/persistence/support-ticket-repository.js';
-import { categories, everyonePermissions, infoMessages, roles } from '../scripts/support-server/blueprint.js';
+import {
+  categories, everyonePermissions, infoMessages, onboardingDefaultChannels, onboardingPrompts, roles,
+} from '../scripts/support-server/blueprint.js';
 
 const user = '111111111111111111';
 const stranger = '222222222222222222';
@@ -233,6 +236,34 @@ describe('support screens', () => {
   });
 });
 
+describe('ticket screenshots', () => {
+  const image = (name: string, size = 1000, contentType: string | null = 'image/png') => ({ url: `https://cdn/${name}`, name, size, contentType });
+
+  it('keeps up to three images within the size limit and renames them', () => {
+    expect(acceptedScreenshots([
+      image('notes.txt', 10, 'text/plain'), image('huge.png', 9 * 1024 * 1024), image('a.JPG', 10, 'image/jpeg'),
+      image('b.webp', 10, 'image/webp'), image('c', 10), image('d.png'),
+    ]).map((file) => file.name)).toEqual(['screenshot-1.jpg', 'screenshot-2.webp', 'screenshot-3.png']);
+  });
+
+  it('copies readable screenshots into the ticket header and skips one that fails', async () => {
+    const posts: Array<{ body: { components: unknown[]; attachments: unknown[] }; files: Array<{ name: string }> }> = [];
+    const rest = { post: async (_route: string, options: never) => { posts.push(options); return {}; } } as never;
+    const fetchFile = (async (url: string) => url.endsWith('broken')
+      ? new Response(null, { status: 404 }) : new Response(new Uint8Array([1, 2, 3]))) as typeof fetch;
+    const desk = new RestSupportDesk(rest, { guildId: guild, logChannelId: channel, teamRoleId: staffMember }, fetchFile);
+    const ticket: SupportTicket = {
+      ticketId: 5, discordUserId: user, guildId: guild, channelId: channel, topic: 'bug', status: 'open',
+      threadId: '7', openedAt: '2026-10-09T12:00:00.000Z', closedAt: null, closedBy: null,
+    };
+    await desk.postTicketHeader('7', { ticket, userName: 'player', description: 'Broken', language: 'en',
+      screenshots: [image('screenshot-1.png'), { ...image('screenshot-2.png'), url: 'https://cdn/broken' }] });
+    expect(posts[0]!.files.map((file) => file.name)).toEqual(['screenshot-1.png']);
+    expect(posts[0]!.body.attachments).toEqual([{ id: 0, filename: 'screenshot-1.png' }]);
+    expect(JSON.stringify(posts[0]!.body.components)).toContain('attachment://screenshot-1.png');
+  });
+});
+
 describe('support server blueprint', () => {
   const channels = categories.flatMap((category) => category.channels);
   const flag = (value: string | undefined, permission: bigint) => (BigInt(value ?? '0') & permission) === permission;
@@ -265,12 +296,32 @@ describe('support server blueprint', () => {
   });
 
   it('ranks staff over supporters and opens the lounge to donators and boosters only', () => {
-    expect(roles.map((role) => role.key)).toEqual(['owner', 'admins', 'moderators', 'support', 'booster', 'legend', 'superDonator', 'donator']);
+    expect(roles.map((role) => role.key)).toEqual(['owner', 'admins', 'moderators', 'support', 'booster', 'legend', 'superDonator', 'donator', 'updates']);
     expect(roles.find((role) => role.key === 'support')?.aliases).toContain('Support Team');
     const lounge = channels.find((spec) => spec.key === 'lounge')!;
     expect(flag(lounge.overwrites.find((overwrite) => overwrite.audience === 'everyone')?.deny, PermissionFlagsBits.ViewChannel)).toBe(true);
     for (const audience of ['booster', 'legend', 'superDonator', 'donator', 'support'] as const) {
       expect(flag(lounge.overwrites.find((overwrite) => overwrite.audience === audience)?.allow, PermissionFlagsBits.ViewChannel)).toBe(true);
+    }
+  });
+
+  it('meets Discord’s onboarding rules: seven default channels, five open for everyone to post', () => {
+    const blocked = (overwrites: readonly { audience: string; deny?: string; allow?: string }[] = []) =>
+      flag(overwrites.find((overwrite) => overwrite.audience === 'everyone')?.deny, PermissionFlagsBits.SendMessages)
+      || flag(overwrites.find((overwrite) => overwrite.audience === 'everyone')?.deny, PermissionFlagsBits.ViewChannel);
+    const defaults = onboardingDefaultChannels.map((key) => {
+      const category = categories.find((candidate) => candidate.channels.some((spec) => spec.key === key))!;
+      return { spec: category.channels.find((spec) => spec.key === key)!, category };
+    });
+    expect(defaults.length).toBeGreaterThanOrEqual(7);
+    expect(defaults.filter(({ spec, category }) => !blocked(spec.overwrites) && !blocked(category.overwrites)
+      && spec.type === ChannelType.GuildText).length).toBeGreaterThanOrEqual(5);
+    // Every option leads somewhere members can see.
+    const hidden = new Set(channels.filter((spec) => flag(spec.overwrites.find((overwrite) => overwrite.audience === 'everyone')?.deny,
+      PermissionFlagsBits.ViewChannel)).map((spec) => spec.key));
+    for (const option of onboardingPrompts.flatMap((prompt) => prompt.options)) {
+      expect((option.channels ?? []).filter((key) => hidden.has(key))).toEqual([]);
+      expect((option.channels?.length ?? 0) + (option.roles?.length ?? 0)).toBeGreaterThan(0);
     }
   });
 

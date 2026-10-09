@@ -4,7 +4,7 @@ import {
 } from 'discord.js';
 import type { SupportTicketService } from '../../application/support-ticket-service.js';
 import type { SupportConfig } from '../../config/environment.js';
-import { isSupportTopic, ticketNumber, type SupportTicket } from '../../domain/support-ticket.js';
+import { acceptedScreenshots, isSupportTopic, ticketNumber, type SupportTicket } from '../../domain/support-ticket.js';
 import type { Language } from '../../domain/user-config.js';
 import { localizer } from '../i18n.js';
 import { buildNoticePanel, dealioEphemeralV2Flags, type DealioNoticeKind } from '../ui/components-v2.js';
@@ -152,6 +152,10 @@ async function submitForm(interaction: ModalSubmitInteraction, service: SupportT
   const t = localizer(language);
   const topic = interaction.fields.getStringSelectValues(supportModalFields.topic)[0] ?? 'other';
   const description = interaction.fields.getTextInputValue(supportModalFields.description).trim();
+  const uploaded = interaction.fields.getUploadedFiles(supportModalFields.screenshots, false);
+  const screenshots = acceptedScreenshots([...(uploaded?.values() ?? [])].map((file) => ({
+    url: file.url, name: file.name, size: file.size, contentType: file.contentType,
+  })));
   const result = await service.open({
     discordUserId: interaction.user.id,
     userName: interaction.user.username,
@@ -160,6 +164,7 @@ async function submitForm(interaction: ModalSubmitInteraction, service: SupportT
     topic: isSupportTopic(topic) ? topic : 'other',
     description,
     language,
+    screenshots,
   });
   let value: Notice;
   switch (result.kind) {

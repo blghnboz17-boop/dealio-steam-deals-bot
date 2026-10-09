@@ -67,6 +67,7 @@ simgesi ekler.
 | 🌟 Legendary Donator | Yok | Toplam 10 kahve |
 | 💖 Super Donator | Yok | Toplam 5 kahve |
 | ☕ Donator | Yok | Herhangi bir kahve |
+| 🔔 Updates | Yok (listede ayrı görünmez) | Onboarding'de "ping me" diyenler; duyurularda @everyone yerine bunu etiketle |
 
 Donator rollerini sen elle verirsin: kullanıcı Buy Me a Coffee'deki adıyla ticket açar.
 Kademeler `scripts/support-server/blueprint.ts` içindeki `donatorTiers` ve
@@ -77,7 +78,7 @@ Kademeler `scripts/support-server/blueprint.ts` içindeki `donatorTiers` ve
 | Kategori | Kanal | Kim yazabilir |
 | --- | --- | --- |
 | 📌 Start Here | 👋・welcome, 📜・rules, 📣・announcements (duyuru kanalı, takip edilebilir), ❓・faq, 💝・support-dealio | Ekip ve Dealio |
-| 💬 Community | 💬・general, 🔥・deals (30 sn yavaş mod), 💡・suggestions (forum, durum etiketleri) | Herkes |
+| 💬 Community | 💬・general, 🎮・off-topic, 🕹️・now-playing, 🔥・deals (30 sn yavaş mod), 🏆・deal-wins (galeri görünümlü forum), 💡・suggestions (forum, durum etiketleri), 🤖・try-dealio | Herkes |
 | 💬 Community | 💖・supporters-lounge | Yalnızca Donator, Booster ve ekip |
 | 🎫 Support | 🎫・open-a-ticket | Kimse; üyeler yalnızca kendi ticket thread'lerine yazar |
 | 🔒 Staff | 📋・ticket-log, 🛡️・staff-chat, 🔔・discord-updates | Yalnızca ekip |
@@ -85,14 +86,23 @@ Kademeler `scripts/support-server/blueprint.ts` içindeki `donatorTiers` ve
 - **Community** açık (App Directory'deki destek sunucusu için şart); doğrulama seviyesi
   *Orta*, medya filtresi tüm üyeler, bildirimler yalnızca @bahsetme.
 - **Karşılama ekranı** yeni üyelere kurallar, SSS, ticket, duyurular ve fırsatlar kanalını gösterir.
+- **Onboarding** açık: 13 varsayılan kanal, "What brings you to Dealio?" sorusu (yeni üye,
+  yardım, fırsatlar, öneriler; seçime göre kanallar) ve 🔔 Updates rolü için tercih.
+  *Server Guide* (karşılama mesajı ve yapılacaklar listesi) Discord API'sinde yok;
+  istersen Sunucu Ayarları → Onboarding → Server Guide'dan elle doldurabilirsin.
+- **:dealio:** özel emojisi Dealio'nun avatarından oluşturulur.
+- **Media kanalı** API ile oluşturulamıyor (Discord `50024` döndürüyor), bu yüzden
+  `deal-wins` galeri görünümlü bir forum.
 - **AutoMod**: spam, toplu etiketleme (10 dk susturma), cinsel içerik ve hakaretler,
-  sunucu davet bağlantıları (ekip hariç). Uyarılar `staff-chat`'e düşer.
+  sunucu davet bağlantıları (ekip hariç) ve ekibi taklit eden profil adları ("Dealio Support"
+  gibi; ad değişene kadar yazamaz). Uyarılar `staff-chat`'e düşer.
 - Üyeler thread açamaz ve @everyone kullanamaz.
 
 ## Ticket'lar nasıl çalışır
 
 - `open-a-ticket` kanalındaki **Ticket aç** butonu bir form açar: konu (kurulum,
-  bildirimler, hata, hesap, diğer) ve açıklama. Form ve tüm mesajlar kullanıcının
+  bildirimler, hata, hesap, diğer), açıklama ve isteğe bağlı en fazla 3 ekran görüntüsü
+  (8 MB'a kadar görseller; thread'e kopyalanır, veritabanında tutulmaz). Form ve tüm mesajlar kullanıcının
   Dealio diline, yoksa Discord diline göre TR/EN/DE/FR olur.
 - Dealio kanalda `#0042 · Bug report · kullanıcı` adlı, davet edilemeyen özel bir thread
   açar, kullanıcıyı ekler, açıklamayı ve **Ticket'ı kapat** butonunu gönderir.
