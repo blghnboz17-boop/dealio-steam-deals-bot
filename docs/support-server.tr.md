@@ -59,10 +59,12 @@ simgesi ekler.
 
 | Rol | Yetki | Kim alır |
 | --- | --- | --- |
+| 🤖 Dealio | Yönetici | Dealio'nun kendisi (betik verir); Discord'un yönettiği Dealio rolünden ayrı |
 | 👑 Owner | Yönetici | Sunucu sahibi (betik verir) |
 | 🛡️ Admins | Yönetici | Güvendiğin yöneticiler |
 | 🔨 Moderators | Mesaj/thread yönetimi, susturma, atma, yasaklama | Moderatörler |
 | 🎧 Support Team | Mesaj/thread yönetimi, susturma; tüm ticket'ları görür | Ticket'lara bakanlar |
+| ⚙️ Bots | Yok | Diğer bütün botlar (betik verir); her botun kendi rolü bunun altına dizilir |
 | 💎 Server Booster | Yok | Discord otomatik verir |
 | 🌟 Legendary Donator | Yok | Toplam 10 kahve |
 | 💖 Super Donator | Yok | Toplam 5 kahve |
@@ -79,9 +81,14 @@ Kademeler `scripts/support-server/blueprint.ts` içindeki `donatorTiers` ve
 | --- | --- | --- |
 | 📌 Start Here | 👋・welcome, 📜・rules, 📣・announcements (duyuru kanalı, takip edilebilir), ❓・faq, 💝・support-dealio | Ekip ve Dealio |
 | 💬 Community | 💬・general, 🎮・off-topic, 🕹️・now-playing, 🔥・deals (30 sn yavaş mod), 🏆・deal-wins (galeri görünümlü forum), 💡・suggestions (forum, durum etiketleri), 🤖・try-dealio | Herkes |
+| 💬 Community | 🎉・giveaways | Ekip ve botlar yazar, üyeler tepki verir |
 | 💬 Community | 💖・supporters-lounge | Yalnızca Donator, Booster ve ekip |
+| 🌍 International | 🇹🇷・türkçe, 🇩🇪・deutsch, 🇫🇷・français | Herkes |
+| 🎮 Games & Bots | 🎲・owo, 🐸・dank-memer, 🃏・karuta, 🔎・looking-for-group, 🎵・music-commands, 🚀・bump | Herkes; oyun botları yalnızca kendi kanalında görünür |
+| 🔊 Voice | 🛋️ Lounge, 🎮 Gaming 1–2 (5 kişi), 🎵 Music, 🎙️ Events (sahne), 😴 AFK (5 dk) | Herkes; sahnede ekip konuşur |
 | 🎫 Support | 🎫・open-a-ticket | Kimse; üyeler yalnızca kendi ticket thread'lerine yazar |
-| 🔒 Staff | 📋・ticket-log, 🛡️・staff-chat, 🔔・discord-updates | Yalnızca ekip |
+| 🔒 Staff | 📋・ticket-log, 📝・mod-log (bot logları), 🛡️・staff-chat, 🔔・discord-updates, 🔒 Staff Voice | Yalnızca ekip |
+| 🔒 Staff | 🔐・admin-chat | Yalnızca Owner, Admins (ve Dealio) |
 
 - **Community** açık (App Directory'deki destek sunucusu için şart); doğrulama seviyesi
   *Orta*, medya filtresi tüm üyeler, bildirimler yalnızca @bahsetme.
@@ -97,6 +104,30 @@ Kademeler `scripts/support-server/blueprint.ts` içindeki `donatorTiers` ve
   sunucu davet bağlantıları (ekip hariç) ve ekibi taklit eden profil adları ("Dealio Support"
   gibi; ad değişene kadar yazamaz). Uyarılar `staff-chat`'e düşer.
 - Üyeler thread açamaz ve @everyone kullanamaz.
+
+## Diğer botlar
+
+Botları yalnızca bir insan ekleyebilir (Discord yetkilendirme onayı ister). `🛡️・staff-chat`
+kanalındaki **Recommended bots** panelinde her bot için bir **Add** butonu var; linkler
+`scripts/support-server/blueprint.ts` içindeki `thirdPartyBots` listesinden gelir ve hiçbirine
+Yönetici yetkisi verilmez. Botları ekledikten sonra betiği yeniden çalıştır:
+
+- her bot ⚙️ Bots rolünü alır, kendi rolü onun altına dizilir;
+- OwO, Dank Memer, Karuta, Jockie Music ve DISBOARD yalnızca kendi kanallarını görür;
+- Carl-bot ve ProBot logları için `📝・mod-log` kanalını kendi panellerinden seç.
+
+| Bot | Ne için |
+| --- | --- |
+| 🛡️ Carl-bot | Tepki rolleri, loglar, embed'ler, ek automod |
+| ✨ ProBot | Hoş geldin görselleri, seviyeler, üye logları |
+| 🎵 Jockie Music | Ses kanallarında müzik |
+| 🎲 OwO · 🐸 Dank Memer · 🃏 Karuta | Oyun botları |
+| 🎉 GiveawayBot | Çekilişler |
+| 🚀 DISBOARD | Sunucu listesi (`/bump`) |
+| 📊 ServerStats | Canlı üye ve boost sayaçları |
+
+MEE6 ve Dyno listede yok: uygulama kimlikleri Discord'un herkese açık uygulama sorgusunda
+doğrulanamadı; işlevlerini Carl-bot ve ProBot karşılıyor.
 
 ## Ticket'lar nasıl çalışır
 

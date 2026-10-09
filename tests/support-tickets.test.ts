@@ -15,7 +15,7 @@ import {
 import { createDatabase } from '../src/persistence/database.js';
 import { SupportTicketRepository } from '../src/persistence/support-ticket-repository.js';
 import {
-  categories, everyonePermissions, infoMessages, onboardingDefaultChannels, onboardingPrompts, roles,
+  botInviteUrl, categories, everyonePermissions, infoMessages, onboardingDefaultChannels, onboardingPrompts, roles, thirdPartyBots,
 } from '../scripts/support-server/blueprint.js';
 
 const user = '111111111111111111';
@@ -285,18 +285,18 @@ describe('support server blueprint', () => {
   });
 
   it('hides the staff channels and never lets members ping everyone', () => {
-    for (const key of ['ticketLog', 'staffChat', 'discordUpdates'] as const) {
+    for (const key of ['ticketLog', 'modLog', 'staffChat', 'adminChat', 'discordUpdates', 'staffVoice'] as const) {
       const spec = channels.find((candidate) => candidate.key === key)!;
       expect(flag(spec.overwrites.find((overwrite) => overwrite.audience === 'everyone')?.deny, PermissionFlagsBits.ViewChannel)).toBe(true);
     }
     expect(flag(everyonePermissions, PermissionFlagsBits.MentionEveryone)).toBe(false);
     expect(flag(everyonePermissions, PermissionFlagsBits.Administrator)).toBe(false);
-    expect(roles.filter((role) => flag(role.permissions, PermissionFlagsBits.Administrator)).map((role) => role.key)).toEqual(['owner', 'admins']);
-    expect(roles.filter((role) => role.key !== 'owner' && role.key !== 'admins').every((role) => !flag(role.permissions, PermissionFlagsBits.ManageGuild))).toBe(true);
+    expect(roles.filter((role) => flag(role.permissions, PermissionFlagsBits.Administrator)).map((role) => role.key)).toEqual(['dealioBot', 'owner', 'admins']);
+    expect(roles.filter((role) => !['dealioBot', 'owner', 'admins'].includes(role.key)).every((role) => !flag(role.permissions, PermissionFlagsBits.ManageGuild))).toBe(true);
   });
 
   it('ranks staff over supporters and opens the lounge to donators and boosters only', () => {
-    expect(roles.map((role) => role.key)).toEqual(['owner', 'admins', 'moderators', 'support', 'booster', 'legend', 'superDonator', 'donator', 'updates']);
+    expect(roles.map((role) => role.key)).toEqual(['dealioBot', 'owner', 'admins', 'moderators', 'support', 'bots', 'booster', 'legend', 'superDonator', 'donator', 'updates']);
     expect(roles.find((role) => role.key === 'support')?.aliases).toContain('Support Team');
     const lounge = channels.find((spec) => spec.key === 'lounge')!;
     expect(flag(lounge.overwrites.find((overwrite) => overwrite.audience === 'everyone')?.deny, PermissionFlagsBits.ViewChannel)).toBe(true);
@@ -323,6 +323,36 @@ describe('support server blueprint', () => {
       expect((option.channels ?? []).filter((key) => hidden.has(key))).toEqual([]);
       expect((option.channels?.length ?? 0) + (option.roles?.length ?? 0)).toBeGreaterThan(0);
     }
+  });
+
+  it('only lets Admins and the Owner into admin chat, and keeps member-free channels read-only', () => {
+    const adminChat = channels.find((spec) => spec.key === 'adminChat')!;
+    expect(adminChat.overwrites).toEqual([{ audience: 'everyone', deny: PermissionFlagsBits.ViewChannel.toString() }]);
+    for (const key of ['welcome', 'rules', 'announcements', 'faq', 'supportDealio', 'tickets', 'giveaways'] as const) {
+      const spec = channels.find((candidate) => candidate.key === key)!;
+      expect(flag(spec.overwrites.find((overwrite) => overwrite.audience === 'everyone')?.deny, PermissionFlagsBits.SendMessages)).toBe(true);
+    }
+  });
+
+  it('invites other bots without Administrator and keeps game bots in channels that exist', () => {
+    const keys = new Set(channels.map((spec) => spec.key));
+    for (const bot of thirdPartyBots) {
+      expect(flag(bot.permissions, PermissionFlagsBits.Administrator)).toBe(false);
+      expect(bot.clientId).toMatch(/^\d{17,20}$/);
+      for (const home of bot.homeChannels ?? []) expect(keys.has(home)).toBe(true);
+      expect(botInviteUrl(bot, guild)).toBe(`https://discord.com/oauth2/authorize?client_id=${bot.clientId}`
+        + `&scope=bot%20applications.commands&permissions=${bot.permissions}&integration_type=0&guild_id=${guild}`);
+    }
+    const panel = infoMessages('123456789012345678', (key) => `9${key.length}`.padEnd(18, '0'), 'banner.png', () => undefined, guild);
+    expect(panel[0]!.channel).toBe('staffChat');
+    expect(JSON.stringify(panel[0]!.container.toJSON())).toContain('client_id=408785106942164992');
+  });
+
+  it('has voice, stage and AFK channels and a channel for each other language', () => {
+    expect(channels.filter((spec) => spec.type === ChannelType.GuildVoice).length).toBeGreaterThanOrEqual(5);
+    expect(channels.some((spec) => spec.type === ChannelType.GuildStageVoice)).toBe(true);
+    expect(channels.filter((spec) => ['turkish', 'german', 'french'].includes(spec.key)).map((spec) => spec.name))
+      .toEqual(['🇹🇷・türkçe', '🇩🇪・deutsch', '🇫🇷・français']);
   });
 
   it('has unique channel names and keys, an announcement channel and a forum', () => {
