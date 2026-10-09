@@ -7,6 +7,7 @@ import { AdminControlRepository } from '../src/persistence/admin-control-reposit
 import { BroadcastRepository } from '../src/persistence/broadcast-repository.js';
 import { createDatabase } from '../src/persistence/database.js';
 import { DeletionJournal, hashDiscordUserId } from '../src/persistence/deletion-journal.js';
+import { SupportTicketRepository } from '../src/persistence/support-ticket-repository.js';
 import { TelemetryRepository } from '../src/persistence/telemetry-repository.js';
 import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 import { WishlistStateRepository } from '../src/persistence/wishlist-state-repository.js';
@@ -78,6 +79,10 @@ function seed(database: DatabaseSync): void {
   const controls = new AdminControlRepository(database);
   controls.audit('user.message', user, 'en', 'ok', at);
   controls.audit('broadcast.create', null, JSON.stringify({ userIds: [user, other] }), 'ok', at);
+  const tickets = new SupportTicketRepository(database);
+  const ticket = tickets.reserve(user, '333333333333333333', '444444444444444444', 'alerts', at)!;
+  tickets.attachThread(ticket.ticketId, '555555555555555555');
+  tickets.reserve(other, '333333333333333333', '444444444444444444', 'bug', at);
 }
 
 it('/delete-data leaves no trace of the user outside the records the policy keeps', () => {
@@ -135,6 +140,8 @@ it('re-applies the announcement part of a deletion to a restored database', asyn
       [{ discordUserId: user, language: 'en' }], '2026-10-03T00:00:00.000Z');
 
     expect(journal.reconcile(database)).toBe(1);
+    expect(new SupportTicketRepository(database).findActive(user)).toBeNull();
+    expect(new SupportTicketRepository(database).findActive(other)).not.toBeNull();
     const broadcasts = new BroadcastRepository(database);
     expect(broadcasts.get('direct')).toBeNull();
     expect(broadcasts.get('named')?.audience).toEqual({ userIds: [other] });

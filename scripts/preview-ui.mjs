@@ -5,6 +5,7 @@ import { buildStatusV2Panel } from '../dist/discord/status-view-v2.js';
 import { buildSaleNotificationPanel, buildInitialWishlistV2Page } from '../dist/discord/notification-components-v2.js';
 import { buildCountryRangePanel } from '../dist/discord/ui/country-picker.js';
 import { buildSetupConfirmationPanel, buildSetupWelcomePanel } from '../dist/discord/setup-view.js';
+import { buildSupportPanel, buildTicketClosedNotice, buildTicketHeader } from '../dist/discord/support/support-view.js';
 const date = '2026-09-12T14:00:00.000Z';
 const games = [[620, 'Portal 2', 1999, 199, 90], [1091500, 'Cyberpunk 2077', 5999, 2099, 65], [1086940, 'Baldur’s Gate 3', 5999, 4499, 25]];
 const items = games.map(([appId, name, initialMinor, finalMinor, discountPercent]) => ({
@@ -15,6 +16,8 @@ const items = games.map(([appId, name, initialMinor, finalMinor, discountPercent
     platforms: { windows: true, mac: appId === 620, linux: appId === 620 }, saleEndsAt: '2030-01-01T00:00:00.000Z' },
 }));
 const panels = {};
+const ticket = { ticketId: 42, discordUserId: 'preview-user', guildId: 'g', channelId: 'tickets', topic: 'alerts', status: 'open',
+  threadId: 't', openedAt: date, closedAt: null, closedBy: null };
 for (const language of ['tr', 'en', 'de', 'fr']) {
   const config = {
     discordUserId: 'preview-user', configurationId: 'preview-config', configVersion: 1,
@@ -71,6 +74,9 @@ for (const language of ['tr', 'en', 'de', 'fr']) {
     empty: personal('wishlist', { ...assistantData, items: [] }),
     expired: [buildStatusV2Panel(dashboard, 'preview', { mode: 'home', disabled: true }).toJSON()],
     region: [buildCountryRangePanel(language, 'preview', { selected: 'TR' }).toJSON()],
+    supportPanel: [buildSupportPanel(language, { faqChannelId: 'faq' }).toJSON()],
+    ticket: [buildTicketHeader(ticket, 'I set a target price for Hades but got no DM when it dropped to $9.99. My DMs are open.', language).toJSON(),
+      buildTicketClosedNotice({ ...ticket, status: 'closed' }, 'preview-user', language).toJSON()],
     setup: [buildSetupConfirmationPanel({ discordUserId: 'preview-user', steamId64: '76561198000000000', language, storeCountryCode: 'TR', profile: { personaName: 'Bilgehan', avatarUrl: 'https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg' } }, 'preview', { regionSelectionSource: 'discord-locale' }).toJSON()],
     summary: buildInitialWishlistV2Page({ discordUserId: 'preview-user', steamId64: '76561198000000000', language, storeCountryCode: 'TR',
       minimumDiscountPercent: 30, totalGameCount: 24, failedItemCount: 0, capturedAt: date, upcomingCount: 8,
