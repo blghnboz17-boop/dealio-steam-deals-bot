@@ -17,7 +17,7 @@ import {
   type RESTPostAPIGuildChannelJSONBody,
 } from 'discord.js';
 import {
-  autoModerationRules, bannerFileName, categories, dealioRoles, impersonationKeywords, thirdPartyBots, onboardingDefaultChannels, onboardingPrompts, ownerRoles, everyonePermissions, guildSettings, infoMessages, roles, starterChannels,
+  autoModerationRules, bannerFileName, categories, dealioRoles, staffAboveDealio, impersonationKeywords, thirdPartyBots, onboardingDefaultChannels, onboardingPrompts, ownerRoles, everyonePermissions, guildSettings, infoMessages, roles, starterChannels,
   welcomeScreen, type Audience, type ChannelKey, type ChannelSpec, type OverwriteSpec, type RoleKey,
 } from './support-server/blueprint.js';
 
@@ -90,8 +90,10 @@ for (const spec of roles) {
     : existingRoles.find((role) => role.name === spec.name || spec.aliases?.includes(role.name));
   if (existing) {
     const renamed = existing.name !== spec.name ? ` (was ${existing.name})` : '';
-    await change(`Update role ${spec.name}${renamed}`, () => rest.patch(Routes.guildRole(guildId, existing.id), { body }), undefined);
     roleIds[spec.key] = existing.id;
+    // Roles ranked above Dealio (the owner and staff) are the owner's to edit; Discord refuses Dealio.
+    await change(`Update role ${spec.name}${renamed}`, () => rest.patch(Routes.guildRole(guildId, existing.id), { body }), undefined)
+      .catch(() => console.log(`Leave ${existing.name} as it is: it ranks above Dealio`));
   } else if (spec.managedBooster) {
     console.log(`Skip ${spec.name}: Discord creates it with the server's first boost; run this again afterwards to style it`);
   } else {
@@ -102,24 +104,31 @@ for (const spec of roles) {
 }
 const roleId = (key: RoleKey): string | undefined => roleIds[key];
 
-// Order: Dealio on top, then the list above. Dealio cannot raise its own role, so it is
-// only included when it already outranks everything it has to move.
-const botRole = existingRoles.find((role) => role.tags?.bot_id === clientId);
-const otherBotRoles = existingRoles.filter((role) => role.tags?.bot_id && role.tags.bot_id !== clientId);
-const ordered = roles.flatMap((spec) => roleIds[spec.key]
-  ? [roleIds[spec.key]!, ...(spec.key === 'bots' ? otherBotRoles.map((role) => role.id) : [])] : []);
-if (!dryRun) {
-  const positions = ordered.map((id, index) => ({ id, position: ordered.length - index }));
-  await rest.patch(Routes.guildRoles(guildId), {
-    body: botRole ? [{ id: botRole.id, position: ordered.length + 1 }, ...positions] : positions,
-    reason: 'Dealio support server setup',
-  }).then(() => console.log('Order roles: Dealio, then staff, boosters and donators'))
-    .catch(async () => rest.patch(Routes.guildRoles(guildId), { body: positions }).then(
-      () => console.log('Order roles below Dealio'),
-      (error: unknown) => console.warn(`  Could not order roles (${String(error)}). Drag the Dealio role to the top in Server Settings → Roles and run this again.`),
-    ));
+// Order. The owner and staff outrank Dealio; Dealio orders everything below its own role.
+const currentRoles = dryRun ? existingRoles : await rest.get(Routes.guildRoles(guildId)) as APIRole[];
+const botRole = currentRoles.find((role) => role.tags?.bot_id === clientId);
+const otherBotRoles = currentRoles.filter((role) => role.tags?.bot_id && role.tags.bot_id !== clientId);
+// Discord breaks position ties by ID: the older role ranks higher.
+const outranks = (a: APIRole, b: APIRole) => a.position > b.position || (a.position === b.position && BigInt(a.id) < BigInt(b.id));
+const staffAboveBot = botRole !== undefined && staffAboveDealio.every((key) => {
+  const role = currentRoles.find((candidate) => candidate.id === roleIds[key]);
+  return role !== undefined && outranks(role, botRole);
+});
+const ordered = roles.filter((spec) => !staffAboveBot || !staffAboveDealio.includes(spec.key))
+  .flatMap((spec) => roleIds[spec.key] ? [roleIds[spec.key]!, ...(spec.key === 'bots' ? otherBotRoles.map((role) => role.id) : [])] : []);
+const positions = ordered.map((id, index) => ({ id, position: ordered.length - index }));
+if (staffAboveBot) {
+  await change('Order roles under Dealio: 🤖 Dealio, ⚙️ Bots and each bot, boosters, donators, Updates',
+    () => rest.patch(Routes.guildRoles(guildId), { body: positions, reason: 'Dealio support server setup' }), undefined)
+    .catch((error: unknown) => console.warn(`  Could not order roles (${String(error)})`));
 } else {
-  console.log('[dry-run] Order roles: Dealio, then staff, boosters and donators');
+  // Until the owner moves Dealio's role down, keep the intended order right under it.
+  await change('Order roles: staff, 🤖 Dealio, ⚙️ Bots and each bot, boosters, donators, Updates',
+    () => rest.patch(Routes.guildRoles(guildId), {
+      body: botRole ? [{ id: botRole.id, position: ordered.length + 1 }, ...positions] : positions,
+      reason: 'Dealio support server setup',
+    }), undefined).catch((error: unknown) => console.warn(`  Could not order roles (${String(error)})`));
+  console.log('  ACTION: in Server Settings → Roles, drag the "Dealio" role (marked BOT) just below 🎧 Support Team, then run this again.');
 }
 
 // Dealio wears its own all-permissions role; every other bot wears ⚙️ Bots.
@@ -139,9 +148,10 @@ for (const role of otherBotRoles) {
 }
 
 // The owner wears the crown and receives the ticket pings.
+const ownerMember = dryRun ? { roles: [] as string[] } : await rest.get(Routes.guildMember(guildId, guild.owner_id)) as { roles: string[] };
 for (const key of ownerRoles) {
   const id = roleIds[key];
-  if (!id) continue;
+  if (!id || ownerMember.roles.includes(id)) continue;
   await change(`Give the server owner ${roles.find((spec) => spec.key === key)!.name}`,
     () => rest.put(Routes.guildMemberRole(guildId, guild.owner_id, id), { reason: 'Dealio support server setup' }), undefined)
     .catch((error: unknown) => console.warn(`  Could not give the owner a role (${String(error)})`));
