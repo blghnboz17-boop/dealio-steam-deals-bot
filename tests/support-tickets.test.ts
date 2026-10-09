@@ -248,7 +248,7 @@ describe('support server blueprint', () => {
     for (const permission of [PermissionFlagsBits.CreatePrivateThreads, PermissionFlagsBits.ManageThreads, PermissionFlagsBits.SendMessagesInThreads]) {
       expect(flag(bot.allow, permission)).toBe(true);
     }
-    for (const role of ['team', 'support'] as const) {
+    for (const role of ['admins', 'moderators', 'support'] as const) {
       expect(flag(tickets.overwrites.find((overwrite) => overwrite.audience === role)?.allow, PermissionFlagsBits.ManageThreads)).toBe(true);
     }
   });
@@ -260,7 +260,18 @@ describe('support server blueprint', () => {
     }
     expect(flag(everyonePermissions, PermissionFlagsBits.MentionEveryone)).toBe(false);
     expect(flag(everyonePermissions, PermissionFlagsBits.Administrator)).toBe(false);
-    expect(roles.every((role) => !flag(role.permissions, PermissionFlagsBits.Administrator))).toBe(true);
+    expect(roles.filter((role) => flag(role.permissions, PermissionFlagsBits.Administrator)).map((role) => role.key)).toEqual(['owner', 'admins']);
+    expect(roles.filter((role) => role.key !== 'owner' && role.key !== 'admins').every((role) => !flag(role.permissions, PermissionFlagsBits.ManageGuild))).toBe(true);
+  });
+
+  it('ranks staff over supporters and opens the lounge to donators and boosters only', () => {
+    expect(roles.map((role) => role.key)).toEqual(['owner', 'admins', 'moderators', 'support', 'booster', 'legend', 'superDonator', 'donator']);
+    expect(roles.find((role) => role.key === 'support')?.aliases).toContain('Support Team');
+    const lounge = channels.find((spec) => spec.key === 'lounge')!;
+    expect(flag(lounge.overwrites.find((overwrite) => overwrite.audience === 'everyone')?.deny, PermissionFlagsBits.ViewChannel)).toBe(true);
+    for (const audience of ['booster', 'legend', 'superDonator', 'donator', 'support'] as const) {
+      expect(flag(lounge.overwrites.find((overwrite) => overwrite.audience === audience)?.allow, PermissionFlagsBits.ViewChannel)).toBe(true);
+    }
   });
 
   it('has unique channel names and keys, an announcement channel and a forum', () => {
@@ -272,7 +283,7 @@ describe('support server blueprint', () => {
 
   it('builds the info messages within Discord’s limits, linking real channels', () => {
     const messages = infoMessages('123456789012345678', (key) => `9${key.length}`.padEnd(18, '0'), 'banner.png');
-    expect(messages.map((message) => message.channel)).toEqual(['welcome', 'rules', 'faq', 'tickets']);
+    expect(messages.map((message) => message.channel)).toEqual(['welcome', 'rules', 'faq', 'supportDealio', 'tickets']);
     const ticketPanel = JSON.stringify(messages.at(-1)!.container.toJSON());
     expect(ticketPanel).toContain('"custom_id":"support:open"');
     expect(JSON.stringify(messages[0]!.container.toJSON())).toContain('attachment://dealio-banner.png');

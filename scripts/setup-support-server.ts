@@ -17,7 +17,7 @@ import {
   type RESTPostAPIGuildChannelJSONBody,
 } from 'discord.js';
 import {
-  autoModerationRules, bannerFileName, categories, everyonePermissions, guildSettings, infoMessages, roles, starterChannels,
+  autoModerationRules, bannerFileName, categories, ownerRoles, everyonePermissions, guildSettings, infoMessages, roles, starterChannels,
   welcomeScreen, type Audience, type ChannelKey, type ChannelSpec, type OverwriteSpec, type RoleKey,
 } from './support-server/blueprint.js';
 
@@ -71,21 +71,63 @@ await change('Server name, icon, verification, content filter and notification d
 
 // --- Roles ------------------------------------------------------------------------------
 const existingRoles = await rest.get(Routes.guildRoles(guildId)) as APIRole[];
-const roleIds = {} as Record<RoleKey, string>;
+const roleIds = {} as Partial<Record<RoleKey, string>>;
+const enhancedColors = guild.features.includes('ENHANCED_ROLE_COLORS' as never);
+const roleIcons = guild.features.includes('ROLE_ICONS' as never);
 for (const spec of roles) {
-  const body = { name: spec.name, color: spec.color, hoist: true, mentionable: false, permissions: spec.permissions };
-  const existing = existingRoles.find((role) => role.name === spec.name);
+  const body = {
+    name: spec.name,
+    color: spec.color,
+    // Gradients and icons need boost level 2; until then the colour and the emoji in the name carry the look.
+    ...(enhancedColors && spec.gradient ? { colors: { primary_color: spec.gradient[0], secondary_color: spec.gradient[1] } } : {}),
+    ...(roleIcons ? { unicode_emoji: spec.icon } : {}),
+    hoist: true,
+    mentionable: false,
+    ...(spec.managedBooster ? {} : { permissions: spec.permissions }),
+  };
+  const existing = spec.managedBooster
+    ? existingRoles.find((role) => role.tags?.premium_subscriber !== undefined)
+    : existingRoles.find((role) => role.name === spec.name || spec.aliases?.includes(role.name));
   if (existing) {
-    await change(`Update role ${spec.name}`, () => rest.patch(Routes.guildRole(guildId, existing.id), { body }), undefined);
+    const renamed = existing.name !== spec.name ? ` (was ${existing.name})` : '';
+    await change(`Update role ${spec.name}${renamed}`, () => rest.patch(Routes.guildRole(guildId, existing.id), { body }), undefined);
     roleIds[spec.key] = existing.id;
+  } else if (spec.managedBooster) {
+    console.log(`Skip ${spec.name}: Discord creates it with the server's first boost; run this again afterwards to style it`);
   } else {
     const created = await change(`Create role ${spec.name}`,
       () => rest.post(Routes.guildRoles(guildId), { body }) as Promise<APIRole>, { id: fakeId() } as APIRole);
     roleIds[spec.key] = created.id;
   }
 }
-// New roles start at the bottom, below Dealio's own role, so Dealio can manage them;
-// Support Team is created last and therefore sits under Dealio Team.
+const roleId = (key: RoleKey): string | undefined => roleIds[key];
+
+// Order: Dealio on top, then the list above. Dealio cannot raise its own role, so it is
+// only included when it already outranks everything it has to move.
+const botRole = existingRoles.find((role) => role.tags?.bot_id === clientId);
+const ordered = roles.flatMap((spec) => roleIds[spec.key] ? [roleIds[spec.key]!] : []);
+if (!dryRun) {
+  const positions = ordered.map((id, index) => ({ id, position: ordered.length - index }));
+  await rest.patch(Routes.guildRoles(guildId), {
+    body: botRole ? [{ id: botRole.id, position: ordered.length + 1 }, ...positions] : positions,
+    reason: 'Dealio support server setup',
+  }).then(() => console.log('Order roles: Dealio, then staff, boosters and donators'))
+    .catch(async () => rest.patch(Routes.guildRoles(guildId), { body: positions }).then(
+      () => console.log('Order roles below Dealio'),
+      (error: unknown) => console.warn(`  Could not order roles (${String(error)}). Drag the Dealio role to the top in Server Settings → Roles and run this again.`),
+    ));
+} else {
+  console.log('[dry-run] Order roles: Dealio, then staff, boosters and donators');
+}
+
+// The owner wears the crown and receives the ticket pings.
+for (const key of ownerRoles) {
+  const id = roleIds[key];
+  if (!id) continue;
+  await change(`Give the server owner ${roles.find((spec) => spec.key === key)!.name}`,
+    () => rest.put(Routes.guildMemberRole(guildId, guild.owner_id, id), { reason: 'Dealio support server setup' }), undefined)
+    .catch((error: unknown) => console.warn(`  Could not give the owner a role (${String(error)})`));
+}
 await change('Set what @everyone may do server-wide (no thread creation, no @everyone pings)',
   () => rest.patch(Routes.guildRole(guildId, guildId), { body: { permissions: everyonePermissions } }), undefined);
 
@@ -98,7 +140,9 @@ function overwrites(specs: readonly OverwriteSpec[]) {
   const target = (audience: Audience) => audience === 'everyone' ? { id: guildId!, type: OverwriteType.Role }
     : audience === 'bot' ? { id: me.id, type: OverwriteType.Member }
     : { id: roleIds[audience], type: OverwriteType.Role };
-  return specs.map((spec) => ({ ...target(spec.audience), allow: spec.allow ?? '0', deny: spec.deny ?? '0' }));
+  // A role that does not exist yet (Server Booster before the first boost) gets its rule on a later run.
+  return specs.filter((spec) => spec.audience === 'everyone' || spec.audience === 'bot' || roleIds[spec.audience])
+    .map((spec) => ({ ...target(spec.audience) as { id: string; type: OverwriteType }, allow: spec.allow ?? '0', deny: spec.deny ?? '0' }));
 }
 
 function forumTags(spec: ChannelSpec, current?: readonly APIGuildForumTag[]) {
@@ -213,7 +257,7 @@ for (const starter of starterChannels) {
 
 // --- AutoMod ----------------------------------------------------------------------------
 const existingRules = dryRun ? [] : await rest.get(Routes.guildAutoModerationRules(guildId)) as Array<{ id: string; name: string }>;
-for (const rule of autoModerationRules({ staffChat: channelId('staffChat'), staffRoles: [roleIds.team, roleIds.support] })) {
+for (const rule of autoModerationRules({ staffChat: channelId('staffChat'), staffRoles: (['owner', 'admins', 'moderators', 'support'] as const).flatMap((key) => roleIds[key] ? [roleIds[key]!] : []) })) {
   const existing = existingRules.find((candidate) => candidate.name === rule.name);
   await change(`${existing ? 'Update' : 'Create'} AutoMod rule "${rule.name}"`, () => existing
     ? rest.patch(Routes.guildAutoModerationRule(guildId, existing.id), { body: { ...rule, trigger_type: undefined, enabled: true } })
@@ -222,7 +266,7 @@ for (const rule of autoModerationRules({ staffChat: channelId('staffChat'), staf
 }
 
 // --- Info messages ----------------------------------------------------------------------
-for (const message of infoMessages(clientId, channelId, bannerPath)) {
+for (const message of infoMessages(clientId, channelId, bannerPath, roleId)) {
   const target = channelId(message.channel);
   const files = (message.files ?? []).map((path) => ({ name: path === bannerPath ? bannerFileName : basename(path), data: readFileSync(path) }));
   const body = {
@@ -247,11 +291,10 @@ invite ??= await change('Create a permanent invite to #welcome', () => rest.post
 
 console.log(`
 Done. Next steps (docs/support-server.tr.md):
-  1. Server Settings → Roles → Dealio: untick Administrator (keep the rest).
-  2. Give yourself the "Dealio Team" role.
-  3. Set these on the VM's .env and restart Dealio, so the ticket button works:
+  1. Hand out the staff and Donator roles in Server Settings → Members.
+  2. Set these on the VM's .env and restart Dealio, so the ticket button works:
        DEALIO_SUPPORT_GUILD_ID=${guildId}
        DEALIO_SUPPORT_LOG_CHANNEL_ID=${channelId('ticketLog')}
-       DEALIO_SUPPORT_TEAM_ROLE_ID=${roleIds.support}
-  4. Support server invite for the Developer Portal and top.gg: https://discord.gg/${invite.code}
+       DEALIO_SUPPORT_TEAM_ROLE_ID=${roleIds.support ?? ''}
+  3. Support server invite for the Developer Portal and top.gg: https://discord.gg/${invite.code}
 `);

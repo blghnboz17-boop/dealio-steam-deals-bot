@@ -57,37 +57,54 @@ export const everyonePermissions = bits(
   P.ReadMessageHistory, P.UseApplicationCommands, P.Connect, P.Speak, P.Stream, P.UseVAD,
 );
 
-export type RoleKey = 'team' | 'support';
+export type StaffRoleKey = 'owner' | 'admins' | 'moderators' | 'support';
+export type SupporterRoleKey = 'legend' | 'superDonator' | 'donator';
+export type RoleKey = StaffRoleKey | SupporterRoleKey | 'booster';
+
 export interface RoleSpec {
   readonly key: RoleKey;
   readonly name: string;
+  /** Earlier names, so renaming a role keeps its ID (the ticket role ID is in the VM's .env). */
+  readonly aliases?: readonly string[];
   readonly color: number;
+  /** A gradient, shown once the server unlocks enhanced role colors (boost level 2). */
+  readonly gradient?: readonly [number, number];
+  /** A role icon, shown once the server unlocks role icons (boost level 2). */
+  readonly icon: string;
   readonly permissions: string;
+  /** Discord's own Server Booster role: it exists after the first boost and Discord assigns it. */
+  readonly managedBooster?: true;
 }
 
+const moderation = [P.ManageMessages, P.ManageThreads, P.ModerateMembers, P.ManageNicknames, P.ViewAuditLog, P.PinMessages];
+
+/** Top to bottom, just below Dealio's own role. Every role is shown separately in the member list. */
 export const roles: readonly RoleSpec[] = [
-  {
-    key: 'team',
-    name: 'Dealio Team',
-    color: dealioBrand.colors.primary,
-    permissions: bits(P.ManageMessages, P.ManageThreads, P.ModerateMembers, P.KickMembers, P.BanMembers,
-      P.ManageNicknames, P.ViewAuditLog, P.MentionEveryone, P.ManageEvents, P.PinMessages),
-  },
-  {
-    key: 'support',
-    name: 'Support Team',
-    color: dealioBrand.colors.accent,
-    permissions: bits(P.ManageMessages, P.ManageThreads, P.ModerateMembers, P.ManageNicknames, P.ViewAuditLog, P.PinMessages),
-  },
+  { key: 'owner', name: '👑 Owner', icon: '👑', color: 0xf1c40f, gradient: [0xf1c40f, 0xff8c00], permissions: bits(P.Administrator) },
+  { key: 'admins', name: '🛡️ Admins', aliases: ['Dealio Team'], icon: '🛡️', color: 0xe74c3c, gradient: [0xe74c3c, 0xff6b81],
+    permissions: bits(P.Administrator) },
+  { key: 'moderators', name: '🔨 Moderators', icon: '🔨', color: 0x3498db, gradient: [0x3498db, 0x66c0f4],
+    permissions: bits(...moderation, P.KickMembers, P.BanMembers, P.MuteMembers, P.MoveMembers, P.ManageEvents) },
+  { key: 'support', name: '🎧 Support Team', aliases: ['Support Team'], icon: '🎧', color: dealioBrand.colors.accent,
+    gradient: [dealioBrand.colors.accent, dealioBrand.colors.primary], permissions: bits(...moderation) },
+  { key: 'booster', name: '💎 Server Booster', icon: '💎', color: 0xf47fff, gradient: [0xf47fff, 0xb57edc], permissions: '0', managedBooster: true },
+  { key: 'legend', name: '🌟 Legendary Donator', icon: '🌟', color: 0xffd166, gradient: [0xffd166, 0xff7eb3], permissions: '0' },
+  { key: 'superDonator', name: '💖 Super Donator', icon: '💖', color: 0xff7eb3, gradient: [0xff7eb3, 0xc77dff], permissions: '0' },
+  { key: 'donator', name: '☕ Donator', icon: '☕', color: 0xd4a373, gradient: [0xd4a373, 0xf4d6a0], permissions: '0' },
 ];
+
+/** The roles the guild owner gets: the crown, and the ticket pings. */
+export const ownerRoles: readonly RoleKey[] = ['owner', 'support'];
+
+export const buyMeACoffeeUrl = 'https://buymeacoffee.com/dealio';
 
 /** Who a channel rule is for: everyone, one of the roles above, or Dealio itself. */
 export type Audience = 'everyone' | RoleKey | 'bot';
 export interface OverwriteSpec { readonly audience: Audience; readonly allow?: string; readonly deny?: string }
 
 export type ChannelKey =
-  | 'welcome' | 'rules' | 'announcements' | 'faq'
-  | 'general' | 'deals' | 'suggestions'
+  | 'welcome' | 'rules' | 'announcements' | 'faq' | 'supportDealio'
+  | 'general' | 'deals' | 'suggestions' | 'lounge'
   | 'tickets'
   | 'ticketLog' | 'staffChat' | 'discordUpdates';
 
@@ -109,7 +126,9 @@ export interface CategorySpec {
   readonly channels: readonly ChannelSpec[];
 }
 
-const staff: readonly RoleKey[] = ['team', 'support'];
+const staff: readonly RoleKey[] = ['admins', 'moderators', 'support'];
+const supporters: readonly RoleKey[] = ['booster', 'legend', 'superDonator', 'donator'];
+const botPosting = bits(P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory);
 const threadCreation = [P.CreatePublicThreads, P.CreatePrivateThreads];
 
 /** Everyone reads; only the team and Dealio post. */
@@ -123,7 +142,14 @@ const readOnly: readonly OverwriteSpec[] = [
 const staffOnly: readonly OverwriteSpec[] = [
   { audience: 'everyone', deny: bits(P.ViewChannel) },
   ...staff.map((audience): OverwriteSpec => ({ audience, allow: bits(P.ViewChannel, P.SendMessages, P.ReadMessageHistory) })),
-  { audience: 'bot', allow: bits(P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory) },
+  { audience: 'bot', allow: botPosting },
+];
+
+/** Supporters (boosters and donators) and the team. */
+const supportersOnly: readonly OverwriteSpec[] = [
+  { audience: 'everyone', deny: bits(P.ViewChannel) },
+  ...[...supporters, ...staff].map((audience): OverwriteSpec => ({ audience, allow: bits(P.ViewChannel, P.SendMessages, P.ReadMessageHistory) })),
+  { audience: 'bot', allow: botPosting },
 ];
 
 export const categories: readonly CategorySpec[] = [
@@ -135,6 +161,7 @@ export const categories: readonly CategorySpec[] = [
       { key: 'rules', name: '📜・rules', type: ChannelType.GuildText, topic: 'The server rules. Being here means you agree to them.', overwrites: readOnly },
       { key: 'announcements', name: '📣・announcements', type: ChannelType.GuildAnnouncement, topic: 'Releases, new features and service status. Follow it to get updates in your own server.', overwrites: readOnly },
       { key: 'faq', name: '❓・faq', type: ChannelType.GuildText, topic: 'Quick answers to the most common questions.', overwrites: readOnly },
+      { key: 'supportDealio', name: '💝・support-dealio', type: ChannelType.GuildText, topic: 'Keep Dealio free: Donator and Booster roles and their perks.', overwrites: readOnly },
     ],
   },
   {
@@ -158,6 +185,10 @@ export const categories: readonly CategorySpec[] = [
           { name: 'Done', emoji: '✅', moderated: true },
           { name: 'Declined', emoji: '❌', moderated: true },
         ],
+      },
+      {
+        key: 'lounge', name: '💖・supporters-lounge', type: ChannelType.GuildText, overwrites: supportersOnly,
+        topic: 'A cosy corner for Donators and Server Boosters. Thank you for keeping Dealio free!',
       },
     ],
   },
@@ -187,7 +218,8 @@ export const categories: readonly CategorySpec[] = [
       {
         key: 'ticketLog', name: '📋・ticket-log', type: ChannelType.GuildText, topic: 'Dealio posts every opened and closed ticket here.',
         // Dealio pings the Support Team role here without making it mentionable by everyone.
-        overwrites: [...staffOnly, { audience: 'bot', allow: bits(P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory, P.MentionEveryone) }],
+        overwrites: [...staffOnly.filter((overwrite) => overwrite.audience !== 'bot'),
+          { audience: 'bot', allow: bits(P.ViewChannel, P.SendMessages, P.EmbedLinks, P.ReadMessageHistory, P.MentionEveryone) }],
       },
       { key: 'staffChat', name: '🛡️・staff-chat', type: ChannelType.GuildText, topic: 'Team talk. AutoMod alerts land here too.', overwrites: staffOnly },
       { key: 'discordUpdates', name: '🔔・discord-updates', type: ChannelType.GuildText, topic: 'Discord sends Community server notices here.', overwrites: staffOnly },
@@ -286,6 +318,7 @@ function welcome(clientId: string, channel: (key: ChannelKey) => string): Contai
         + `🎫 ${c('tickets')} · private help from the team\n`
         + `📣 ${c('announcements')} · releases and status\n`
         + `💡 ${c('suggestions')} · ideas for Dealio\n`
+        + `💝 ${c('supportDealio')} · Donator roles and perks\n`
         + `🔥 ${c('deals')} · share what you caught`),
     )
     .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -347,11 +380,52 @@ function faq(channel: (key: ChannelKey) => string): ContainerBuilder {
     )));
 }
 
-export function infoMessages(clientId: string, channel: (key: ChannelKey) => string, bannerPath: string): InfoMessage[] {
+/** Coffees in total for each Donator tier; the owner hands the roles out. */
+export const donatorTiers = [
+  { key: 'donator', text: 'Any coffee, any time. Thank you!' },
+  { key: 'superDonator', text: 'Five coffees in total.' },
+  { key: 'legend', text: 'Ten coffees in total: a true Dealio legend.' },
+] as const;
+
+function supportDealio(channel: (key: ChannelKey) => string, roleId: (key: RoleKey) => string | undefined): ContainerBuilder {
+  const role = (key: RoleKey) => {
+    const id = roleId(key);
+    return id ? `<@&${id}>` : `**${roles.find((candidate) => candidate.key === key)!.name}**`;
+  };
+  return done(new ContainerBuilder()
+    .setAccentColor(0xff7eb3)
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(`${kicker('💝', 'Support Dealio')}\n# Keep Dealio free for everyone\n`
+        + 'Dealio has no ads, no paywall and no premium tier. '
+        + 'It runs on one small server that its developer pays for. If Dealio saved you money, '
+        + 'a coffee helps keep it running, and you get a shiny role as a thank-you.'),
+      new TextDisplayBuilder().setContent('### Donator roles\n'
+        + donatorTiers.slice().reverse().map((tier) => `${role(tier.key)} · ${tier.text}`).join('\n')),
+      new TextDisplayBuilder().setContent(`### Boost the server\n${role('booster')} · Discord gives you this role automatically while you boost.`),
+      new TextDisplayBuilder().setContent('### What you get\n'
+        + '✨ Your own colour and your own spot in the member list\n'
+        + `💖 Access to <#${channel('lounge')}>\n`
+        + '🙏 Our honest gratitude: every coffee goes to keeping Dealio online'),
+      new TextDisplayBuilder().setContent('### How to get your Donator role\n'
+        + `Buy a coffee, then open a ticket in <#${channel('tickets')}> (topic: *Something else*) with the name you used on Buy Me a Coffee. `
+        + 'The team adds your role by hand, usually within a day.'),
+    )
+    .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(buyMeACoffeeUrl).setEmoji('☕').setLabel('Buy Dealio a coffee'),
+    )));
+}
+
+export function infoMessages(
+  clientId: string,
+  channel: (key: ChannelKey) => string,
+  bannerPath: string,
+  roleId: (key: RoleKey) => string | undefined = () => undefined,
+): InfoMessage[] {
   return [
     { channel: 'welcome', container: welcome(clientId, channel), files: [bannerPath] },
     { channel: 'rules', container: rules(channel) },
     { channel: 'faq', container: faq(channel) },
+    { channel: 'supportDealio', container: supportDealio(channel, roleId) },
     { channel: 'tickets', container: buildSupportPanel('en', { faqChannelId: channel('faq') }) },
   ];
 }

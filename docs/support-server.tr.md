@@ -12,7 +12,7 @@ kanalında yalnızca kullanıcının ve ekibin gördüğü özel bir thread olur
    sunucu oluşturamaz, bu adımı yalnızca sen yapabilirsin.)
 2. **Sunucu kimliğini al.** Ayarlar → Gelişmiş → *Geliştirici Modu* açık olsun; sunucu
    simgesine sağ tık → *Sunucu ID'sini kopyala*.
-3. **Dealio'yu kurulum yetkisiyle ekle.** Açılan sayfada "Sunucuya ekle" listesinden
+3. **Dealio'yu Yönetici yetkisiyle ekle.** Açılan sayfada "Sunucuya ekle" listesinden
    yeni sunucuyu seç:
 
    ```
@@ -30,11 +30,13 @@ kanalında yalnızca kullanıcının ve ekibin gördüğü özel bir thread olur
    npm run support:setup -- --guild <SUNUCU_ID>
    ```
 
-   Betik sonunda üç kimlik ve kalıcı bir davet bağlantısı yazar.
-5. **Yönetici yetkisini geri al.** Sunucu Ayarları → Roller → *Dealio* → **Yönetici**
-   kutusunu kapat (diğerleri kalsın).
-6. **Kendine rolleri ver:** `Dealio Team` ve `Support Team`. Ticket bildirimleri
-   `Support Team` rolüne gider.
+   Betik sonunda üç kimlik ve kalıcı bir davet bağlantısı yazar. Kurulu sunucunun
+   davet bağlantısı: https://discord.gg/GVEA3MReDy
+5. **Roller.** Betik sunucu sahibine `👑 Owner` ve `🎧 Support Team` rollerini verir
+   (ticket bildirimleri Support Team'e gider). Diğer rolleri Sunucu Ayarları → Üyeler'den
+   dağıt. Dealio'nun Yönetici yetkisi kalabilir; betiği yeniden çalıştırmak için de gerekir.
+6. **Booster rolü.** Discord'un `Server Booster` rolü ilk boost'ta oluşur. Sonra betiği
+   bir kez daha çalıştır: rolü `💎 Server Booster` yapar, renklendirir ve lounge'a ekler.
 7. **VM'de ticket'ları aç.** Betiğin yazdığı üç satırı VM'deki `.env`'e ekle ve Dealio'yu
    yeniden başlat:
 
@@ -49,15 +51,34 @@ kanalında yalnızca kullanıcının ve ekibin gördüğü özel bir thread olur
    bağlantısını gir. Discovery için ekip sahibinin kimlik doğrulaması da gerekir.
 
 Betiği istediğin zaman yeniden çalıştırabilirsin: her şeyi adıyla bulur, kopya
-oluşturmaz, metinleri ve izinleri günceller. Bunun için 3. adımdaki gibi Yönetici
-yetkisini geçici olarak yeniden vermen gerekir.
+oluşturmaz, metinleri, rolleri ve izinleri günceller (Dealio'nun Yönetici yetkisi gerekir).
+Sunucu boost seviyesi 2'ye ulaşınca yeniden çalıştırmak rollere gradyan renk ve rol
+simgesi ekler.
+
+## Roller
+
+| Rol | Yetki | Kim alır |
+| --- | --- | --- |
+| 👑 Owner | Yönetici | Sunucu sahibi (betik verir) |
+| 🛡️ Admins | Yönetici | Güvendiğin yöneticiler |
+| 🔨 Moderators | Mesaj/thread yönetimi, susturma, atma, yasaklama | Moderatörler |
+| 🎧 Support Team | Mesaj/thread yönetimi, susturma; tüm ticket'ları görür | Ticket'lara bakanlar |
+| 💎 Server Booster | Yok | Discord otomatik verir |
+| 🌟 Legendary Donator | Yok | Toplam 10 kahve |
+| 💖 Super Donator | Yok | Toplam 5 kahve |
+| ☕ Donator | Yok | Herhangi bir kahve |
+
+Donator rollerini sen elle verirsin: kullanıcı Buy Me a Coffee'deki adıyla ticket açar.
+Kademeler `scripts/support-server/blueprint.ts` içindeki `donatorTiers` ve
+`💝・support-dealio` mesajında yazılı; değiştirince betiği yeniden çalıştır.
 
 ## Sunucunun yapısı
 
 | Kategori | Kanal | Kim yazabilir |
 | --- | --- | --- |
-| 📌 Start Here | 👋・welcome, 📜・rules, 📣・announcements (duyuru kanalı, takip edilebilir), ❓・faq | Ekip ve Dealio |
+| 📌 Start Here | 👋・welcome, 📜・rules, 📣・announcements (duyuru kanalı, takip edilebilir), ❓・faq, 💝・support-dealio | Ekip ve Dealio |
 | 💬 Community | 💬・general, 🔥・deals (30 sn yavaş mod), 💡・suggestions (forum, durum etiketleri) | Herkes |
+| 💬 Community | 💖・supporters-lounge | Yalnızca Donator, Booster ve ekip |
 | 🎫 Support | 🎫・open-a-ticket | Kimse; üyeler yalnızca kendi ticket thread'lerine yazar |
 | 🔒 Staff | 📋・ticket-log, 🛡️・staff-chat, 🔔・discord-updates | Yalnızca ekip |
 
@@ -76,7 +97,7 @@ yetkisini geçici olarak yeniden vermen gerekir.
 - Dealio kanalda `#0042 · Bug report · kullanıcı` adlı, davet edilemeyen özel bir thread
   açar, kullanıcıyı ekler, açıklamayı ve **Ticket'ı kapat** butonunu gönderir.
   `ticket-log` kanalına bir satır yazar ve `Support Team` rolünü etiketler.
-- `Support Team` ve `Dealio Team` ticket kanalında *Thread'leri Yönet* yetkisine sahip
+- Admins, Moderators ve Support Team ticket kanalında *Thread'leri Yönet* yetkisine sahip
   olduğu için bütün özel thread'leri görür ve yazabilir.
 - Kullanıcı başına aynı anda bir açık ticket ve 24 saatte üç ticket hakkı vardır.
   Bir hafta sessiz kalan thread'i Discord arşivler; kullanıcı oraya yazınca yeniden açılır.
