@@ -339,7 +339,7 @@ describe('support server blueprint', () => {
     for (const bot of thirdPartyBots) {
       expect(flag(bot.permissions, PermissionFlagsBits.Administrator)).toBe(false);
       expect(bot.clientId).toMatch(/^\d{17,20}$/);
-      for (const home of bot.homeChannels ?? []) expect(keys.has(home)).toBe(true);
+      for (const home of [...(bot.homeChannels ?? []), ...(bot.inviteChannel ? [bot.inviteChannel] : [])]) expect(keys.has(home)).toBe(true);
       expect(botInviteUrl(bot, guild)).toBe(`https://discord.com/oauth2/authorize?client_id=${bot.clientId}`
         + `&scope=bot%20applications.commands&permissions=${bot.permissions}&integration_type=0&guild_id=${guild}`);
     }
