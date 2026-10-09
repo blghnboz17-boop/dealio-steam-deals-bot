@@ -1,7 +1,10 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { sealBackup, openBackup } from '../src/operations/backup-envelope.js';
-import { healthProblems } from '../src/operations/health-check.js';
+import { healthProblems, OLDEST_SCAN_SQL } from '../src/operations/health-check.js';
+import { CheckStateRepository } from '../src/persistence/check-state-repository.js';
+import { createDatabase } from '../src/persistence/database.js';
+import { UserConfigRepository } from '../src/persistence/user-config-repository.js';
 
 const keys = generateKeyPairSync('rsa', {
   modulusLength: 2048,
@@ -61,5 +64,30 @@ describe('independent health assessment', () => {
 
   it('allows a daily digest to wait up to the configured queue threshold', () => {
     expect(healthProblems(ready, iso(7000), iso(86400), now)).toEqual([]);
+  });
+
+  it('does not count a private wishlist as a stalled scan, but still notices when its checks stop', () => {
+    const database = createDatabase(':memory:');
+    const users = new UserConfigRepository(database);
+    const checks = new CheckStateRepository(database);
+    const metrics = { checkedCount: 1, onSaleCount: 0, freeCount: 0, unknownPriceCount: 0, failedItemCount: 0 };
+    const oldestScan = () => (database.prepare(OLDEST_SCAN_SQL).get() as { at: string | null }).at;
+    try {
+      users.upsert('public', '76561198000000001', 'tr', 'TR', iso(30 * 86400));
+      users.upsert('private', '76561198000000002', 'tr', 'TR', iso(30 * 86400));
+      checks.markSuccess('public', iso(60), iso(50), 1, metrics);
+      checks.markSuccess('private', iso(8 * 86400), iso(8 * 86400), 1, metrics);
+      checks.markUnavailable('private', iso(40), iso(30), 'STEAM_WISHLIST_INACCESSIBLE', 1);
+      expect(oldestScan()).toBe(iso(50));
+      expect(healthProblems(ready, oldestScan(), null, now)).toEqual([]);
+
+      checks.markUnavailable('private', iso(7300), iso(7290), 'STEAM_WISHLIST_INACCESSIBLE', 1);
+      expect(healthProblems(ready, oldestScan(), null, now)).toEqual(['scan']);
+
+      checks.markUnavailable('private', iso(40), iso(30), 'STEAM_TIMEOUT', 1);
+      expect(oldestScan()).toBe(iso(8 * 86400));
+    } finally {
+      database.close();
+    }
   });
 });

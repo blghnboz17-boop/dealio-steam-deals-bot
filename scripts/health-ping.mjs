@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { DatabaseSync } from 'node:sqlite';
 import { readFile } from 'node:fs/promises';
-import { healthProblems } from '../dist/operations/health-check.js';
+import { healthProblems, OLDEST_SCAN_SQL } from '../dist/operations/health-check.js';
 
 let problems;
 let db;
@@ -9,8 +9,7 @@ try {
   let heartbeat = null;
   try { heartbeat = JSON.parse(await readFile('.runtime/bot.health.json', 'utf8')); } catch { /* assessed below */ }
   db = new DatabaseSync(process.env.DATABASE_PATH ?? './data/wishlist.db', { readOnly: true, timeout: 2000 });
-  const scan = db.prepare(`SELECT MIN(COALESCE(last_success_completed_at,config.created_at)) at FROM user_config config
-    LEFT JOIN check_state state ON state.discord_user_id=config.discord_user_id WHERE config.enabled=1`).get();
+  const scan = db.prepare(OLDEST_SCAN_SQL).get();
   const queue = db.prepare(`SELECT MIN(n.created_at) at FROM notification_log n JOIN user_config u ON u.discord_user_id=n.discord_user_id
     WHERE u.enabled=1 AND n.config_version=u.config_version AND n.status IN ('candidate','failed','sending')`).get();
   problems = healthProblems(heartbeat, scan.at, queue.at, Date.now());
