@@ -1,3 +1,15 @@
+// Oldest scan the health signal waits on. A wishlist its owner made private (or a
+// deleted Steam account) fails every check until the user acts, which is not a
+// stalled scanner: for those users the last completed attempt counts, so the
+// signal still notices when the scheduler stops visiting them.
+export const OLDEST_SCAN_SQL = `SELECT MIN(COALESCE(
+    CASE WHEN state.last_error_code = 'STEAM_WISHLIST_INACCESSIBLE' THEN state.last_completed_at
+         ELSE state.last_success_completed_at END,
+    config.created_at)) at
+  FROM user_config config
+  LEFT JOIN check_state state ON state.discord_user_id = config.discord_user_id
+  WHERE config.enabled = 1`;
+
 export function healthProblems(heartbeat: unknown, scanAt: string | null, queueAt: string | null, now: number): string[] {
   const record = heartbeat && typeof heartbeat === 'object' ? heartbeat as Record<string, unknown> : {};
   const stale = (value: unknown, seconds: number): boolean => {
