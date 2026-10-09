@@ -59,7 +59,7 @@ export const everyonePermissions = bits(
 
 export type StaffRoleKey = 'owner' | 'admins' | 'moderators' | 'support';
 export type SupporterRoleKey = 'legend' | 'superDonator' | 'donator';
-export type RoleKey = StaffRoleKey | SupporterRoleKey | 'booster';
+export type RoleKey = StaffRoleKey | SupporterRoleKey | 'booster' | 'updates';
 
 export interface RoleSpec {
   readonly key: RoleKey;
@@ -74,6 +74,8 @@ export interface RoleSpec {
   readonly permissions: string;
   /** Discord's own Server Booster role: it exists after the first boost and Discord assigns it. */
   readonly managedBooster?: true;
+  /** Shown as its own group in the member list; ping-only roles are not. */
+  readonly hoist?: boolean;
 }
 
 const moderation = [P.ManageMessages, P.ManageThreads, P.ModerateMembers, P.ManageNicknames, P.ViewAuditLog, P.PinMessages];
@@ -91,6 +93,8 @@ export const roles: readonly RoleSpec[] = [
   { key: 'legend', name: '🌟 Legendary Donator', icon: '🌟', color: 0xffd166, gradient: [0xffd166, 0xff7eb3], permissions: '0' },
   { key: 'superDonator', name: '💖 Super Donator', icon: '💖', color: 0xff7eb3, gradient: [0xff7eb3, 0xc77dff], permissions: '0' },
   { key: 'donator', name: '☕ Donator', icon: '☕', color: 0xd4a373, gradient: [0xd4a373, 0xf4d6a0], permissions: '0' },
+  // Members pick it in onboarding; announcements mention it instead of @everyone.
+  { key: 'updates', name: '🔔 Updates', icon: '🔔', color: 0, permissions: '0', hoist: false },
 ];
 
 /** The roles the guild owner gets: the crown, and the ticket pings. */
@@ -104,7 +108,7 @@ export interface OverwriteSpec { readonly audience: Audience; readonly allow?: s
 
 export type ChannelKey =
   | 'welcome' | 'rules' | 'announcements' | 'faq' | 'supportDealio'
-  | 'general' | 'deals' | 'suggestions' | 'lounge'
+  | 'general' | 'offTopic' | 'nowPlaying' | 'deals' | 'dealWins' | 'suggestions' | 'tryDealio' | 'lounge'
   | 'tickets'
   | 'ticketLog' | 'staffChat' | 'discordUpdates';
 
@@ -118,6 +122,8 @@ export interface ChannelSpec {
   /** Forum tags; `moderated` ones only the team can apply. */
   readonly tags?: readonly { readonly name: string; readonly emoji: string; readonly moderated?: boolean }[];
   readonly defaultReaction?: string;
+  /** A forum that opens as a grid of image cards (media channels cannot be created over the API). */
+  readonly gallery?: true;
 }
 
 export interface CategorySpec {
@@ -169,9 +175,20 @@ export const categories: readonly CategorySpec[] = [
     overwrites: [],
     channels: [
       { key: 'general', name: '💬・general', type: ChannelType.GuildText, topic: 'Chat about Dealio, Steam and games. For account problems, open a ticket instead.', overwrites: [] },
+      { key: 'offTopic', name: '🎮・off-topic', type: ChannelType.GuildText, topic: 'Games, memes and everything that isn’t Dealio. Keep it friendly.', overwrites: [] },
+      { key: 'nowPlaying', name: '🕹️・now-playing', type: ChannelType.GuildText, topic: 'What are you playing right now? Share it, and find your next game.', overwrites: [] },
       {
         key: 'deals', name: '🔥・deals', type: ChannelType.GuildText, rateLimitPerUser: 30, overwrites: [],
         topic: 'Share great Steam deals you caught. Store links only: no referral, key-reseller or affiliate links.',
+      },
+      {
+        key: 'dealWins', name: '🏆・deal-wins', type: ChannelType.GuildForum, gallery: true, rateLimitPerUser: 300, defaultReaction: '🔥', overwrites: [],
+        topic: 'Show off what you bought thanks to a Dealio alert: a screenshot of the alert or your library, and what you saved.',
+        tags: [
+          { name: 'Huge saving', emoji: '💸' },
+          { name: 'Free game', emoji: '🎁' },
+          { name: 'Wishlist win', emoji: '❤️' },
+        ],
       },
       {
         key: 'suggestions', name: '💡・suggestions', type: ChannelType.GuildForum, rateLimitPerUser: 600, defaultReaction: '👍',
@@ -185,6 +202,10 @@ export const categories: readonly CategorySpec[] = [
           { name: 'Done', emoji: '✅', moderated: true },
           { name: 'Declined', emoji: '❌', moderated: true },
         ],
+      },
+      {
+        key: 'tryDealio', name: '🤖・try-dealio', type: ChannelType.GuildText, overwrites: [],
+        topic: 'Try /dealio here. Your panel is private: only you see it, and it doesn’t clutter the chat.',
       },
       {
         key: 'lounge', name: '💖・supporters-lounge', type: ChannelType.GuildText, overwrites: supportersOnly,
@@ -274,6 +295,58 @@ export const autoModerationRules = (ids: { readonly staffChat: string; readonly 
   ];
 };
 
+/**
+ * Discord's member-profile AutoMod: names that pose as staff can't interact until changed.
+ * Discord allows one such rule per server.
+ */
+export const impersonationKeywords = [
+  '*dealio support*', '*dealio team*', '*dealio staff*', '*dealio admin*', '*dealio mod*',
+  '*discord staff*', '*discord support*', '*steam support*', '*valve support*',
+];
+
+/**
+ * Onboarding: the channels every newcomer sees, a question that tailors the rest, and
+ * an opt-in for the Updates ping role. Discord needs at least seven default channels,
+ * five of them open for @everyone to post.
+ */
+export const onboardingDefaultChannels: readonly ChannelKey[] = [
+  'welcome', 'rules', 'announcements', 'faq', 'supportDealio',
+  'general', 'offTopic', 'nowPlaying', 'deals', 'dealWins', 'suggestions', 'tryDealio', 'tickets',
+];
+
+export interface OnboardingPromptSpec {
+  readonly title: string;
+  readonly singleSelect: boolean;
+  readonly options: readonly {
+    readonly title: string;
+    readonly description: string;
+    readonly emoji: string;
+    readonly channels?: readonly ChannelKey[];
+    readonly roles?: readonly RoleKey[];
+  }[];
+}
+
+export const onboardingPrompts: readonly OnboardingPromptSpec[] = [
+  {
+    title: 'What brings you to Dealio?',
+    singleSelect: false,
+    options: [
+      { title: 'I’m new to Dealio', description: 'Show me how to get started', emoji: '🆕', channels: ['faq', 'tryDealio'] },
+      { title: 'I need help', description: 'Private help from the team', emoji: '🛠️', channels: ['tickets', 'faq'] },
+      { title: 'Steam deals', description: 'Share deals and show what I saved', emoji: '🔥', channels: ['deals', 'dealWins'] },
+      { title: 'Ideas for Dealio', description: 'Suggest and vote on features', emoji: '💡', channels: ['suggestions'] },
+    ],
+  },
+  {
+    title: 'Want a ping when Dealio gets an update?',
+    singleSelect: true,
+    options: [
+      { title: 'Yes, ping me', description: 'Releases and important status news', emoji: '🔔', roles: ['updates'], channels: ['announcements'] },
+      { title: 'No thanks', description: 'I’ll check announcements myself', emoji: '🔕', channels: ['announcements'] },
+    ],
+  },
+];
+
 // ---------------------------------------------------------------------------------
 // Messages Dealio keeps in the info channels.
 
@@ -317,9 +390,10 @@ function welcome(clientId: string, channel: (key: ChannelKey) => string): Contai
         + `❓ ${c('faq')} · quick answers\n`
         + `🎫 ${c('tickets')} · private help from the team\n`
         + `📣 ${c('announcements')} · releases and status\n`
+        + `🤖 ${c('tryDealio')} · try /dealio right here\n`
         + `💡 ${c('suggestions')} · ideas for Dealio\n`
         + `💝 ${c('supportDealio')} · Donator roles and perks\n`
-        + `🔥 ${c('deals')} · share what you caught`),
+        + `🔥 ${c('deals')} · share deals · 🏆 ${c('dealWins')} · show what you saved`),
     )
     .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setStyle(ButtonStyle.Link).setURL(links.invite(clientId)).setEmoji('➕').setLabel('Add Dealio'),

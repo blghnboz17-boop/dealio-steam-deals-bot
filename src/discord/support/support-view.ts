@@ -3,7 +3,10 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
+  FileUploadBuilder,
   LabelBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
   ModalBuilder,
   SeparatorBuilder,
   SeparatorSpacingSize,
@@ -13,7 +16,7 @@ import {
   TextInputStyle,
 } from 'discord.js';
 import {
-  supportDescriptionMaxLength, supportTopics, ticketNumber,
+  supportDescriptionMaxLength, supportScreenshotLimit, supportTopics, ticketNumber,
   type SupportTicket, type SupportTopic,
 } from '../../domain/support-ticket.js';
 import { languageLocale, type Language } from '../../domain/user-config.js';
@@ -26,7 +29,8 @@ export const supportSubmitCustomId = 'support:submit';
 export const supportClosePrefix = 'support:close:';
 const topicFieldId = 'topic';
 const descriptionFieldId = 'description';
-export const supportModalFields = { topic: topicFieldId, description: descriptionFieldId } as const;
+const screenshotsFieldId = 'screenshots';
+export const supportModalFields = { topic: topicFieldId, description: descriptionFieldId, screenshots: screenshotsFieldId } as const;
 
 export const supportHelpUrl = 'https://blghnboz17-boop.github.io/dealio-public-pages/help.html';
 
@@ -174,6 +178,16 @@ export function buildSupportModal(language: Language): ModalBuilder {
             de: 'Z. B. Ich habe einen Zielpreis für Hades gesetzt, aber keine DM bekommen.',
             fr: 'Ex. : J’ai fixé un prix cible pour Hades mais je n’ai reçu aucun DM.',
           }))),
+      new LabelBuilder()
+        .setLabel(t({ tr: 'Ekran görüntüleri (isteğe bağlı)', en: 'Screenshots (optional)', de: 'Screenshots (optional)', fr: 'Captures d’écran (facultatif)' }))
+        .setDescription(t({
+          tr: `En fazla ${supportScreenshotLimit} görsel. Kişisel bilgileri kapatmayı unutma.`,
+          en: `Up to ${supportScreenshotLimit} images. Remember to hide personal details.`,
+          de: `Bis zu ${supportScreenshotLimit} Bilder. Verdecke persönliche Angaben.`,
+          fr: `Jusqu’à ${supportScreenshotLimit} images. Pense à masquer tes infos personnelles.`,
+        }))
+        .setFileUploadComponent(new FileUploadBuilder().setCustomId(screenshotsFieldId).setRequired(false)
+          .setMinValues(0).setMaxValues(supportScreenshotLimit)),
     );
 }
 
@@ -183,7 +197,12 @@ export function ticketThreadName(ticket: SupportTicket, userName: string): strin
 }
 
 /** The first message in a ticket's thread: who asked what, and the close button. */
-export function buildTicketHeader(ticket: SupportTicket, description: string, language: Language): ContainerBuilder {
+export function buildTicketHeader(
+  ticket: SupportTicket,
+  description: string,
+  language: Language,
+  screenshotNames: readonly string[] = [],
+): ContainerBuilder {
   const t = localizer(language);
   const quoted = description.trim().split('\n').map((line) => `> ${line}`).join('\n');
   const opened = t({
@@ -198,7 +217,13 @@ export function buildTicketHeader(ticket: SupportTicket, description: string, la
       new TextDisplayBuilder().setContent(`${kicker(language)}\n# Ticket ${ticketNumber(ticket.ticketId)}\n`
         + `${topicDisplay(ticket.topic, language)} · ${opened}`),
       new TextDisplayBuilder().setContent(quoted),
-    )
+    );
+  if (screenshotNames.length > 0) {
+    container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(
+      ...screenshotNames.map((name) => new MediaGalleryItemBuilder().setURL(`attachment://${name}`)),
+    ));
+  }
+  container
     .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
     .addTextDisplayComponents(new TextDisplayBuilder().setContent(t({
       tr: 'Teşekkürler! Dealio ekibi buradan cevap verecek, Discord sana bildirim gönderir. Ekran görüntüsü ve sorunu tekrar oluşturma adımları çok işe yarar.\n-# Steam şifreni ya da Discord token’ını asla istemeyiz; burada da paylaşma.',

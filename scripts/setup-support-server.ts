@@ -12,12 +12,12 @@ import { readFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import {
-  ChannelType, MessageFlags, OverwriteType, REST, Routes,
+  ChannelType, MessageFlags, OverwriteType, REST, Routes, SnowflakeUtil,
   type APIChannel, type APIGuild, type APIGuildForumTag, type APIExtendedInvite, type APIInvite, type APIMessage, type APIRole, type APIUser,
   type RESTPostAPIGuildChannelJSONBody,
 } from 'discord.js';
 import {
-  autoModerationRules, bannerFileName, categories, ownerRoles, everyonePermissions, guildSettings, infoMessages, roles, starterChannels,
+  autoModerationRules, bannerFileName, categories, impersonationKeywords, onboardingDefaultChannels, onboardingPrompts, ownerRoles, everyonePermissions, guildSettings, infoMessages, roles, starterChannels,
   welcomeScreen, type Audience, type ChannelKey, type ChannelSpec, type OverwriteSpec, type RoleKey,
 } from './support-server/blueprint.js';
 
@@ -81,7 +81,7 @@ for (const spec of roles) {
     // Gradients and icons need boost level 2; until then the colour and the emoji in the name carry the look.
     ...(enhancedColors && spec.gradient ? { colors: { primary_color: spec.gradient[0], secondary_color: spec.gradient[1] } } : {}),
     ...(roleIcons ? { unicode_emoji: spec.icon } : {}),
-    hoist: true,
+    hoist: spec.hoist ?? true,
     mentionable: false,
     ...(spec.managedBooster ? {} : { permissions: spec.permissions }),
   };
@@ -167,6 +167,7 @@ async function ensureChannel(spec: ChannelSpec, parentId: string, position: numb
     ...(spec.rateLimitPerUser !== undefined ? { rate_limit_per_user: spec.rateLimitPerUser } : {}),
     ...(spec.tags ? { available_tags: forumTags(spec, existing && 'available_tags' in existing ? existing.available_tags : undefined) } : {}),
     ...(spec.defaultReaction ? { default_reaction_emoji: { emoji_name: spec.defaultReaction } } : {}),
+    ...(spec.gallery ? { default_forum_layout: 2 } : {}),
   };
   if (existing) {
     const { type: _type, ...update } = body;
@@ -264,6 +265,64 @@ for (const rule of autoModerationRules({ staffChat: channelId('staffChat'), staf
     : rest.post(Routes.guildAutoModerationRules(guildId), { body: { ...rule, enabled: true } }), undefined)
     .catch((error: unknown) => console.warn(`  AutoMod rule "${rule.name}" skipped: ${String(error)}`));
 }
+
+const profileRuleName = 'Dealio · Staff impersonation';
+const profileRule = {
+  name: profileRuleName, event_type: 2, trigger_type: 6, enabled: true,
+  trigger_metadata: { keyword_filter: impersonationKeywords },
+  // Blocks chatting and reacting until the name changes; Discord tells the member why.
+  actions: [{ type: 4 }],
+  exempt_roles: (['owner', 'admins', 'moderators', 'support'] as const).flatMap((key) => roleIds[key] ? [roleIds[key]!] : []),
+};
+const existingProfileRule = existingRules.find((candidate) => candidate.name === profileRuleName);
+await change(`${existingProfileRule ? 'Update' : 'Create'} AutoMod rule "${profileRuleName}" (names posing as staff)`, () => existingProfileRule
+  ? rest.patch(Routes.guildAutoModerationRule(guildId, existingProfileRule.id), { body: { ...profileRule, trigger_type: undefined } })
+  : rest.post(Routes.guildAutoModerationRules(guildId), { body: profileRule }), undefined)
+  .catch((error: unknown) => console.warn(`  AutoMod rule "${profileRuleName}" skipped: ${String(error)}`));
+
+// --- Custom emoji -----------------------------------------------------------------------
+const emojis = dryRun ? [] : await rest.get(Routes.guildEmojis(guildId)) as Array<{ name: string }>;
+if (!emojis.some((emoji) => emoji.name === 'dealio') && me.avatar) {
+  const avatar = await fetch(`https://cdn.discordapp.com/avatars/${me.id}/${me.avatar}.png?size=128`, { signal: AbortSignal.timeout(15_000) });
+  if (avatar.ok) {
+    const image = `data:image/png;base64,${Buffer.from(await avatar.arrayBuffer()).toString('base64')}`;
+    await change('Create the :dealio: emoji', () => rest.post(Routes.guildEmojis(guildId), { body: { name: 'dealio', image } }), undefined)
+      .catch((error: unknown) => console.warn(`  :dealio: emoji skipped: ${String(error)}`));
+  }
+}
+
+// --- Onboarding -------------------------------------------------------------------------
+// Prompt and option IDs are kept by title, so members' earlier answers stay valid.
+const currentOnboarding = dryRun ? { prompts: [] } : await rest.get(Routes.guildOnboarding(guildId)) as {
+  prompts: Array<{ id: string; title: string; options: Array<{ id: string; title: string }> }>;
+};
+const onboarding = {
+  enabled: true,
+  mode: 0,
+  default_channel_ids: onboardingDefaultChannels.map(channelId),
+  prompts: onboardingPrompts.map((prompt) => {
+    const current = currentOnboarding.prompts.find((candidate) => candidate.title === prompt.title);
+    return {
+      id: current?.id ?? SnowflakeUtil.generate().toString(),
+      type: 0,
+      title: prompt.title,
+      single_select: prompt.singleSelect,
+      required: false,
+      in_onboarding: true,
+      options: prompt.options.map((option) => ({
+        id: current?.options.find((candidate) => candidate.title === option.title)?.id ?? SnowflakeUtil.generate().toString(),
+        title: option.title,
+        description: option.description,
+        emoji: { name: option.emoji },
+        channel_ids: (option.channels ?? []).map(channelId),
+        role_ids: (option.roles ?? []).flatMap((key) => roleIds[key] ? [roleIds[key]!] : []),
+      })),
+    };
+  }),
+};
+await change('Onboarding: default channels, "What brings you here?" and the Updates ping opt-in',
+  () => rest.put(Routes.guildOnboarding(guildId), { body: onboarding }), undefined)
+  .catch((error: unknown) => console.warn(`  Onboarding skipped: ${String(error)}`));
 
 // --- Info messages ----------------------------------------------------------------------
 for (const message of infoMessages(clientId, channelId, bannerPath, roleId)) {
