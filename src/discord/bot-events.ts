@@ -23,6 +23,7 @@ import { languageFromDiscordLocale } from './language.js';
 import { recordInteraction } from './interaction-telemetry.js';
 import { refuseInteraction } from './ui/refused-interactions.js';
 import type { TelemetryRepository } from '../persistence/telemetry-repository.js';
+import { handleSupportInteraction, isSupportInteraction, type SupportInteractionOptions } from './support/support-interactions.js';
 
 export interface BotCommandServices {
   readonly userConfigurationService: UserConfigurationService;
@@ -48,6 +49,8 @@ export interface BotEventOptions {
   readonly telemetry?: Pick<TelemetryRepository, 'recordInteraction'>;
   /** Accounts the owner blocked from the admin panel. */
   readonly blocks?: { isUserBlocked(discordUserId: string): boolean };
+  /** Support tickets in the Dealio support server. */
+  readonly support?: SupportInteractionOptions;
 }
 
 /**
@@ -74,6 +77,7 @@ export function registerBotEvents(options: BotEventOptions): void {
     health,
     telemetry,
     blocks,
+    support,
   } = options;
 
   client.once(Events.ClientReady, () => {
@@ -115,6 +119,29 @@ export function registerBotEvents(options: BotEventOptions): void {
           }).catch(() => undefined);
         });
       }
+      return;
+    }
+    if (support && isSupportInteraction(interaction)) {
+      taskTracker.run(async () => {
+        try {
+          await handleSupportInteraction(interaction, support);
+        } catch (error: unknown) {
+          safeLogger.error('Support interaction failed', error);
+          const language = support.languageFor(interaction.user.id, interaction.locale);
+          const panel = buildNoticePanel(language, 'danger',
+            localizer(language)({ tr: 'Bir şeyler ters gitti', en: 'Something went wrong', de: 'Da ist etwas schiefgelaufen', fr: 'Quelque chose s’est mal passé' }),
+            localizer(language)({
+              tr: 'Geçici bir sorun çıktı. Biraz sonra yeniden dener misin?',
+              en: 'A temporary problem got in the way. Could you try again in a moment?',
+              de: 'Ein vorübergehendes Problem ist aufgetreten. Versuchst du es gleich noch mal?',
+              fr: 'Un souci passager est survenu. Tu peux réessayer dans un instant ?',
+            }));
+          const reply = interaction.deferred || interaction.replied
+            ? interaction.editReply({ flags: MessageFlags.IsComponentsV2, components: [panel] })
+            : interaction.reply({ flags: dealioEphemeralV2Flags, components: [panel] });
+          await reply.catch(() => undefined);
+        }
+      });
       return;
     }
     if (typeof interaction.isButton === 'function' && interaction.isButton()

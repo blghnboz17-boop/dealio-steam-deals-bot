@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import { deleteUserFromBroadcasts } from './broadcast-repository.js';
+import { deleteUserSupportTickets } from './support-ticket-repository.js';
 
 /** Longer than the backup retention, so every restorable backup predates a kept entry. */
 export const deletionJournalRetentionMs = 35 * 24 * 60 * 60 * 1000;
@@ -65,7 +66,7 @@ export class DeletionJournal {
     }>;
     const remove = database.prepare('DELETE FROM user_config WHERE discord_user_id = ? AND created_at <= ?');
     let removed = 0;
-    // Restored usage events and announcement deliveries from before a deletion go too.
+    // Restored usage events, announcement deliveries and support tickets from before a deletion go too.
     const hasTelemetry = database.prepare(
       "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'interaction_event'").get() !== undefined;
     if (hasTelemetry) {
@@ -73,13 +74,15 @@ export class DeletionJournal {
       const seen = database.prepare(`SELECT DISTINCT discord_user_id FROM interaction_event
         UNION SELECT DISTINCT discord_user_id FROM broadcast_recipient
         UNION SELECT DISTINCT CAST(named.value AS TEXT) FROM broadcast, json_each(broadcast.audience, '$.userIds') AS named
-        UNION SELECT DISTINCT target FROM admin_audit WHERE target IS NOT NULL`)
+        UNION SELECT DISTINCT target FROM admin_audit WHERE target IS NOT NULL
+        UNION SELECT DISTINCT discord_user_id FROM support_ticket`)
         .all() as Array<{ discord_user_id: string }>;
       for (const { discord_user_id: userId } of seen) {
         const at = deletedAt.get(hashDiscordUserId(userId));
         if (!at) continue;
         removeEvents.run(userId, at);
         deleteUserFromBroadcasts(database, userId, at);
+        deleteUserSupportTickets(database, userId, at);
         pseudonymizeAuditUser(database, userId, at);
       }
     }

@@ -31,7 +31,8 @@
     "monitor:preview": "node scripts/monitor.mjs --preview",
     "metrics:report": "node scripts/metrics-report.mjs",
     "release:check": "node scripts/release-gate.mjs",
-    "preview:admin": "npm run build && node scripts/preview-admin.mjs"
+    "preview:admin": "npm run build && node scripts/preview-admin.mjs",
+    "support:setup": "tsx scripts/setup-support-server.ts"
   },
   "dependencies": {
     "@azure/identity": "^4.13.2",

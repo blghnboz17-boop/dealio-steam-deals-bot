@@ -13,6 +13,12 @@ import { buildCountryRangePanel, buildCountrySearchPanel } from '../src/discord/
 import { buildExpiredPanel } from '../src/discord/ui/components-v2.js';
 import { priceLine } from '../src/discord/ui/design.js';
 import { messagesFor } from '../src/discord/messages.js';
+import { buildSupportPanel, buildTicketClosedNotice, buildTicketHeader } from '../src/discord/support/support-view.js';
+
+const supportTicket = {
+  ticketId: 7, discordUserId: 'u', guildId: 'g', channelId: 'c', topic: 'alerts', status: 'open',
+  threadId: 't', openedAt: '2026-10-09T12:00:00.000Z', closedAt: null, closedBy: null,
+} as const;
 
 const json = (panel: ContainerBuilder) => JSON.stringify(panel.toJSON()).replace(/[  ]/g, ' ');
 
@@ -84,6 +90,9 @@ function everyScreen(language: Language): string[] {
     buildCountryRangePanel(language, 's', { selected: 'DE' }),
     buildCountrySearchPanel(language, 's', 'zzzz'),
     buildExpiredPanel(language),
+    buildSupportPanel(language, { faqChannelId: 'c' }),
+    buildTicketHeader(supportTicket, 'Hades', language),
+    buildTicketClosedNotice(supportTicket, 'u', language),
   ].map(json);
 }
 

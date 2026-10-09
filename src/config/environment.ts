@@ -17,12 +17,23 @@ export interface EnvironmentConfig {
   readonly production?: boolean;
   /** The owner's admin panel; absent unless DEALIO_ADMIN_TOKEN is set. */
   readonly adminPanel?: AdminPanelConfig;
+  /** Support tickets in the Dealio support server; absent unless all three IDs are set. */
+  readonly support?: SupportConfig;
 }
 
 export interface AdminPanelConfig {
   readonly token: string;
   /** Always bound to 127.0.0.1; reached through an SSH tunnel. */
   readonly port: number;
+}
+
+export interface SupportConfig {
+  /** The support server; ticket buttons work only there. */
+  readonly guildId: string;
+  /** The team-only channel that lists opened and closed tickets. */
+  readonly logChannelId: string;
+  /** The role that answers tickets; it is mentioned in the log channel. */
+  readonly teamRoleId: string;
 }
 
 export const defaultAdminPanelPort = 8787;
@@ -138,6 +149,8 @@ export function loadEnvironment(
       : defaultAdminPanelPort,
   };
 
+  const support = supportConfig(environment);
+
   if (environment.DEALIO_PRODUCTION === 'true' && !environment.AZURE_LEASE_CONTAINER_URL) {
     // Explicit single-host rollout while cloud resources await credit verification.
     // Copying this configuration to a different machine must not start a gateway.
@@ -165,5 +178,30 @@ export function loadEnvironment(
     ...(isThereAnyDealApiKey ? { isThereAnyDealApiKey } : {}),
     ...(dealioBannerUrl ? { dealioBannerUrl } : {}),
     ...(adminPanel ? { adminPanel } : {}),
+    ...(support ? { support } : {}),
   };
+}
+
+const supportKeys = {
+  guildId: 'DEALIO_SUPPORT_GUILD_ID',
+  logChannelId: 'DEALIO_SUPPORT_LOG_CHANNEL_ID',
+  teamRoleId: 'DEALIO_SUPPORT_TEAM_ROLE_ID',
+} as const;
+
+/** All three support IDs or none: a half-configured ticket desk would fail on the first ticket. */
+function supportConfig(environment: NodeJS.ProcessEnv): SupportConfig | undefined {
+  const values = Object.fromEntries(Object.entries(supportKeys)
+    .map(([field, key]) => [field, environment[key]?.trim() || undefined])) as Record<keyof SupportConfig, string | undefined>;
+  const present = Object.values(values).filter((value) => value !== undefined).length;
+  if (present === 0) return undefined;
+  for (const [field, key] of Object.entries(supportKeys) as Array<[keyof SupportConfig, string]>) {
+    const value = values[field];
+    if (value === undefined) {
+      throw new Error(`Environment variable ${key} is required when the other DEALIO_SUPPORT_* variables are set`);
+    }
+    if (!/^\d{17,20}$/.test(value)) {
+      throw new Error(`Environment variable ${key} must be a Discord ID`);
+    }
+  }
+  return values as unknown as SupportConfig;
 }

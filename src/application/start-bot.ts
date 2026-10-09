@@ -57,6 +57,10 @@ import { applyPresence, registerGuildTracking } from '../discord/guild-tracking.
 import { AdminControlRepository } from '../persistence/admin-control-repository.js';
 import { BroadcastRepository } from '../persistence/broadcast-repository.js';
 import { TelemetryRepository } from '../persistence/telemetry-repository.js';
+import { SupportTicketRepository } from '../persistence/support-ticket-repository.js';
+import { SupportTicketService } from './support-ticket-service.js';
+import { RestSupportDesk } from '../discord/support/support-desk.js';
+import { languageFromDiscordLocale } from '../discord/language.js';
 
 export interface StartBotOptions {
   readonly signal?: AbortSignal;
@@ -152,6 +156,7 @@ export async function startBot(
     // Owner controls exist whether or not the admin panel is enabled: the sign-up
     // limit, blocks and usage telemetry also apply to a bot without the panel.
     const telemetryRepository = new TelemetryRepository(database);
+    const supportTicketRepository = new SupportTicketRepository(database);
     const adminControlRepository = new AdminControlRepository(database);
     const broadcastRepository = new BroadcastRepository(database);
     const runtimeSettings = new RuntimeSettings(adminControlRepository, environment.maxUsers);
@@ -236,7 +241,7 @@ export async function startBot(
         return {items:[...result.wishlistItems],errors:[...result.failedItems,...result.unavailableItems]};
       },
     );
-    const runRetention=()=>{try{wishlistStateRepository.assistant.cleanup();telemetryRepository.cleanup();adminControlRepository.cleanup();broadcastRepository.cleanup();}catch(error){safeLogger.error('Retention cleanup failed',error);}};
+    const runRetention=()=>{try{wishlistStateRepository.assistant.cleanup();telemetryRepository.cleanup();adminControlRepository.cleanup();broadcastRepository.cleanup();supportTicketRepository.cleanup();}catch(error){safeLogger.error('Retention cleanup failed',error);}};
     // Also once at startup: frequent restarts must not keep postponing the hourly cleanup.
     runRetention();
     const retentionTimer=setInterval(runRetention,3600000);
@@ -364,6 +369,14 @@ export async function startBot(
       health,
       telemetry: telemetryRepository,
       blocks: adminControlRepository,
+      support: {
+        ...(environment.support ? {
+          config: environment.support,
+          service: new SupportTicketService(supportTicketRepository, new RestSupportDesk(client.rest, environment.support)),
+        } : {}),
+        languageFor: (discordUserId, locale) => userConfigurationService.get(discordUserId)?.language
+          ?? languageFromDiscordLocale(locale),
+      },
     });
 
     if(environment.azureLeaseContainerUrl) cloudLease = await AzureApplicationLease.forApplication(
