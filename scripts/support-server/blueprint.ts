@@ -83,11 +83,15 @@ export interface RoleSpec {
 
 const moderation = [P.ManageMessages, P.ManageThreads, P.ModerateMembers, P.ManageNicknames, P.ViewAuditLog, P.PinMessages];
 
-/** Top to bottom, just below Dealio's own role. Every role is shown separately in the member list. */
+/**
+ * Top to bottom. The owner and the staff rank above Dealio; Discord's own Dealio role sits
+ * right under Support Team (the owner drags it there once: a bot cannot lower its own role),
+ * and everything from 🤖 Dealio down is ordered by the script. Members, boosters and donators
+ * stay below every bot.
+ */
+export const staffAboveDealio: readonly RoleKey[] = ['owner', 'admins', 'moderators', 'support'];
+
 export const roles: readonly RoleSpec[] = [
-  // Dealio's own, separate from the role Discord manages for it: every permission, top of the list.
-  { key: 'dealioBot', name: '🤖 Dealio', icon: '🤖', color: dealioBrand.colors.primary,
-    gradient: [dealioBrand.colors.primary, dealioBrand.colors.accent], permissions: bits(P.Administrator) },
   { key: 'owner', name: '👑 Owner', icon: '👑', color: 0xf1c40f, gradient: [0xf1c40f, 0xff8c00], permissions: bits(P.Administrator) },
   { key: 'admins', name: '🛡️ Admins', aliases: ['Dealio Team'], icon: '🛡️', color: 0xe74c3c, gradient: [0xe74c3c, 0xff6b81],
     permissions: bits(P.Administrator) },
@@ -95,6 +99,9 @@ export const roles: readonly RoleSpec[] = [
     permissions: bits(...moderation, P.KickMembers, P.BanMembers, P.MuteMembers, P.MoveMembers, P.ManageEvents) },
   { key: 'support', name: '🎧 Support Team', aliases: ['Support Team'], icon: '🎧', color: dealioBrand.colors.accent,
     gradient: [dealioBrand.colors.accent, dealioBrand.colors.primary], permissions: bits(...moderation) },
+  // Dealio's own, separate from the role Discord manages for it: every permission, below the staff.
+  { key: 'dealioBot', name: '🤖 Dealio', icon: '🤖', color: dealioBrand.colors.primary,
+    gradient: [dealioBrand.colors.primary, dealioBrand.colors.accent], permissions: bits(P.Administrator) },
   // Every other bot gets this one; their own managed roles are placed right below it.
   { key: 'bots', name: '⚙️ Bots', icon: '⚙️', color: 0x99aab5, permissions: '0' },
   { key: 'booster', name: '💎 Server Booster', icon: '💎', color: 0xf47fff, gradient: [0xf47fff, 0xb57edc], permissions: '0', managedBooster: true },

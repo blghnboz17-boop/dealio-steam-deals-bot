@@ -291,12 +291,12 @@ describe('support server blueprint', () => {
     }
     expect(flag(everyonePermissions, PermissionFlagsBits.MentionEveryone)).toBe(false);
     expect(flag(everyonePermissions, PermissionFlagsBits.Administrator)).toBe(false);
-    expect(roles.filter((role) => flag(role.permissions, PermissionFlagsBits.Administrator)).map((role) => role.key)).toEqual(['dealioBot', 'owner', 'admins']);
+    expect(roles.filter((role) => flag(role.permissions, PermissionFlagsBits.Administrator)).map((role) => role.key)).toEqual(['owner', 'admins', 'dealioBot']);
     expect(roles.filter((role) => !['dealioBot', 'owner', 'admins'].includes(role.key)).every((role) => !flag(role.permissions, PermissionFlagsBits.ManageGuild))).toBe(true);
   });
 
   it('ranks staff over supporters and opens the lounge to donators and boosters only', () => {
-    expect(roles.map((role) => role.key)).toEqual(['dealioBot', 'owner', 'admins', 'moderators', 'support', 'bots', 'booster', 'legend', 'superDonator', 'donator', 'updates']);
+    expect(roles.map((role) => role.key)).toEqual(['owner', 'admins', 'moderators', 'support', 'dealioBot', 'bots', 'booster', 'legend', 'superDonator', 'donator', 'updates']);
     expect(roles.find((role) => role.key === 'support')?.aliases).toContain('Support Team');
     const lounge = channels.find((spec) => spec.key === 'lounge')!;
     expect(flag(lounge.overwrites.find((overwrite) => overwrite.audience === 'everyone')?.deny, PermissionFlagsBits.ViewChannel)).toBe(true);
