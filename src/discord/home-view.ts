@@ -8,7 +8,7 @@ import type { StatusV2Options } from './status-view-v2.js';
 import { sanitizeGameName } from './notification-messages.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { dealioBrand } from './ui/brand.js';
-import { countryDisplay, hotPrefix, supportButton, noPriceText, panelHeader, priceFetched, priceLine, savingsLine, tabAccent } from './ui/design.js';
+import { countryDisplay, helpButton, hotPrefix, supportButton, noPriceText, panelHeader, priceFetched, priceLine, savingsLine, tabAccent } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 import { localizer } from './i18n.js';
 import { staleTargetsNotice } from './assistant-view.js';
@@ -129,6 +129,7 @@ export function buildHomePanel(result: ReadyStatus, sessionId: string, options: 
     ...(deals ? [deals] : []),
     // A fresh Steam check, whose result screen leads back to an up-to-date Home.
     button('check', t({ tr: 'Steam’de şimdi kontrol et', en: 'Check Steam now', de: 'Jetzt bei Steam prüfen', fr: 'Vérifier Steam maintenant' }), '🔄'),
+    helpButton(language),
     supportButton(language),
   ));
   divider();

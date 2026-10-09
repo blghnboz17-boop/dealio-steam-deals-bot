@@ -127,7 +127,7 @@ Dealio hesap kimliklerini, tercihlerini, oyun kurallarını, gözlemlenen wishli
 
 Bildirim geçmişi son **30 günü** gösterir; fiyat gözlemleri **90 gün** tutulur. Aktif teslimat ve devam eden tekliflerin tekrarını önleyen kayıtlar daha uzun kalabilir. `/delete-data` aktif hesap kayıtlarını siler. Mevcut yedek kopyaları yeniden yazılmaz; ancak ayrı tutulan bir silme kaydı (Discord kimliğinin tek yönlü özeti, 35 gün saklanır) yedekten geri dönülse bile verilerinin geri gelmemesini sağlar.
 
-[Gizlilik](https://blghnboz17-boop.github.io/dealio-public-pages/privacy-tr.html) · [Kullanım koşulları](https://blghnboz17-boop.github.io/dealio-public-pages/terms-tr.html) · [Yardım](https://blghnboz17-boop.github.io/dealio-public-pages/help-tr.html)
+[Gizlilik](https://blghnboz17-boop.github.io/dealio-public-pages/privacy-tr.html) · [Kullanım koşulları](https://blghnboz17-boop.github.io/dealio-public-pages/terms-tr.html) · [Yardım](https://blghnboz17-boop.github.io/dealio-public-pages/help-tr.html) · [Destek sunucusu](https://dsc.gg/dealiosupport)
 
 ## ❓ Sık sorulanlar
 
@@ -136,7 +136,7 @@ Bildirim geçmişi son **30 günü** gösterir; fiyat gözlemleri **90 gün** tu
 
 Bu mesaj tek başına nedenini söylemez; yanlış bir şey yaptığın anlamına da gelmez. Steam fiyatlara yanıt verememiş, Discord işlemi tamamlayamamış veya Dealio tarafında bir sorun çıkmış olabilir. Varsa mesajdaki ayrıntı bize daha çok şey söyler.
 
-Biraz bekleyip komutu bir kez daha dene; bekleme süresi gösteriliyorsa dolmasını bekle. Eski paneldeki düğme çalışmıyorsa `/dealio` ile yeni bir panel aç. Sorun devam ederse [yardım sayfasından](https://blghnboz17-boop.github.io/dealio-public-pages/help-tr.html) kullandığın komutu, yaklaşık saati ve hata metnini paylaş. Ekran görüntüsündeki kişisel bilgileri gizlemen yeterli; kurulumu hemen silip baştan yapmana gerek yok.
+Biraz bekleyip komutu bir kez daha dene; bekleme süresi gösteriliyorsa dolmasını bekle. Eski paneldeki düğme çalışmıyorsa `/dealio` ile yeni bir panel aç. Sorun devam ederse [destek sunucusunda bir ticket aç](https://dsc.gg/dealiosupport) ve kullandığın komutu, yaklaşık saati ve hata metnini paylaş. Ekran görüntüsündeki kişisel bilgileri gizlemen yeterli; kurulumu hemen silip baştan yapmana gerek yok.
 
 </details>
 
@@ -154,7 +154,7 @@ Test mesajı geliyor ama indirim bildirimi gelmiyorsa `/dealio` → ⚙️ Ayarl
 
 Profil bağlantısının doğru olduğundan ve wishlist’inin dışarıdan görülebildiğinden emin ol. Bunu Steam hesabına giriş yapmadığın bir tarayıcı penceresinde kendi wishlist bağlantını açarak kontrol edebilirsin; profilin görünmesi tek başına yeterli olmayabilir.
 
-Steam gizlilik ayarlarını değiştirdiysen biraz bekleyip yeniden dene. Liste dışarıdan açıldığı hâlde Dealio hâlâ okuyamıyorsa Steam geçici olarak yanıt vermiyor olabilir. Tekrar denediğinde de düzelmiyorsa [bize haber ver](https://blghnboz17-boop.github.io/dealio-public-pages/help-tr.html); Steam şifreni veya oturum bilgilerini paylaşma.
+Steam gizlilik ayarlarını değiştirdiysen biraz bekleyip yeniden dene. Liste dışarıdan açıldığı hâlde Dealio hâlâ okuyamıyorsa Steam geçici olarak yanıt vermiyor olabilir. Tekrar denediğinde de düzelmiyorsa [destek sunucusunda bir ticket aç](https://dsc.gg/dealiosupport); Steam şifreni veya oturum bilgilerini paylaşma.
 
 </details>
 
