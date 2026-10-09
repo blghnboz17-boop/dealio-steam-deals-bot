@@ -477,6 +477,8 @@ export interface ThirdPartyBot {
   readonly permissions: string;
   /** When set, the bot sees only these text channels (game bots stay out of the chat). */
   readonly homeChannels?: readonly ChannelKey[];
+  /** A channel it may see and make invites for without posting (DISBOARD's listing invite). */
+  readonly inviteChannel?: ChannelKey;
 }
 
 export const thirdPartyBots: readonly ThirdPartyBot[] = [
@@ -497,7 +499,7 @@ export const thirdPartyBots: readonly ThirdPartyBot[] = [
   { name: 'GiveawayBot', clientId: '294882584201003009', emoji: '🎉', purpose: 'Giveaways with one command',
     permissions: bits(...textBot) },
   { name: 'DISBOARD', clientId: '302050872383242240', emoji: '🚀', purpose: 'Server listing: /bump brings new members',
-    permissions: bits(...textBot, P.CreateInstantInvite), homeChannels: ['bump'] },
+    permissions: bits(...textBot, P.CreateInstantInvite), homeChannels: ['bump'], inviteChannel: 'welcome' },
   { name: 'ServerStats', clientId: '458276816071950337', emoji: '📊', purpose: 'Live member and boost counters',
     permissions: bits(P.ViewChannel, P.ManageChannels, P.Connect) },
 ];

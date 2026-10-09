@@ -324,8 +324,13 @@ for (const bot of thirdPartyBots) {
   await change(`Keep ${bot.name} in ${bot.homeChannels.join(', ')}`, async () => {
     for (const spec of specs) {
       const home = bot.homeChannels!.includes(spec.key);
+      const invite = bot.inviteChannel === spec.key;
       await rest.put(Routes.channelPermission(channelId(spec.key), bot.clientId), {
-        body: { type: OverwriteType.Member, allow: home ? homeAllow : '0', deny: home ? '0' : P.ViewChannel.toString() },
+        body: {
+          type: OverwriteType.Member,
+          allow: home ? homeAllow : invite ? (P.ViewChannel | P.CreateInstantInvite | P.ReadMessageHistory).toString() : '0',
+          deny: home || invite ? '0' : P.ViewChannel.toString(),
+        },
       });
     }
   }, undefined).catch((error: unknown) => console.warn(`  Could not limit ${bot.name} (${String(error)})`));
