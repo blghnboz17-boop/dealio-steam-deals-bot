@@ -23,7 +23,7 @@ import { dealioBrand } from './ui/brand.js';
 import { assertComponentsV2Limit, dealioFooter } from './ui/components-v2.js';
 import { uiCopy } from './ui/copy.js';
 import { messagesFor } from './messages.js';
-import { countryDisplay, panelHeader, tabAccent } from './ui/design.js';
+import { countryDisplay, panelHeader, tabAccent, wishlistHidden, wishlistHiddenNotice } from './ui/design.js';
 import { buildTabBar } from './ui/tab-bar.js';
 
 type ReadyStatus = Extract<StatusDashboardResult, { status: 'ready' }>;
@@ -97,7 +97,8 @@ function buildSettingsPanel(
     `### 🗓️ ${t({ tr: 'Kontroller', en: 'Checks', de: 'Prüfungen', fr: 'Vérifications' })}`,
     `🔜 ${t({ tr: 'Bir sonraki kontrol', en: 'Next check', de: 'Nächste Prüfung', fr: 'Prochaine vérification' })}: ${config.enabled
       ? displayTime(checkState?.nextScheduledAt, text.never) : t(trackingPaused).toLocaleLowerCase(languageLocale[language])}`,
-    `${localizedCheckStatus(checkState?.lastStatus ?? null, language)} · ${displayTime(checkState?.lastCompletedAt, text.never)}`,
+    `${wishlistHidden(checkState) ? '🔒 ' + t({ tr: 'İstek listen gizli görünüyor', en: 'Your wishlist looks private', de: 'Deine Wunschliste wirkt privat', fr: 'Ta liste semble privée' })
+      : localizedCheckStatus(checkState?.lastStatus ?? null, language)} · ${displayTime(checkState?.lastCompletedAt, text.never)}`,
     `-# 🎮 ${displayCount(checkState?.lastSuccessCheckedCount, '—')} ${t({ tr: 'oyun', en: 'games', de: 'Spiele', fr: 'jeux' })} · 🏷️ ${displayCount(checkState?.lastSuccessOnSaleCount, '—')} ${t({
       tr: 'indirimde', en: 'on sale', de: 'im Angebot', fr: 'en promo',
     })} · 💱 ${result.latestPriceCurrencies.join(' / ') || text.never}`,
@@ -123,7 +124,9 @@ function buildSettingsPanel(
       fr: `> ⚠️ Lors de la dernière vérification, il me manquait le prix de **${incompleteCount} ${one ? 'jeu' : 'jeux'}** ; ${one ? 'il n’est pas compté' : 'ils ne sont pas comptés'} dans les promos.`,
     })));
   }
-  if (failed) {
+  if (wishlistHidden(checkState)) {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('> ' + wishlistHiddenNotice(language)));
+  } else if (failed) {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(t({
       tr: '> ⚠️ Son kontrol yarım kaldı. Sayılar bir önceki başarılı kontrolden; güncel fiyatları henüz teyit edemedim.',
       en: '> ⚠️ The last check didn’t finish. These numbers are from the last good check; current prices aren’t confirmed yet.',

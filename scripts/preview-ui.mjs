@@ -71,6 +71,8 @@ for (const language of ['tr', 'en', 'de', 'fr']) {
     free: [buildSaleNotificationPanel([{ ...notifications[1], finalPriceMinor: 0, discountPercent: 100 }], language).toJSON()],
     blocked: [buildStatusV2Panel({ ...dashboard, config: { ...config, enabled: false, dmDeliveryBlockedAt: date } }, 'preview', { mode: 'home' }).toJSON()],
     partial: [buildStatusV2Panel({ ...dashboard, checkState: { ...dashboard.checkState, lastStatus: 'unavailable', lastSuccessUnknownPriceCount: 4 } }, 'preview', { mode: 'home' }).toJSON()],
+    hidden: [buildStatusV2Panel({ ...dashboard, checkState: { ...dashboard.checkState, lastStatus: 'unavailable', lastErrorCode: 'STEAM_WISHLIST_INACCESSIBLE' } }, 'preview', { mode: 'home' }).toJSON(),
+      buildStatusV2Panel({ ...dashboard, checkState: { ...dashboard.checkState, lastStatus: 'unavailable', lastErrorCode: 'STEAM_WISHLIST_INACCESSIBLE' } }, 'preview', { mode: 'status' }).toJSON()],
     empty: personal('wishlist', { ...assistantData, items: [] }),
     expired: [buildStatusV2Panel(dashboard, 'preview', { mode: 'home', disabled: true }).toJSON()],
     region: [buildCountryRangePanel(language, 'preview', { selected: 'TR' }).toJSON()],

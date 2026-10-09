@@ -1,6 +1,7 @@
 import { ButtonBuilder, ButtonStyle } from 'discord.js';
 import { storeCountryName, type StoreCountryCode } from '../../domain/store-country.js';
 import { languageLocale, type Language } from '../../domain/user-config.js';
+import type { CheckState } from '../../domain/check-state.js';
 import type { StoreFacts, UpcomingRelease, WishlistItem, WishlistItemError } from '../../domain/steam.js';
 import { localizer, percentText, type Localized } from '../i18n.js';
 import { formatMinorPrice } from '../notification-messages.js';
@@ -139,6 +140,26 @@ export function helpButton(language: Language): ButtonBuilder {
 export function supportButton(language: Language): ButtonBuilder {
   return new ButtonBuilder().setStyle(ButtonStyle.Link).setURL('https://buymeacoffee.com/dealio').setEmoji('☕')
     .setLabel(localizer(language)({ tr: 'Destek ol', en: 'Support Dealio', de: 'Dealio unterstützen', fr: 'Soutenir Dealio' }));
+}
+
+/**
+ * Steam answered that the wishlist cannot be read: the user's own privacy setting
+ * (or a deleted account), not a Steam outage, so the panel names the fix.
+ */
+export function wishlistHidden(checkState: Pick<CheckState, 'lastStatus' | 'lastErrorCode'> | null | undefined): boolean {
+  return checkState?.lastStatus === 'unavailable' && checkState.lastErrorCode === 'STEAM_WISHLIST_INACCESSIBLE';
+}
+
+const steamPrivacyUrl = 'https://steamcommunity.com/my/edit/settings';
+
+/** "🔒 I can't see your wishlist…", with a link to Steam's privacy settings; Home and Settings show the same text. */
+export function wishlistHiddenNotice(language: Language): string {
+  return '🔒 ' + localizer(language)({
+    tr: `İstek listeni göremiyorum, bu yüzden bildirim gönderemiyorum. [Steam gizlilik ayarlarında](${steamPrivacyUrl}) profilini ve “Oyun ayrıntıları”nı **Herkese Açık** yap; sonraki kontrolde kaldığım yerden devam ederim.`,
+    en: `I can’t see your wishlist, so I can’t send alerts. In [Steam’s privacy settings](${steamPrivacyUrl}), set your profile and “Game details” to **Public**; I’ll pick up again at the next check.`,
+    de: `Ich kann deine Wunschliste nicht sehen und deshalb keine Benachrichtigungen senden. Stell in den [Steam-Privatsphäre-Einstellungen](${steamPrivacyUrl}) dein Profil und „Spieldetails“ auf **Öffentlich**; bei der nächsten Prüfung mache ich weiter.`,
+    fr: `Je ne vois pas ta liste de souhaits, donc je ne peux pas t’envoyer d’alertes. Dans les [paramètres de confidentialité Steam](${steamPrivacyUrl}), mets ton profil et « Détails des jeux » en **Public** ; je reprendrai à la prochaine vérification.`,
+  });
 }
 
 /** Steam's own wording for each Steam Deck rating. */
